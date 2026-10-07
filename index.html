@@ -43,6 +43,9 @@ h1{font-size:17px;margin:0;font-weight:800}
 
 /* 보낸 기록 — 말풍선 */
 #log{flex:1;overflow:auto;padding:14px 16px 8px;display:flex;flex-direction:column;gap:10px}
+/* 펫이 보이면 대화 끝에 펫 키만큼 빈자리 — 맨 아래 말풍선·방이 입력칸 위 펫에 가리지 않고 그 위로 올라온다 */
+#log::after{content:"";flex:none;height:0}
+body:has(#petStage:not(.off)) #log::after{height:96px}
 .empty{margin:auto;text-align:center;color:var(--muted);font-size:14px;max-width:300px}
 .empty b{color:var(--text)}
 .day{align-self:center;font-size:11px;color:var(--muted);background:var(--soft);border-radius:99px;padding:2px 10px}
@@ -73,6 +76,11 @@ h1{font-size:17px;margin:0;font-weight:800}
 .rst{flex:none;font-size:11px;font-weight:800;border-radius:99px;padding:1px 7px;background:var(--soft);color:var(--muted)}
 .rst.ask{background:var(--accentsoft);color:var(--accent)}.rst.err{color:var(--warn)}.rst.busy{color:var(--ok)}
 .dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--accent2)}
+.unread{color:var(--accent2);font-weight:800}
+.tail.warn{color:var(--warn)}
+.quick{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;scrollbar-width:none}
+.quick .chip{flex:none}
+.typingrow{display:flex;gap:8px;align-items:center}
 .back{border:0;background:none;font-size:30px;line-height:1;padding:0 2px 4px 0;color:var(--accent);font-weight:600}
 header .ttl{min-width:0;flex:1}
 header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -166,6 +174,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 
   <!-- 지시: 새 일을 맡기거나, 대화 번호를 넣어 이어서 말한다 -->
   <section class="pane on" id="say">
+    <div class="quick" id="quick" style="display:none"></div>
     <div class="chips" id="modeChips">
       <button class="chip on" data-mode="read">읽기</button>
       <button class="chip w" data-mode="write">수정 허용</button>
@@ -286,6 +295,7 @@ function draw() {
 
 function plainBar() {                                 // 메일 앱 모드: 대화방 없이 처음 화면 그대로
   for (const id of ['#sayRow', '#ansRow', '#modeChips', '#logo']) $(id).style.display = '';
+  $('#quick').style.display = 'none';
   for (const b of document.querySelectorAll('.tabs button')) b.style.display = '';
   $('#backBtn').style.display = $('#delBtn').style.display = 'none'; $('#ttl').textContent = 'D&C 메신저'; $('.tabs').style.display = '';
   document.querySelector('.tabs [data-pane=say]').textContent = '지시';
@@ -298,7 +308,7 @@ function openMail(subject, body, rec) {
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
   if (cfg.key) subject += ' [k:' + cfg.key + ']';          // 암호 단어 — PC 게이트웨이가 확인하고 떼어 낸다
   if (gOn()) {                                              // Gmail 로 바로 보낸다. 연결이 끊겼으면 다시 연결하고 돌아와서 보낸다
-    gout.push({ subject, body, reply: gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
+    gout.push({ subject, body, reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
     store.set('gout', gout); draw(); petCheer();
     if (gLive()) gPoll(); else if (gtok) gAuth(true); else gAuth(false);
     return true;
@@ -491,6 +501,7 @@ function gParse(g) {
     refs: ((H['in-reply-to'] || '') + ' ' + (H.references || '')).match(/<[^<>]+>/g) || [] };
   if (m.bot) {
     m.kind = H['x-dispatch-kind'] || 'reply'; m.status = H['x-dispatch-status'] || '';
+    m.ack = m.kind === 'ack';                          // PC 가 받았다는 신호 — 말풍선으로는 안 보이고 내 말의 '1' 을 지운다
     let b = body.includes(ASK_SPLIT) ? body.slice(body.indexOf(ASK_SPLIT) + ASK_SPLIT.length) : body;   // 맨 위 ☐ 선택지 줄은 따로 받는다
     const i = b.lastIndexOf('\n--\n');
     m.text = (i >= 0 ? b.slice(0, i) : b).trim();
@@ -509,7 +520,8 @@ function gList() {                                         // 화면에 보일 �
   const list = Object.values(gmsgs).filter(m => m && !m.skip && m.ts > since).sort((a, b) => a.ts - b.ts);
   const byId = {}; for (const m of list) if (m.id) byId[m.id] = m;
   for (const m of list) if (m.thread) for (const r of m.refs) { const o = byId[r]; if (o && !o.thread) o.thread = m.thread; }
-  return list;
+  for (const m of list) if (m.ack) for (const r of m.refs) if (byId[r]) byId[r].got = true;
+  return list.filter(m => !m.ack);
 }
 function gWaiting(list) {                                  // 내가 보내고 아직 답이 없는 대화(30분 안) — 'PC 가 일하는 중'
   const last = {};
@@ -604,6 +616,7 @@ function gRooms(list) {
   for (const m of list) { const k = roomKey(m); if (m.ts > (ghide[k] || 0)) get(k, m.thread).msgs.push(m); }
   for (const o of gout) get(o.thread ? 'T' + o.thread : 'o:' + o.at, o.thread).out.push(o);
   const waiting = new Set(gWaiting(list).map(roomKey));
+  const got = new Set(gWaiting(list).filter(m => m.got).map(roomKey));
   for (const r of Object.values(rooms)) {
     const first = r.msgs.find(m => !m.bot) || r.out[0], last = r.msgs[r.msgs.length - 1];
     r.title = (((first && (first.text || first.rest)) || '').split('\n')[0].replace(/^@\S+\s+/, '')
@@ -611,7 +624,7 @@ function gRooms(list) {
     r.mode = r.msgs.some(m => m.mode === 'write') || r.out.some(o => o.mode === 'write') ? 'write' : 'read';
     r.ts = Math.max(last ? last.ts : 0, ...r.out.map(o => o.at));
     r.last = r.out.length ? r.out[r.out.length - 1].text : last ? (last.text || last.rest || '') : '';
-    r.st = r.out.length ? '보내는 중' : waiting.has(r.key) ? '일하는 중' : !last || !last.bot ? ''
+    r.st = r.out.length ? '보내는 중' : got.has(r.key) ? '일하는 중' : waiting.has(r.key) ? '전송됨' : !last || !last.bot ? ''
       : last.kind === 'confirm' ? '실행 확인' : last.status === 'error' ? '오류' : last.ask ? '질문' : '완료';
     r.ask = last && last.bot && last.ask ? last : null;
     r.unread = !!(last && last.bot && last.ts > (gseen[r.key] || 0));
@@ -665,6 +678,23 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   if (!on || on.style.display === 'none') setTab('say');
   refresh();
 }
+function roomStop(r) {                                 // PC 가 하던 일을 끊는다(워커가 2초 안에 멈추고 '멈췄습니다' 회신)
+  const mine = r.msgs.filter(m => !m.bot && m.id);
+  if (!mine.length || !confirm('PC 가 하던 일을 지금 멈출까요?')) return;
+  openMail('Re: ' + TAG.read + (r.no ? ' [T' + r.no + ']' : '') + ' 멈춤', '멈춤',
+    { kind: 'stop', text: '멈춤', mode: r.mode, thread: r.no || '', reply: mine[mine.length - 1].id });
+}
+const QUICK = ['계속해', '요약만 해줘', '자세히 설명해줘', '고마워'];   // 방 안 빠른 답 — 누르면 입력칸에 채운다(보내기는 직접)
+function drawQuick(r) {
+  const box = $('#quick'), on = !!(r && r.no && !r.out.length && r.st !== '일하는 중' && r.st !== '전송됨');
+  box.style.display = on ? '' : 'none';
+  if (!on) return;
+  box.replaceChildren(...QUICK.map(q => {
+    const b = el('button', 'chip', q);
+    b.onclick = () => { const t = $('#sayText'); t.value = q; grow(t); refresh(); t.focus(); };
+    return b;
+  }));
+}
 function drawGmail(box) {
   const list = gList(), rooms = gRooms(list);
   if (room && !rooms.some(r => r.key === room)) {
@@ -672,7 +702,7 @@ function drawGmail(box) {
     try { history.replaceState(room ? { room } : null, ''); } catch (e) {}
   }
   const r = room && rooms.find(x => x.key === room);
-  roomBar(r);
+  roomBar(r); drawQuick(r);
   if (r) drawRoom(box, r); else drawRooms(box, rooms);
   try { petDraw(); } catch (e) {}                         // 처음 그릴 땐 펫 코드가 아직 준비 전이다
 }
@@ -686,7 +716,7 @@ function drawRooms(box, rooms) {
     const row = el('button', 'room'), body = el('div', 'rbody'), top = el('div', 'rtop'), bot = el('div', 'rbot');
     top.append(el('span', 'rtitle', r.title), el('span', 'rtime', when(r.ts)));
     bot.append(el('span', 'rlast', (r.last || '').split('\n')[0]));
-    if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy' }[r.st] || ''), r.st));
+    if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy', '전송됨': '' }[r.st] || ''), r.st));
     if (r.unread) bot.append(el('span', 'dot'));
     body.append(top, bot);
     row.append(el('span', 'tagchip' + (r.mode === 'write' ? ' w' : ''), r.no ? 'T' + r.no : '새'), body);
@@ -709,6 +739,7 @@ function drawRoom(box, r) {
     const meta = el('div', 'meta');
     const st = !m.bot ? '' : m.kind === 'confirm' ? '실행 확인' : m.status === 'error' ? '오류' : m.ask ? '질문' : '';
     if (st) meta.append(el('span', 'tagchip' + (m.mode === 'write' ? ' w' : ''), st));
+    if (r.st === '전송됨' && m === r.msgs[r.msgs.length - 1]) meta.append(el('span', 'unread', '1'));   // 카톡 읽음 표시 — PC 가 받으면 사라진다
     meta.append(el('span', '', hm(m.ts)));
     if (r.ask === m && m.ask.options) {                  // 아직 답하지 않은 질문 — 단추로 고른다
       const a = m.ask, ask = el('div', 'ask');
@@ -730,9 +761,15 @@ function drawRoom(box, r) {
   for (const o of r.out) {                             // 아직 못 보낸 것
     const w = el('div', 'msg'); w.append(el('div', 'bubble wait', o.text), el('div', 'meta', '보내는 중…')); add(o.at, w);
   }
-  if (r.st === '일하는 중') {
-    const w = el('div', 'msg bot'); w.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…')); box.append(w);
+  if (r.st === '일하는 중' || r.st === '전송됨') {
+    const w = el('div', 'msg bot'), row = el('div', 'typingrow');
+    if (r.st === '일하는 중') row.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…'));
+    const stopB = el('button', 'stopbtn', '■ 멈춤');
+    stopB.onclick = () => roomStop(r);
+    row.append(stopB); w.append(row); box.append(w);
   }
+  if (r.st === '전송됨' && Date.now() - r.ts > 3 * 60000)   // 보통 1분 안에 받는다 — 오래 못 받으면 회사 메일 스팸 격리가 흔한 원인
+    box.append(el('div', 'tail warn', 'PC 가 아직 못 받았어요 — 회사 메일 스팸함에 걸렸는지 확인해 보세요'));
   gseen[r.key] = r.ts; store.set('gseen', gseen);
   box.scrollTop = box.scrollHeight;
 }
@@ -772,7 +809,7 @@ async function petLoad() {
 function petDraw() {
   if (!petSkin) return;
   const now = Date.now(), bark = petFlash.bark > now;
-  const work = gOn() && (gout.length > 0 || gWaiting(gList()).length > 0);   // 답을 기다리는 동안 고양이가 일한다
+  const work = gOn() && gWaiting(gList()).some(m => m.got);   // PC 가 받아서 일하는 동안 고양이가 일한다
   const cat = work ? 'work' : petFlash.happy > now ? 'happy' : 'idle';
   const pd = petting === 'dog' ? PetSkin.petted('dog', 'alert', bark) : { mood: 'alert', bark };
   const pc = petting === 'cat' ? PetSkin.petted('cat', cat, false) : { mood: cat };
