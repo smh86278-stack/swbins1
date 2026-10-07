@@ -101,9 +101,11 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   padding:8px 14px;border-radius:14px;font-size:14px;transition:.25s;pointer-events:none;max-width:85vw;text-align:center}
 #toast.show{opacity:.95;transform:translate(-50%,0)}
 /* 인형 강아지·고양이(D&C 허브와 같은 그림, pet/) — 머리줄 아래. 누르면 쓰다듬기, 보내면 반긴다 */
-.petstage{display:flex;justify-content:center;align-items:flex-end;gap:2px;padding:4px 16px 0;height:104px;flex:none}
+.petstage{position:fixed;inset:0;z-index:4;pointer-events:none}
 .petstage.off{display:none}
-.petstage .pet{width:84px;position:relative;-webkit-tap-highlight-color:transparent}
+.petstage .pet{width:84px;position:absolute;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.petstage .pet.dragging{filter:drop-shadow(0 8px 10px rgba(90,60,140,.35));transition:none}
+.msg .meta .del{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;padding:0 4px;cursor:pointer}
 .field select{width:100%;font:inherit;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
 </style>
 <link rel="stylesheet" href="pet/pets.css">
@@ -187,6 +189,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <div class="hint" style="margin-top:4px">보낼 때 제목 끝에 자동으로 붙습니다. PC 가 개인 주소에서 온 지시를 이 단어로 확인합니다.</div></div>
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div></div>
+    <div class="field"><button type="button" class="btn" id="clearSent" style="width:100%">보낸 기록 모두 지우기 (이 기기에서만)</button></div>
     <div class="actions"><button class="btn" value="cancel" formnovalidate>닫기</button><button class="btn pri" value="ok">저장</button></div>
   </form>
 </dialog>
@@ -224,6 +227,9 @@ function draw() {
     const m = el('div', 'msg'), b = el('div', 'bubble', s.text), meta = el('div', 'meta');
     meta.append(el('span', 'tagchip' + (s.mode === 'write' ? ' w' : ''), s.label));
     meta.append(el('span', '', pad(d.getHours()) + ':' + pad(d.getMinutes())));
+    const del = el('button', 'del', '지우기');                // 이 기기의 보낸 기록에서만 뺀다(PC·메일은 그대로)
+    del.onclick = () => { sent = sent.filter(x => x !== s); store.set('sent', sent); draw(); };
+    meta.append(del);
     if (s.kind === 'say') {
       const again = el('button', 'again', '다시 쓰기');
       again.onclick = () => { setTab('say'); $('#sayText').value = s.text; $('#sayThread').value = s.thread || ''; setMode(s.mode); grow($('#sayText')); refresh(); $('#sayText').focus(); };
@@ -370,12 +376,55 @@ function petCheer() {                                     // 보내면 강아지
   const now = Date.now(); petFlash.bark = now + 3000; petFlash.happy = now + 4000;
   petDraw(); setTimeout(petDraw, 3100); setTimeout(petDraw, 4100);
 }
-for (const k of ['Dog', 'Cat']) {                         // 폰은 마우스가 없으니 누르면 잠깐 쓰다듬기
-  $('#p' + k).addEventListener('click', () => {
-    petting = k.toLowerCase(); petDraw();
-    clearTimeout(petTimer); petTimer = setTimeout(() => { petting = null; petDraw(); }, 2500);
-  });
+/* 펫 옮기기 — 손가락으로 끌면 그 자리에 두고(이 기기에 기억), 살짝 누르면 쓰다듬기 */
+const PET_POS = 'dnc-pet-pos';
+function petPos() { try { return JSON.parse(localStorage.getItem(PET_POS) || '{}'); } catch (e) { return {}; } }
+function petPlace() {
+  const pos = petPos(), w = innerWidth, h = innerHeight;
+  const bottom = ($('.composer') ? $('.composer').getBoundingClientRect().top : h) - 100;
+  const def = { dog: [w - 186, bottom], cat: [w - 100, bottom] };      // 처음엔 입력칸 바로 위 오른쪽(대화를 덜 가린다)
+  for (const kind of ['dog', 'cat']) {
+    const el = $('#p' + kind[0].toUpperCase() + kind.slice(1)), p = pos[kind] || def[kind];
+    const x = Math.min(Math.max(0, p[0]), w - 84), y = Math.min(Math.max(0, p[1]), h - 100);   // 화면 밖으로 안 나가게
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+  }
 }
+for (const k of ['Dog', 'Cat']) {
+  const pet = $('#p' + k), kind = k.toLowerCase();
+  let start = null;
+  pet.addEventListener('pointerdown', e => {
+    start = { x: e.clientX, y: e.clientY, l: pet.offsetLeft, t: pet.offsetTop, moved: false };
+    try { pet.setPointerCapture(e.pointerId); } catch (err) {}         // 손가락이 펫 밖으로 나가도 계속 따라오게
+  });
+  pet.addEventListener('pointermove', e => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (!start.moved && Math.hypot(dx, dy) < 8) return;               // 8px 안쪽은 누르기로 본다
+    start.moved = true; pet.classList.add('dragging');
+    pet.style.left = Math.min(Math.max(0, start.l + dx), innerWidth - 84) + 'px';
+    pet.style.top = Math.min(Math.max(0, start.t + dy), innerHeight - 100) + 'px';
+  });
+  const end = () => {
+    if (!start) return;
+    const moved = start.moved; start = null; pet.classList.remove('dragging');
+    if (moved) {
+      const pos = petPos(); pos[kind] = [pet.offsetLeft, pet.offsetTop];
+      try { localStorage.setItem(PET_POS, JSON.stringify(pos)); } catch (err) {}
+      return;
+    }
+    petting = kind; petDraw();                                        // 누르기 = 쓰다듬기
+    clearTimeout(petTimer); petTimer = setTimeout(() => { petting = null; petDraw(); }, 2500);
+  };
+  pet.addEventListener('pointerup', end);
+  pet.addEventListener('pointercancel', () => { if (start) { start.moved = true; } end(); });
+}
+addEventListener('resize', petPlace);
+petPlace();
+$('#clearSent').addEventListener('click', () => {
+  if (!sent.length) { toast('지울 기록이 없습니다'); return; }
+  if (!confirm('이 기기의 보낸 기록 ' + sent.length + '건을 모두 지울까요? (PC·메일은 그대로)')) return;
+  sent = []; store.set('sent', sent); draw(); toast('지웠습니다');
+});
 for (const kind of ['dog', 'cat']) $('#' + kind + 'Breed').addEventListener('change', e => {
   const p = petPick(); p[kind] = e.target.value;
   try { localStorage.setItem(PET_PICK, JSON.stringify(p)); } catch (err) {}
