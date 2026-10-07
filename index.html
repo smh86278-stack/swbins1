@@ -182,6 +182,9 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <input id="setFolders" type="text" placeholder="hub, mobile"></div>
     <div class="field"><label for="setPrefix">Jira 키 앞부분</label>
       <input id="setPrefix" type="text" placeholder="PROJ-"></div>
+    <div class="field"><label for="setKey">암호 단어 (폰 기본 메일이 iCloud 같은 개인 주소일 때)</label>
+      <input id="setKey" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="PC 에서 알려 준 단어">
+      <div class="hint" style="margin-top:4px">보낼 때 제목 끝에 자동으로 붙습니다. PC 가 개인 주소에서 온 지시를 이 단어로 확인합니다.</div></div>
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div></div>
     <div class="actions"><button class="btn" value="cancel" formnovalidate>닫기</button><button class="btn pri" value="ok">저장</button></div>
@@ -235,6 +238,7 @@ function draw() {
 function openMail(subject, body, rec) {
   if (!cfg.mail) { openSettings(); toast('먼저 메일 주소를 넣어 주세요'); return false; }   // 입력은 지우지 않는다
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
+  if (cfg.key) subject += ' [k:' + cfg.key + ']';          // 암호 단어 — PC 게이트웨이가 확인하고 떼어 낸다
   const url = 'mailto:' + encodeURIComponent(cfg.mail) + '?subject=' + enc(subject) + '&body=' + enc(body);
   (window.dispatchGo || (u => { location.href = u; }))(url);   // dispatchGo: 시험용 가로채기
   sent.push(Object.assign({ at: Date.now() }, rec)); sent = sent.slice(-200); store.set('sent', sent); draw();
@@ -313,13 +317,14 @@ for (const id of ['#sayText', '#ansText']) $(id).addEventListener('input', e => 
 for (const id of ['#ansThread', '#jiraNo', '#sayThread']) $(id).addEventListener('input', refresh);
 
 function openSettings() {
+  $('#setKey').value = cfg.key || '';
   $('#setMail').value = cfg.mail || ''; $('#setFolders').value = (cfg.folders || []).join(', '); $('#setPrefix').value = cfg.prefix || '';
   $('#dlg').showModal();
 }
 $('#setBtn').onclick = openSettings;
 $('#dlg').addEventListener('close', () => {
   if ($('#dlg').returnValue !== 'ok') return;
-  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim() };
+  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, '') };
   store.set('cfg', cfg); applyCfg(); toast('저장했습니다');
 });
 function applyCfg() {
