@@ -45,6 +45,8 @@ h1{font-size:17px;margin:0;font-weight:800}
 .empty{margin:auto;text-align:center;color:var(--muted);font-size:14px;max-width:300px}
 .empty b{color:var(--text)}
 .day{align-self:center;font-size:11px;color:var(--muted);background:var(--soft);border-radius:99px;padding:2px 10px}
+.hint{align-self:center;font-size:12px;color:var(--muted);text-align:center}
+.hint a{color:var(--accent);font-weight:700;text-decoration:none;margin-left:6px}
 .msg{align-self:flex-end;max-width:85%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--onaccent);border-radius:18px 18px 6px 18px;padding:9px 13px;
   white-space:pre-wrap;word-break:break-word;box-shadow:var(--shadow)}
@@ -217,7 +219,7 @@ function draw() {
   const box = $('#log'); box.replaceChildren();
   if (!sent.length) {
     const e = el('div', 'empty');
-    e.innerHTML = '<b>메일로 일을 맡기는 곳</b><br><br>아래에 할 일을 적고 보내면 메일 앱이 다 채워진 채 열립니다. <b>보내기</b>만 누르세요.<br><br>답은 메일로 옵니다. 메일 안의 단추로 바로 답하거나, 여기 <b>답하기</b> 탭에서 체크박스로 고르세요.';
+    e.innerHTML = '<b>메일로 일을 맡기는 곳</b><br><br>아래에 할 일을 적고 보내면 메일 앱이 다 채워진 채 열립니다. <b>보내기</b>만 누르세요.<br><br><b>답은 이 화면이 아니라 메일 앱으로 옵니다</b>(이 페이지는 메일함을 읽지 못해요). 메일 안의 단추로 바로 답하거나, 여기 <b>답하기</b> 탭에서 체크박스로 고르세요.';
     box.append(e); return;
   }
   let lastDay = '';
@@ -237,6 +239,9 @@ function draw() {
     }
     m.append(b, meta); box.append(m);
   }
+  const hint = el('div', 'hint', '답은 메일 앱으로 옵니다');     // 이 페이지는 보내기 전용 — 메일함을 읽지 못한다
+  const go = el('a', '', '메일 앱 열기'); go.href = 'message://';  // iOS 메일 앱
+  hint.append(go); box.append(hint);
   box.scrollTop = box.scrollHeight;
 }
 
