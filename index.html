@@ -17,6 +17,7 @@
 <style>
 /* 디스패치 — 폰(아이폰 Safari)에서 쓰는 '보내기' 화면. 서버가 없다: 보내기를 누르면 메일 앱이 제목·본문이 채워진 채 열리고,
    보내기만 누르면 PC 의 메일 게이트웨이가 받아 일을 시작한다. 답은 메일로 온다(메일 안의 단추로 바로 답장).
+   설정에 Google 클라이언트 ID 를 넣고 연결하면 메일 앱 대신 Gmail API 로 바로 보내고, PC 의 회신을 받아 말풍선으로 띄운다.
    이 페이지에는 메일 주소·업무 내용이 들어 있지 않다 — 주소는 처음 한 번 입력하면 이 기기에만 남는다. */
 :root{color-scheme:light dark;
   --bg:light-dark(#f7f4fc,#1a1826);--bg2:light-dark(#fde9f3,#2a1f33);--bg3:light-dark(#e6f1ff,#1c2236);
@@ -45,8 +46,21 @@ h1{font-size:17px;margin:0;font-weight:800}
 .empty{margin:auto;text-align:center;color:var(--muted);font-size:14px;max-width:300px}
 .empty b{color:var(--text)}
 .day{align-self:center;font-size:11px;color:var(--muted);background:var(--soft);border-radius:99px;padding:2px 10px}
-.hint{align-self:center;font-size:12px;color:var(--muted);text-align:center}
-.hint a{color:var(--accent);font-weight:700;text-decoration:none;margin-left:6px}
+.tail{align-self:center;font-size:12px;color:var(--muted);text-align:center}
+.tail a{color:var(--accent);font-weight:700;text-decoration:none;margin-left:6px}
+/* Gmail 로 주고받을 때 — PC(봇) 말풍선은 왼쪽 */
+.msg.bot{align-self:flex-start;align-items:flex-start}
+.bubble.bot{background:var(--solid);color:var(--text);border:1px solid var(--line);border-radius:18px 18px 18px 6px}
+.bubble.wait{opacity:.55}
+.bubble.typing{color:var(--muted);font-size:14px}
+.ask{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:5px;align-items:flex-start;white-space:normal}
+.ask .q{font-weight:800;font-size:14px}
+.opt{border:1px solid var(--line);background:var(--accentsoft);color:var(--accent);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:700;text-align:left}
+.opt.on{background:var(--accent);color:var(--onaccent);border-color:var(--accent)}
+#gbar{display:none;margin:8px 16px 0;padding:8px 12px;border-radius:14px;font-size:13px;align-items:center;gap:8px;
+  background:color-mix(in srgb,var(--warn) 12%,var(--solid));border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line))}
+#gbar.on{display:flex}
+#gbar button{margin-left:auto;flex:none}
 .msg{align-self:flex-end;max-width:85%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--onaccent);border-radius:18px 18px 6px 18px;padding:9px 13px;
   white-space:pre-wrap;word-break:break-word;box-shadow:var(--shadow)}
@@ -123,6 +137,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div>
   <div class="pet cat" id="pCat"><div class="art" id="pCatArt"></div></div>
 </div>
+<div id="gbar"><span id="gbarText"></span><button class="btn" id="gbarBtn">다시 연결</button></div>
 <main id="log" aria-live="polite"></main>
 
 <div class="composer">
@@ -189,6 +204,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div class="field"><label for="setKey">암호 단어 (폰 기본 메일이 iCloud 같은 개인 주소일 때)</label>
       <input id="setKey" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="PC 에서 알려 준 단어">
       <div class="hint" style="margin-top:4px">보낼 때 제목 끝에 자동으로 붙습니다. PC 가 개인 주소에서 온 지시를 이 단어로 확인합니다.</div></div>
+    <div class="field"><label for="setGcid">Google 클라이언트 ID (Gmail 로 주고받기 — 비우면 메일 앱)</label>
+      <input id="setGcid" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="….apps.googleusercontent.com">
+      <div class="hint" style="margin-top:4px" id="gHint">넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.</div>
+      <button type="button" class="btn" id="gOff" style="width:100%;margin-top:6px;display:none">Gmail 연결 끊기 (이 기기에서만)</button></div>
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div></div>
     <div class="field"><button type="button" class="btn" id="clearSent" style="width:100%">보낸 기록 모두 지우기 (이 기기에서만)</button></div>
@@ -208,7 +227,7 @@ const store = {                                   // 이 기기의 설정·보�
 };
 let cfg = store.get('cfg', { mail: '', folders: [], prefix: '' });
 let sent = store.get('sent', []);
-let mode = 'read', folder = '', picks = new Set(), stop = false;
+let mode = 'read', folder = '', picks = new Set(), stop = false, pickN = 4;
 
 function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 2600); }
 function el(t, c, x) { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
@@ -217,6 +236,7 @@ const pad = n => String(n).padStart(2, '0');
 /* ---- 보낸 기록 ---- */
 function draw() {
   const box = $('#log'); box.replaceChildren();
+  if (gOn()) { drawGmail(box); return; }
   if (!sent.length) {
     const e = el('div', 'empty');
     e.innerHTML = '<b>메일로 일을 맡기는 곳</b><br><br>아래에 할 일을 적고 보내면 메일 앱이 다 채워진 채 열립니다. <b>보내기</b>만 누르세요.<br><br><b>답은 이 화면이 아니라 메일 앱으로 옵니다</b>(이 페이지는 메일함을 읽지 못해요). 메일 안의 단추로 바로 답하거나, 여기 <b>답하기</b> 탭에서 체크박스로 고르세요.';
@@ -239,7 +259,7 @@ function draw() {
     }
     m.append(b, meta); box.append(m);
   }
-  const hint = el('div', 'hint', '답은 메일 앱으로 옵니다');     // 이 페이지는 보내기 전용 — 메일함을 읽지 못한다
+  const hint = el('div', 'tail', '답은 메일 앱으로 옵니다');     // 메일 앱 모드는 보내기 전용 — 메일함을 읽지 못한다
   const go = el('a', '', '메일 앱 열기'); go.href = 'message://';  // iOS 메일 앱
   hint.append(go); box.append(hint);
   box.scrollTop = box.scrollHeight;
@@ -250,6 +270,12 @@ function openMail(subject, body, rec) {
   if (!cfg.mail) { openSettings(); toast('먼저 메일 주소를 넣어 주세요'); return false; }   // 입력은 지우지 않는다
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
   if (cfg.key) subject += ' [k:' + cfg.key + ']';          // 암호 단어 — PC 게이트웨이가 확인하고 떼어 낸다
+  if (gOn()) {                                              // Gmail 로 바로 보낸다. 연결이 끊겼으면 다시 연결하고 돌아와서 보낸다
+    gout.push({ subject, body, reply: gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
+    store.set('gout', gout); draw(); petCheer();
+    if (gLive()) gPoll(); else if (gtok) gAuth(true); else gAuth(false);
+    return true;
+  }
   const url = 'mailto:' + encodeURIComponent(cfg.mail) + '?subject=' + enc(subject) + '&body=' + enc(body);
   (window.dispatchGo || (u => { location.href = u; }))(url);   // dispatchGo: 시험용 가로채기
   sent.push(Object.assign({ at: Date.now() }, rec)); sent = sent.slice(-200); store.set('sent', sent); draw();
@@ -283,7 +309,7 @@ $('#saySend').onclick = () => {
 /* ---- 답하기(체크박스) ---- */
 function drawPicks() {
   const box = $('#picks'); box.replaceChildren();
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= pickN; i++) {
     const b = el('button', 'pick' + (picks.has(i) ? ' on' : ''));
     b.setAttribute('role', 'checkbox'); b.setAttribute('aria-checked', picks.has(i));
     const box2 = el('span', 'box', picks.has(i) ? '✓' : ''); b.append(box2, String(i));
@@ -298,8 +324,9 @@ $('#ansSend').onclick = () => {
   const nums = [...picks].sort((a, b) => a - b).join(',');
   const body = stop ? '멈춤' : (nums + (nums && extra ? ' ' : '') + extra);
   if (!body) return;
-  if (!openMail('Re: ' + TAG.read + ' [T' + t + '] 답', body, { kind: 'answer', text: stop ? '멈춤' : (nums ? '☑ ' + nums.split(',').join(' ☑ ') : '') + (extra ? (nums ? '\n' : '') + extra : ''), mode: 'read', label: 'T' + t + ' · 답' })) return;
-  picks.clear(); stop = false; $('#stopBtn').classList.remove('on'); $('#ansText').value = ''; drawPicks(); refresh();
+  if (!openMail('Re: ' + TAG.read + ' [T' + t + '] 답', body, { kind: 'answer', thread: t, text: stop ? '멈춤' : (nums ? '☑ ' + nums.split(',').join(' ☑ ') : '') + (extra ? (nums ? '\n' : '') + extra : ''), mode: 'read', label: 'T' + t + ' · 답' })) return;
+  picks.clear(); stop = false; pickN = 4; $('#stopBtn').classList.remove('on'); $('#ansText').value = ''; drawPicks(); refresh();
+  if (gOn()) setTab('say');
 };
 
 /* ---- Jira ---- */
@@ -328,24 +355,275 @@ for (const id of ['#sayText', '#ansText']) $(id).addEventListener('input', e => 
 for (const id of ['#ansThread', '#jiraNo', '#sayThread']) $(id).addEventListener('input', refresh);
 
 function openSettings() {
-  $('#setKey').value = cfg.key || '';
+  $('#setKey').value = cfg.key || ''; $('#setGcid').value = cfg.gcid || '';
+  $('#gOff').style.display = gtok ? '' : 'none';
+  $('#gHint').textContent = gtok && gtok.email ? gtok.email + ' 로 연결돼 있습니다.' : '넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.';
+  $('#clearSent').textContent = gOn() ? '대화 기록 비우기 (이 기기 화면에서만)' : '보낸 기록 모두 지우기 (이 기기에서만)';
   $('#setMail').value = cfg.mail || ''; $('#setFolders').value = (cfg.folders || []).join(', '); $('#setPrefix').value = cfg.prefix || '';
   $('#dlg').showModal();
 }
 $('#setBtn').onclick = openSettings;
 $('#dlg').addEventListener('close', () => {
   if ($('#dlg').returnValue !== 'ok') return;
-  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, '') };
-  store.set('cfg', cfg); applyCfg(); toast('저장했습니다');
+  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim() };
+  store.set('cfg', cfg); applyCfg(); draw(); toast('저장했습니다');
+  if (gOn() && cfg.mail) { if (gLive()) gPoll(); else gAuth(false); }   // 처음 넣었으면 바로 Google 로그인
 });
+const short = a => a.replace(/^(.{2}).*(@.*)$/, '$1…$2');
 function applyCfg() {
-  $('#who').textContent = cfg.mail ? cfg.mail.replace(/^(.{2}).*(@.*)$/, '$1…$2') + ' 로 보냅니다' : '설정에서 메일 주소를 넣어 주세요';
+  $('#who').textContent = !cfg.mail ? '설정에서 메일 주소를 넣어 주세요'
+    : gOn() ? (gtok && gtok.email ? short(gtok.email) : 'Gmail') + ' · 실시간'
+    : short(cfg.mail) + ' 로 보냅니다';
   $('#jiraPrefix').textContent = cfg.prefix || '';
   if (!(cfg.folders || []).includes(folder)) folder = '';
   drawFolders();
 }
 
+/* ---- Gmail 로 주고받기 ----
+   서버 없이 Google 로그인 화면을 거쳐 돌아올 때 주소 끝(#access_token=…)으로 1시간짜리 토큰을 받는다(이 기기에만).
+   보내기는 Gmail API 로, 받기는 PC 메일 주소와 오간 메일을 몇 초마다 읽어 PC 대화 앱(chat.py)과 같은 규칙으로 말풍선을 만든다. */
+const GSCOPE = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+const GAPI = 'https://gmail.googleapis.com/gmail/v1/users/me/';
+const HOME = location.origin + location.pathname.replace(/index\.html$/, '');   // 구글에 등록한 리디렉션 주소와 같아야 한다
+let gtok = store.get('gtok', null);            // { t, exp, email }
+let gmsgs = store.get('gm', {});               // Gmail id → 대화 메시지(지시 메일이 아니면 { skip })
+let gout = store.get('gout', []);              // 아직 못 보낸 것 — 연결되면 보낸다
+let gstate = '', gBusy = false, gTimer = 0, gHashErr = false;
+const gOn = () => !!cfg.gcid;
+const gLive = () => !!(gtok && gtok.t && gtok.exp > Date.now() + 30000);
+
+function gAuth(silent) {
+  if (!cfg.gcid) return;
+  const st = Math.random().toString(36).slice(2);
+  store.set('gst', st); store.set('glast', Date.now());
+  const p = new URLSearchParams({ client_id: cfg.gcid, redirect_uri: HOME, response_type: 'token', scope: GSCOPE, include_granted_scopes: 'true', state: st });
+  if (silent) p.set('prompt', 'none');                    // 이미 허락했으면 화면 없이 바로 돌아온다
+  if (gtok && gtok.email) p.set('login_hint', gtok.email);
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + p;
+}
+function gTakeHash() {                                     // 로그인에서 돌아왔으면 토큰을 받아 두고 주소를 깨끗이
+  if (!/(^#|&)(access_token|error)=/.test(location.hash)) return;
+  const h = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, '', location.pathname + location.search);
+  if (h.get('state') !== store.get('gst', '')) return;
+  store.set('gst', '');
+  if (h.get('access_token')) {
+    gtok = { t: h.get('access_token'), exp: Date.now() + (parseInt(h.get('expires_in'), 10) || 3600) * 1000, email: (gtok && gtok.email) || '' };
+    store.set('gtok', gtok);
+  } else { gstate = 'need'; gHashErr = true; }           // 조용한 재연결이 안 됐다 — 단추로 다시 로그인
+}
+async function gFetch(path, opt) {
+  const o = Object.assign({}, opt);
+  o.headers = Object.assign({ Authorization: 'Bearer ' + gtok.t }, o.headers);
+  const r = await fetch(GAPI + path, o);
+  if (r.status === 401) { gtok.exp = 0; store.set('gtok', gtok); throw new Error('auth'); }
+  if (!r.ok) throw new Error('Gmail ' + r.status);
+  return r.json();
+}
+
+/* 메일 해석 — tools/dispatch-chat/chat.py 의 parse_message 와 같은 규칙 */
+const KEY_RE = /\s*\[k:[^\]\s]{1,64}\]\s*$/, THREAD_RE = /\[T(\d{1,6})\]/, RE_RE = /^\s*(re|fw|fwd|회신|답장)\s*[:：]\s*/i;
+const SIG_RE = /^\s*(--\s*$|보낸 사람:|보낸사람:|From:|-----Original Message-----|(나의 |내 )?iPhone에서 보냄|Sent from my |Get Outlook for |\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\..*작성:\s*$|On .+ wrote:\s*$)/m;
+const ASK_SPLIT = '─'.repeat(16);
+const bin = s => Uint8Array.from(s, c => c.charCodeAt(0));
+const b64u = s => bin(atob(s.replace(/-/g, '+').replace(/_/g, '/')));
+function txt(bytes, cs) { try { return new TextDecoder(cs || 'utf-8').decode(bytes); } catch (e) { return new TextDecoder().decode(bytes); } }
+function mimeWords(s) {                                    // =?utf-8?b?…?= · =?utf-8?q?…?= 풀기
+  return String(s || '').replace(/\?=\s+=\?/g, '?==?').replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi, (all, cs, enc, x) => {
+    try {
+      return txt(enc.toUpperCase() === 'B' ? bin(atob(x))
+        : bin(x.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (m, h) => String.fromCharCode(parseInt(h, 16)))), cs);
+    } catch (e) { return all; }
+  });
+}
+function gPlain(payload) {
+  const parts = [], walk = p => { parts.push(p); (p.parts || []).forEach(walk); };
+  walk(payload);
+  const has = t => parts.find(p => p.mimeType === t && p.body && p.body.data && !/attachment/i.test(hval(p, 'content-disposition')));
+  const p = has('text/plain') || has('text/html');
+  if (!p) return '';
+  const cs = (hval(p, 'content-type').match(/charset="?([^";\s]+)/i) || [])[1];
+  const t = txt(b64u(p.body.data), cs);
+  return p.mimeType === 'text/html' ? t.replace(/<[^>]+>/g, ' ') : t;
+}
+function hval(p, name) { const h = (p.headers || []).find(x => x.name.toLowerCase() === name); return h ? h.value : ''; }
+function gParse(g) {
+  const H = {}; for (const h of g.payload.headers || []) H[h.name.toLowerCase()] = h.value;
+  const ts = +g.internalDate || Date.now();
+  const subject = mimeWords(H.subject).replace(/\s+/g, ' ').trim();
+  let clean = subject;
+  for (let i = 0; i < 5; i++) { const n = clean.replace(RE_RE, ''); if (n === clean) break; clean = n; }
+  clean = clean.trim().replace(KEY_RE, '');
+  const tag = [TAG.write, TAG.read].find(t => clean === t || (clean.startsWith(t) && /\s/.test(clean[t.length])));   // 긴 태그 먼저
+  if (!tag) return { skip: 1, ts };
+  const body = gPlain(g.payload).replace(/\r/g, '');
+  const tm = clean.match(THREAD_RE), th = String(H['x-dispatch-thread'] || '').trim();
+  const m = { id: (H['message-id'] || '').trim(), ts, mode: tag === TAG.write ? 'write' : 'read',
+    thread: parseInt(/^\d+$/.test(th) ? th : (tm ? tm[1] : '0'), 10) || null,
+    rest: clean.slice(tag.length).replace(THREAD_RE, '').trim(), bot: H['x-dispatch'] === 'bot',
+    refs: ((H['in-reply-to'] || '') + ' ' + (H.references || '')).match(/<[^<>]+>/g) || [] };
+  if (m.bot) {
+    m.kind = H['x-dispatch-kind'] || 'reply'; m.status = H['x-dispatch-status'] || '';
+    let b = body.includes(ASK_SPLIT) ? body.slice(body.indexOf(ASK_SPLIT) + ASK_SPLIT.length) : body;   // 맨 위 ☐ 선택지 줄은 따로 받는다
+    const i = b.lastIndexOf('\n--\n');
+    m.text = (i >= 0 ? b.slice(0, i) : b).trim();
+    m.ask = null;
+    if (H['x-dispatch-ask']) try { m.ask = JSON.parse(txt(bin(atob(mimeWords(H['x-dispatch-ask']).replace(/\s+/g, ''))))); } catch (e) {}
+  } else {
+    const cut = body.search(SIG_RE);
+    const said = (cut >= 0 ? body.slice(0, cut) : body).split('\n').filter(l => !l.trimStart().startsWith('>')).join('\n').trim();
+    // 첫 지시는 제목+본문이 지시문이고, 이어지는 말은 본문이 곧 말이다(비면 제목)
+    m.text = (/^re:/i.test(subject) || tm) && said ? said : [m.rest, said].filter(Boolean).join('\n').trim();
+  }
+  return m;
+}
+function gList() {                                         // 화면에 보일 메시지(시간순). 번호 없는 첫 지시는 그 지시에 답한 봇 메일로 번호를 찾는다
+  const since = store.get('gsince', 0);
+  const list = Object.values(gmsgs).filter(m => m && !m.skip && m.ts > since).sort((a, b) => a.ts - b.ts);
+  const byId = {}; for (const m of list) if (m.id) byId[m.id] = m;
+  for (const m of list) if (m.thread) for (const r of m.refs) { const o = byId[r]; if (o && !o.thread) o.thread = m.thread; }
+  return list;
+}
+function gWaiting(list) {                                  // 내가 보내고 아직 답이 없는 대화(30분 안) — 'PC 가 일하는 중'
+  const last = {};
+  for (const m of list) last[m.thread ? 'T' + m.thread : 'm:' + m.id] = m;
+  return Object.values(last).filter(m => !m.bot && Date.now() - m.ts < 30 * 60000);
+}
+function gReplyTo(t) {                                     // 이어 말할 때 그 대화의 마지막 봇 메일에 답장으로 단다
+  if (!(t > 0)) return '';
+  const b = gList().filter(m => m.bot && m.thread === t && m.id);
+  return b.length ? b[b.length - 1].id : '';
+}
+async function gGet(id) {
+  try { gmsgs[id] = gParse(await gFetch('messages/' + id + '?format=full')); }
+  catch (e) { if (e.message === 'auth') throw e; }
+}
+function gSave() {                                         // 기기 저장소가 넘치지 않게 최근 400통만
+  const ids = Object.keys(gmsgs).sort((a, b) => (gmsgs[b] || {}).ts - (gmsgs[a] || {}).ts);
+  for (const id of ids.slice(400)) delete gmsgs[id];
+  store.set('gm', gmsgs);
+}
+const enc8 = s => new TextEncoder().encode(s);
+function b64(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return btoa(s); }
+function mimeHead(s) {                                     // 제목 → =?UTF-8?B?…?= 조각들(글자를 가르지 않게 45바이트씩)
+  const out = []; let cur = '';
+  for (const ch of s) { if (cur && enc8(cur + ch).length > 45) { out.push(cur); cur = ''; } cur += ch; }
+  if (cur) out.push(cur);
+  return out.map(x => '=?UTF-8?B?' + b64(enc8(x)) + '?=').join('\r\n ') || '""';
+}
+async function gSend(o) {
+  const head = ['To: ' + cfg.mail, 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'];
+  if (o.reply) head.push('In-Reply-To: ' + o.reply, 'References: ' + o.reply);
+  const raw = head.join('\r\n') + '\r\n\r\n' + ((b64(enc8(o.body || '')).match(/.{1,76}/g) || []).join('\r\n')) + '\r\n';
+  const r = await gFetch('messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw: b64(enc8(raw)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') }) });
+  if (r.id) await gGet(r.id);                              // 보낸 편지함에서 바로 가져와 말풍선으로
+}
+async function gPoll() {
+  clearTimeout(gTimer);
+  if (!gOn() || !cfg.mail || document.hidden) return;
+  if (!gLive()) {
+    // 토큰이 끊겼으면 조용히 다시 받아 온다(입력 중이면 글이 날아가지 않게 두고 띠만 띄운다)
+    if (gtok && !gHashErr && !$('#sayText').value.trim() && !$('#ansText').value.trim() && Date.now() - store.get('glast', 0) > 120000) { gAuth(true); return; }
+    gstate = 'need'; drawBanner(); return;
+  }
+  if (gBusy) return;
+  gBusy = true;
+  let changed = false;
+  try {
+    if (!gtok.email) { gtok.email = (await gFetch('profile')).emailAddress || ''; store.set('gtok', gtok); applyCfg(); }
+    while (gout.length) {                                  // 못 보낸 것부터
+      await gSend(gout[0]); gout.shift(); store.set('gout', gout); changed = true; toast('보냈습니다');
+    }
+    const q = '{from:' + cfg.mail + ' to:' + cfg.mail + '} newer_than:30d';
+    const r = await gFetch('messages?maxResults=80&includeSpamTrash=true&q=' + encodeURIComponent(q));
+    const ids = (r.messages || []).map(x => x.id).filter(id => !(id in gmsgs));
+    for (let i = 0; i < ids.length; i += 6) await Promise.all(ids.slice(i, i + 6).map(gGet));
+    if (ids.length) changed = true;
+    gstate = 'ok';
+  } catch (e) {
+    gstate = e.message === 'auth' ? 'need' : 'err';
+  } finally {
+    gBusy = false;
+    if (changed) { gSave(); draw(); }
+    drawBanner();
+    if (gstate === 'need') setTimeout(gPoll, 0);         // 토큰이 막 끊겼으면 조용히 다시 받아 오기를 해 본다
+    else gTimer = setTimeout(gPoll, gWaiting(gList()).length || gout.length ? 8000 : 30000);
+  }
+}
+function drawBanner() {
+  const bar = $('#gbar'), n = gout.length;
+  const msg = !gOn() ? '' : gstate === 'need' ? 'Google 연결이 끊겼어요' + (n ? ' · 보낼 것 ' + n + '건 대기' : '')
+    : gstate === 'err' ? 'Gmail 을 못 읽었어요 — 잠시 뒤 다시 해 봅니다' : '';
+  bar.classList.toggle('on', !!msg); $('#gbarText').textContent = msg;
+  $('#gbarBtn').style.display = gstate === 'need' ? '' : 'none';
+}
+$('#gbarBtn').onclick = () => gAuth(false);
+$('#gOff').onclick = () => {
+  if (!confirm('이 기기에서 Gmail 연결을 끊을까요? (클라이언트 ID 도 지웁니다)')) return;
+  gtok = null; gmsgs = {}; gout = []; cfg.gcid = '';
+  for (const k of ['gtok', 'gm', 'gout']) store.set(k, k === 'gtok' ? null : k === 'gm' ? {} : []);
+  store.set('cfg', cfg); $('#dlg').close(); applyCfg(); draw(); drawBanner(); toast('끊었습니다');
+};
+function drawGmail(box) {
+  const list = gList();
+  if (!list.length && !gout.length) {
+    const e = el('div', 'empty');
+    e.innerHTML = '<b>Gmail 로 주고받습니다</b><br><br>아래에 할 일을 적고 보내면 PC 가 받아 일하고, <b>답이 여기 말풍선으로</b> 옵니다.<br><br>선택지가 오면 말풍선 안 단추를 누르고 보내기만 누르세요.';
+    box.append(e); return;
+  }
+  const lastOf = {}; for (const m of list) if (m.thread) lastOf[m.thread] = m;
+  const ansT = parseInt($('#ansThread').value, 10);
+  let lastDay = '';
+  const add = (ts, node) => {
+    const d = new Date(ts), day = (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
+    if (day !== lastDay) { box.append(el('div', 'day', day)); lastDay = day; }
+    box.append(node);
+  };
+  const hm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  for (const m of list) {
+    const w = el('div', 'msg' + (m.bot ? ' bot' : '')), b = el('div', 'bubble' + (m.bot ? ' bot' : ''), m.text || m.rest || '(빈 메일)');
+    const meta = el('div', 'meta');
+    const st = !m.bot ? '' : m.kind === 'confirm' ? ' · 실행 확인' : m.status === 'error' ? ' · 오류' : m.ask ? ' · 질문' : '';
+    meta.append(el('span', 'tagchip' + (m.mode === 'write' ? ' w' : ''), (m.thread ? 'T' + m.thread : '새 대화') + st), el('span', '', hm(m.ts)));
+    if (m.bot && m.ask && m.ask.options && lastOf[m.thread] === m) {          // 아직 답하지 않은 질문 — 단추로 고른다
+      const a = m.ask, ask = el('div', 'ask');
+      ask.append(el('div', 'q', '❓ ' + a.question + (a.multi ? ' (여러 개)' : '')));
+      a.options.forEach((o, i) => {
+        const n = i + 1, c = el('button', 'opt' + (ansT === m.thread && picks.has(n) ? ' on' : ''), n + '. ' + o);
+        c.onclick = () => {
+          if (parseInt($('#ansThread').value, 10) !== m.thread) { picks.clear(); $('#ansThread').value = m.thread; }
+          if (a.multi && picks.has(n)) picks.delete(n); else { if (!a.multi) picks.clear(); picks.add(n); }
+          stop = false; $('#stopBtn').classList.remove('on'); pickN = Math.min(9, Math.max(a.options.length, 1));
+          setTab('answer'); drawPicks(); refresh(); draw();
+        };
+        ask.append(c);
+      });
+      b.append(ask);
+    }
+    if (m.bot && m.thread) {
+      const again = el('button', 'again', '이어서');
+      again.onclick = () => { setTab('say'); $('#sayThread').value = m.thread; refresh(); $('#sayText').focus(); };
+      meta.append(again);
+    }
+    w.append(b, meta); add(m.ts, w);
+  }
+  for (const o of gout) {                                  // 아직 못 보낸 것
+    const w = el('div', 'msg'); w.append(el('div', 'bubble wait', o.text), el('div', 'meta', '보내는 중…')); add(o.at, w);
+  }
+  for (const m of gWaiting(list)) {                        // 답을 기다리는 대화
+    const w = el('div', 'msg bot');
+    w.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…'), el('div', 'meta', m.thread ? 'T' + m.thread : '새 대화'));
+    box.append(w);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+gTakeHash();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) gPoll(); });
+
 applyCfg(); drawPicks(); draw(); refresh(); setTab(store.get('tab', 'say'));
+if (gOn()) gPoll();
 if (!cfg.mail) setTimeout(openSettings, 300);
 
 /* ---- 인형 강아지·고양이 ---- */
@@ -426,6 +704,10 @@ for (const k of ['Dog', 'Cat']) {
 addEventListener('resize', petPlace);
 petPlace();
 $('#clearSent').addEventListener('click', () => {
+  if (gOn()) {                                           // Gmail 은 그대로 — 이 기기 화면에서 지금까지의 대화만 안 보이게
+    if (!confirm('지금까지의 대화를 이 기기 화면에서 비울까요? (Gmail·PC 는 그대로)')) return;
+    store.set('gsince', Date.now()); draw(); toast('비웠습니다'); return;
+  }
   if (!sent.length) { toast('지울 기록이 없습니다'); return; }
   if (!confirm('이 기기의 보낸 기록 ' + sent.length + '건을 모두 지울까요? (PC·메일은 그대로)')) return;
   sent = []; store.set('sent', sent); draw(); toast('지웠습니다');
