@@ -1,6 +1,6 @@
 {
-  "name": "디스패치",
-  "short_name": "디스패치",
+  "name": "D&C 메신저",
+  "short_name": "D&C 메신저",
   "description": "메일로 일을 맡기는 메신저형 보내기 화면",
   "start_url": "./",
   "scope": "./",
