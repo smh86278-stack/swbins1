@@ -100,7 +100,13 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 #toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 64px);transform:translate(-50%,-10px);opacity:0;background:var(--text);color:var(--bg);
   padding:8px 14px;border-radius:14px;font-size:14px;transition:.25s;pointer-events:none;max-width:85vw;text-align:center}
 #toast.show{opacity:.95;transform:translate(-50%,0)}
+/* 인형 강아지·고양이(D&C 허브와 같은 그림, pet/) — 머리줄 아래. 누르면 쓰다듬기, 보내면 반긴다 */
+.petstage{display:flex;justify-content:center;align-items:flex-end;gap:2px;padding:4px 16px 0;height:104px;flex:none}
+.petstage.off{display:none}
+.petstage .pet{width:84px;position:relative;-webkit-tap-highlight-color:transparent}
+.field select{width:100%;font:inherit;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
 </style>
+<link rel="stylesheet" href="pet/pets.css">
 </head>
 <body>
 <header>
@@ -109,6 +115,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <button class="icon-btn" id="setBtn" aria-label="설정">설정</button>
 </header>
 
+<div class="petstage off" id="petStage">
+  <div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div>
+  <div class="pet cat" id="pCat"><div class="art" id="pCatArt"></div></div>
+</div>
 <main id="log" aria-live="polite"></main>
 
 <div class="composer">
@@ -172,10 +182,14 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <input id="setFolders" type="text" placeholder="hub, mobile"></div>
     <div class="field"><label for="setPrefix">Jira 키 앞부분</label>
       <input id="setPrefix" type="text" placeholder="PROJ-"></div>
+    <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
+      <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div></div>
     <div class="actions"><button class="btn" value="cancel" formnovalidate>닫기</button><button class="btn pri" value="ok">저장</button></div>
   </form>
 </dialog>
 <div id="toast"></div>
+<script src="pet/petwarp.js"></script>
+<script src="pet/pets.js"></script>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -225,6 +239,7 @@ function openMail(subject, body, rec) {
   (window.dispatchGo || (u => { location.href = u; }))(url);   // dispatchGo: 시험용 가로채기
   sent.push(Object.assign({ at: Date.now() }, rec)); sent = sent.slice(-200); store.set('sent', sent); draw();
   toast('메일 앱에서 보내기를 누르세요');
+  petCheer();
   return true;
 }
 
@@ -316,6 +331,52 @@ function applyCfg() {
 
 applyCfg(); drawPicks(); draw(); refresh(); setTab(store.get('tab', 'say'));
 if (!cfg.mail) setTimeout(openSettings, 300);
+
+/* ---- 인형 강아지·고양이 ---- */
+const PET_PICK = 'dnc-pet-breed';
+let petSkin = null, petting = null, petTimer = 0;
+const petFlash = { bark: 0, happy: 0 };
+function petPick() { try { return JSON.parse(localStorage.getItem(PET_PICK) || '{}'); } catch (e) { return {}; } }
+async function petLoad() {
+  if (!window.PetSkin || !window.fetch) return;
+  PetSkin.BASE = 'pet/';
+  const m = await PetSkin.load('plush', petPick());
+  if (!m) return;
+  petSkin = m;
+  PetSkin.reset($('#pDogArt')); PetSkin.reset($('#pCatArt'));
+  $('#petStage').classList.remove('off');
+  for (const kind of ['dog', 'cat']) {
+    const sel = $('#' + kind + 'Breed'), ids = PetSkin.breedIds(m, kind);
+    sel.replaceChildren(...ids.map(b => new Option((kind === 'dog' ? '🐶 ' : '🐱 ') + (m.breeds[kind][b].name || b), b)));
+    sel.value = m._breed[kind];
+  }
+  petDraw();
+}
+function petDraw() {
+  if (!petSkin) return;
+  const now = Date.now(), bark = petFlash.bark > now, cat = petFlash.happy > now ? 'happy' : 'idle';
+  const pd = petting === 'dog' ? PetSkin.petted('dog', 'alert', bark) : { mood: 'alert', bark };
+  const pc = petting === 'cat' ? PetSkin.petted('cat', cat, false) : { mood: cat };
+  $('#pDog').classList.toggle('petting', petting === 'dog'); $('#pCat').classList.toggle('petting', petting === 'cat');
+  PetSkin.render(petSkin, $('#pDog'), $('#pDogArt'), 'dog', pd.mood, pd.bark);
+  PetSkin.render(petSkin, $('#pCat'), $('#pCatArt'), 'cat', pc.mood, false);
+}
+function petCheer() {                                     // 보내면 강아지가 짖고 고양이가 기뻐한다
+  const now = Date.now(); petFlash.bark = now + 3000; petFlash.happy = now + 4000;
+  petDraw(); setTimeout(petDraw, 3100); setTimeout(petDraw, 4100);
+}
+for (const k of ['Dog', 'Cat']) {                         // 폰은 마우스가 없으니 누르면 잠깐 쓰다듬기
+  $('#p' + k).addEventListener('click', () => {
+    petting = k.toLowerCase(); petDraw();
+    clearTimeout(petTimer); petTimer = setTimeout(() => { petting = null; petDraw(); }, 2500);
+  });
+}
+for (const kind of ['dog', 'cat']) $('#' + kind + 'Breed').addEventListener('change', e => {
+  const p = petPick(); p[kind] = e.target.value;
+  try { localStorage.setItem(PET_PICK, JSON.stringify(p)); } catch (err) {}
+  petLoad();
+});
+petLoad();
 </script>
 </body>
 </html>
