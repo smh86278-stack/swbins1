@@ -61,6 +61,21 @@ h1{font-size:17px;margin:0;font-weight:800}
   background:color-mix(in srgb,var(--warn) 12%,var(--solid));border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line))}
 #gbar.on{display:flex}
 #gbar button{margin-left:auto;flex:none}
+/* 대화방 목록(카톡처럼) */
+.room{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:1px solid var(--line);background:var(--solid);border-radius:16px;
+  padding:10px 12px;box-shadow:var(--shadow);flex:none}
+.room .tagchip{flex:none;margin-top:3px}
+.rbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.rtop,.rbot{display:flex;gap:6px;align-items:center;min-width:0}
+.rtitle{flex:1;min-width:0;font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtime{flex:none;font-size:11px;color:var(--muted)}
+.rlast{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rst{flex:none;font-size:11px;font-weight:800;border-radius:99px;padding:1px 7px;background:var(--soft);color:var(--muted)}
+.rst.ask{background:var(--accentsoft);color:var(--accent)}.rst.err{color:var(--warn)}.rst.busy{color:var(--ok)}
+.dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--accent2)}
+.back{border:0;background:none;font-size:30px;line-height:1;padding:0 2px 4px 0;color:var(--accent);font-weight:600}
+header .ttl{min-width:0;flex:1}
+header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .msg{align-self:flex-end;max-width:85%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--onaccent);border-radius:18px 18px 6px 18px;padding:9px 13px;
   white-space:pre-wrap;word-break:break-word;box-shadow:var(--shadow)}
@@ -128,8 +143,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 </head>
 <body>
 <header>
-  <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg></div>
-  <div><h1>D&amp;C 메신저</h1><div class="sub" id="who">메일로 일을 맡깁니다</div></div>
+  <button class="back" id="backBtn" aria-label="대화 목록으로" style="display:none">‹</button>
+  <div class="logo" id="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg></div>
+  <div class="ttl"><h1 id="ttl">D&amp;C 메신저</h1><div class="sub" id="who">메일로 일을 맡깁니다</div></div>
+  <button class="icon-btn" id="delBtn" aria-label="이 대화 지우기" style="display:none">지우기</button>
   <button class="icon-btn" id="setBtn" aria-label="설정">설정</button>
 </header>
 
@@ -155,7 +172,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <span style="width:6px"></span>
       <span id="folderChips" style="display:contents"></span>
     </div>
-    <div class="inline">
+    <div class="inline" id="sayRow">
       <label for="sayThread">이어서</label>
       <div class="prefix" style="max-width:130px"><span>T</span><input id="sayThread" type="number" inputmode="numeric" placeholder="새 대화"></div>
       <span class="hint" style="margin:0">비우면 새 대화</span>
@@ -168,7 +185,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 
   <!-- 답하기: 메일로 온 질문(☐ 1~4)에 체크박스로 답한다 -->
   <section class="pane" id="answer">
-    <div class="inline">
+    <div class="inline" id="ansRow">
       <label for="ansThread">대화</label>
       <div class="prefix" style="max-width:130px"><span>T</span><input id="ansThread" type="number" inputmode="numeric" placeholder="12"></div>
       <span class="hint" style="margin:0">권한은 처음 그대로</span>
@@ -238,6 +255,7 @@ const pad = n => String(n).padStart(2, '0');
 function draw() {
   const box = $('#log'); box.replaceChildren();
   if (gOn()) { drawGmail(box); return; }
+  plainBar();
   if (!sent.length) {
     const e = el('div', 'empty');
     e.innerHTML = '<b>메일로 일을 맡기는 곳</b><br><br>아래에 할 일을 적고 보내면 메일 앱이 다 채워진 채 열립니다. <b>보내기</b>만 누르세요.<br><br><b>답은 이 화면이 아니라 메일 앱으로 옵니다</b>(이 페이지는 메일함을 읽지 못해요). 메일 안의 단추로 바로 답하거나, 여기 <b>답하기</b> 탭에서 체크박스로 고르세요.';
@@ -264,6 +282,14 @@ function draw() {
   const go = el('a', '', '메일 앱 열기'); go.href = 'message://';  // iOS 메일 앱
   hint.append(go); box.append(hint);
   box.scrollTop = box.scrollHeight;
+}
+
+function plainBar() {                                 // 메일 앱 모드: 대화방 없이 처음 화면 그대로
+  for (const id of ['#sayRow', '#ansRow', '#modeChips', '#logo']) $(id).style.display = '';
+  for (const b of document.querySelectorAll('.tabs button')) b.style.display = '';
+  $('#backBtn').style.display = $('#delBtn').style.display = 'none'; $('#ttl').textContent = 'D&C 메신저'; $('.tabs').style.display = '';
+  document.querySelector('.tabs [data-pane=say]').textContent = '지시';
+  $('#sayText').disabled = false; $('#sayText').placeholder = '할 일을 적으세요 (첫 줄이 제목)';
 }
 
 /* ---- 메일 앱 열기 ---- */
@@ -372,7 +398,7 @@ $('#dlg').addEventListener('close', () => {
 });
 const short = a => a.replace(/^(.{2}).*(@.*)$/, '$1…$2');
 function applyCfg() {
-  $('#who').textContent = !cfg.mail ? '설정에서 메일 주소를 넣어 주세요'
+  if (!(gOn() && room)) $('#who').textContent = !cfg.mail ? '설정에서 메일 주소를 넣어 주세요'
     : gOn() ? (gtok && gtok.email ? short(gtok.email) : 'Gmail') + ' · 실시간'
     : short(cfg.mail) + ' 로 보냅니다';
   $('#jiraPrefix').textContent = cfg.prefix || '';
@@ -567,14 +593,109 @@ $('#gOff').onclick = () => {
   for (const k of ['gtok', 'gm', 'gout']) store.set(k, k === 'gtok' ? null : k === 'gm' ? {} : []);
   store.set('cfg', cfg); $('#dlg').close(); applyCfg(); draw(); drawBanner(); toast('끊었습니다');
 };
+/* 대화방 — 카톡처럼 대화 번호([T12])별 방 목록과 방 안 화면. 번호가 아직 없는 첫 지시는 'm:<Message-ID>' 방이고
+   첫 답이 오면 번호 방으로 옮겨 간다. 보내는 중인 새 지시는 'o:<시각>' 방. */
+let room = null;
+let gseen = store.get('gseen', {});                    // 방마다 마지막으로 본 시각 — 안 읽은 답 표시
+let ghide = store.get('ghide', {});                    // 지운 방 → 지운 시각. 그 뒤에 온 말만 다시 보인다(Gmail·PC 는 그대로)
+const roomKey = m => m.thread ? 'T' + m.thread : 'm:' + (m.id || m.ts);
+function gRooms(list) {
+  const rooms = {}, get = (k, no) => rooms[k] || (rooms[k] = { key: k, no: no || null, msgs: [], out: [] });
+  for (const m of list) { const k = roomKey(m); if (m.ts > (ghide[k] || 0)) get(k, m.thread).msgs.push(m); }
+  for (const o of gout) get(o.thread ? 'T' + o.thread : 'o:' + o.at, o.thread).out.push(o);
+  const waiting = new Set(gWaiting(list).map(roomKey));
+  for (const r of Object.values(rooms)) {
+    const first = r.msgs.find(m => !m.bot) || r.out[0], last = r.msgs[r.msgs.length - 1];
+    r.title = (((first && (first.text || first.rest)) || '').split('\n')[0].replace(/^@\S+\s+/, '')
+      .replace(/^\[Jira 자동화\]\s*/, 'Jira · ').slice(0, 60)) || (r.no ? '대화 T' + r.no : '(제목 없음)');
+    r.mode = r.msgs.some(m => m.mode === 'write') || r.out.some(o => o.mode === 'write') ? 'write' : 'read';
+    r.ts = Math.max(last ? last.ts : 0, ...r.out.map(o => o.at));
+    r.last = r.out.length ? r.out[r.out.length - 1].text : last ? (last.text || last.rest || '') : '';
+    r.st = r.out.length ? '보내는 중' : waiting.has(r.key) ? '일하는 중' : !last || !last.bot ? ''
+      : last.kind === 'confirm' ? '실행 확인' : last.status === 'error' ? '오류' : last.ask ? '질문' : '완료';
+    r.ask = last && last.bot && last.ask ? last : null;
+    r.unread = !!(last && last.bot && last.ts > (gseen[r.key] || 0));
+  }
+  return Object.values(rooms).sort((a, b) => b.ts - a.ts);
+}
+function gFollow(key, list) {                          // 방 번호가 바뀌었으면(첫 답이 와서 번호가 붙음 · 보내는 중이던 것이 실제 메일로) 따라간다
+  if (key.startsWith('m:')) { const m = list.find(x => x.id === key.slice(2)); if (m && m.thread) return 'T' + m.thread; }
+  if (key.startsWith('o:')) { const at = +key.slice(2), m = list.find(x => !x.bot && x.ts >= at - 120000); if (m) return roomKey(m); }
+  return null;
+}
+function openRoom(key) {
+  room = key; picks.clear(); stop = false; pickN = 4;
+  try { history.pushState({ room: key }, ''); } catch (e) {}
+  setTab('say'); $('#sayText').value = ''; draw();
+}
+function closeRoom() {
+  if (history.state && history.state.room) history.back();       // 아이폰 쓸어 넘기기와 같은 길로
+  else { room = null; draw(); }
+}
+addEventListener('popstate', e => { room = (e.state && e.state.room) || null; draw(); });
+$('#backBtn').onclick = closeRoom;
+$('#delBtn').onclick = () => {
+  if (!room || !confirm('이 대화를 이 기기 화면에서 지울까요?\n(Gmail·PC 의 메일은 그대로이고, 새 답이 오면 그 뒤부터 다시 보입니다)')) return;
+  ghide[room] = Date.now(); store.set('ghide', ghide);
+  closeRoom(); toast('지웠습니다');
+};
+const when = ts => {
+  const d = new Date(ts), n = new Date();
+  return d.toDateString() === n.toDateString() ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : (d.getMonth() + 1) + '/' + d.getDate();
+};
+function roomBar(r) {                                  // 머리줄 · 입력부를 지금 화면(목록/방)에 맞춘다
+  const inRoom = !!r, tab = name => document.querySelector('.tabs [data-pane=' + name + ']');
+  $('#backBtn').style.display = $('#delBtn').style.display = inRoom ? '' : 'none';
+  $('#logo').style.display = inRoom ? 'none' : '';
+  $('#ttl').textContent = inRoom ? r.title : 'D&C 메신저';
+  if (inRoom) $('#who').textContent = (r.no ? 'T' + r.no + ' · ' : '') + (r.mode === 'write' ? '수정 허용' : '읽기') + (r.st ? ' · ' + r.st : '');
+  else applyCfg();
+  $('#sayRow').style.display = $('#ansRow').style.display = 'none';     // 대화 번호는 방이 정한다
+  $('#modeChips').style.display = inRoom ? 'none' : '';              // 이어 말하면 권한·폴더는 처음 그대로
+  tab('answer').style.display = inRoom && r.ask ? '' : 'none';
+  tab('jira').style.display = inRoom ? 'none' : '';
+  tab('say').textContent = inRoom ? '말하기' : '새 지시';
+  $('.tabs').style.display = inRoom && !r.ask ? 'none' : '';      // 방 안에 질문이 없으면 탭이 하나뿐 — 줄을 숨긴다
+  $('#sayThread').value = inRoom && r.no ? r.no : '';
+  if (inRoom && r.no) $('#ansThread').value = r.no;
+  const wait = inRoom && !r.no;                        // 번호가 붙기 전엔 이어 말할 수 없다
+  $('#sayText').disabled = wait;
+  $('#sayText').placeholder = wait ? '첫 답이 오면 이어서 말할 수 있어요' : inRoom ? '이어서 말하기' : '새로 맡길 일을 적으세요 (첫 줄이 제목)';
+  const on = document.querySelector('.tabs button.on');
+  if (!on || on.style.display === 'none') setTab('say');
+  refresh();
+}
 function drawGmail(box) {
-  const list = gList();
-  if (!list.length && !gout.length) {
+  const list = gList(), rooms = gRooms(list);
+  if (room && !rooms.some(r => r.key === room)) {
+    room = gFollow(room, list);
+    try { history.replaceState(room ? { room } : null, ''); } catch (e) {}
+  }
+  const r = room && rooms.find(x => x.key === room);
+  roomBar(r);
+  if (r) drawRoom(box, r); else drawRooms(box, rooms);
+  try { petDraw(); } catch (e) {}                         // 처음 그릴 땐 펫 코드가 아직 준비 전이다
+}
+function drawRooms(box, rooms) {
+  if (!rooms.length) {
     const e = el('div', 'empty');
-    e.innerHTML = '<b>Gmail 로 주고받습니다</b><br><br>아래에 할 일을 적고 보내면 PC 가 받아 일하고, <b>답이 여기 말풍선으로</b> 옵니다.<br><br>선택지가 오면 말풍선 안 단추를 누르고 보내기만 누르세요.';
+    e.innerHTML = '<b>Gmail 로 주고받습니다</b><br><br>아래에 할 일을 적고 보내면 PC 가 받아 일하고, 대화마다 <b>방</b>이 생겨 답이 말풍선으로 옵니다.<br><br>선택지가 오면 방 안 말풍선의 단추를 누르고 보내기만 누르세요.';
     box.append(e); return;
   }
-  const lastOf = {}; for (const m of list) if (m.thread) lastOf[m.thread] = m;
+  for (const r of rooms) {
+    const row = el('button', 'room'), body = el('div', 'rbody'), top = el('div', 'rtop'), bot = el('div', 'rbot');
+    top.append(el('span', 'rtitle', r.title), el('span', 'rtime', when(r.ts)));
+    bot.append(el('span', 'rlast', (r.last || '').split('\n')[0]));
+    if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy' }[r.st] || ''), r.st));
+    if (r.unread) bot.append(el('span', 'dot'));
+    body.append(top, bot);
+    row.append(el('span', 'tagchip' + (r.mode === 'write' ? ' w' : ''), r.no ? 'T' + r.no : '새'), body);
+    row.onclick = () => openRoom(r.key);
+    box.append(row);
+  }
+  box.scrollTop = 0;
+}
+function drawRoom(box, r) {
   const ansT = parseInt($('#ansThread').value, 10);
   let lastDay = '';
   const add = (ts, node) => {
@@ -583,12 +704,13 @@ function drawGmail(box) {
     box.append(node);
   };
   const hm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
-  for (const m of list) {
+  for (const m of r.msgs) {
     const w = el('div', 'msg' + (m.bot ? ' bot' : '')), b = el('div', 'bubble' + (m.bot ? ' bot' : ''), m.text || m.rest || '(빈 메일)');
     const meta = el('div', 'meta');
-    const st = !m.bot ? '' : m.kind === 'confirm' ? ' · 실행 확인' : m.status === 'error' ? ' · 오류' : m.ask ? ' · 질문' : '';
-    meta.append(el('span', 'tagchip' + (m.mode === 'write' ? ' w' : ''), (m.thread ? 'T' + m.thread : '새 대화') + st), el('span', '', hm(m.ts)));
-    if (m.bot && m.ask && m.ask.options && lastOf[m.thread] === m) {          // 아직 답하지 않은 질문 — 단추로 고른다
+    const st = !m.bot ? '' : m.kind === 'confirm' ? '실행 확인' : m.status === 'error' ? '오류' : m.ask ? '질문' : '';
+    if (st) meta.append(el('span', 'tagchip' + (m.mode === 'write' ? ' w' : ''), st));
+    meta.append(el('span', '', hm(m.ts)));
+    if (r.ask === m && m.ask.options) {                  // 아직 답하지 않은 질문 — 단추로 고른다
       const a = m.ask, ask = el('div', 'ask');
       ask.append(el('div', 'q', '❓ ' + a.question + (a.multi ? ' (여러 개)' : '')));
       a.options.forEach((o, i) => {
@@ -603,23 +725,16 @@ function drawGmail(box) {
       });
       b.append(ask);
     }
-    if (m.bot && m.thread) {
-      const again = el('button', 'again', '이어서');
-      again.onclick = () => { setTab('say'); $('#sayThread').value = m.thread; refresh(); $('#sayText').focus(); };
-      meta.append(again);
-    }
     w.append(b, meta); add(m.ts, w);
   }
-  for (const o of gout) {                                  // 아직 못 보낸 것
+  for (const o of r.out) {                             // 아직 못 보낸 것
     const w = el('div', 'msg'); w.append(el('div', 'bubble wait', o.text), el('div', 'meta', '보내는 중…')); add(o.at, w);
   }
-  for (const m of gWaiting(list)) {                        // 답을 기다리는 대화
-    const w = el('div', 'msg bot');
-    w.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…'), el('div', 'meta', m.thread ? 'T' + m.thread : '새 대화'));
-    box.append(w);
+  if (r.st === '일하는 중') {
+    const w = el('div', 'msg bot'); w.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…')); box.append(w);
   }
+  gseen[r.key] = r.ts; store.set('gseen', gseen);
   box.scrollTop = box.scrollHeight;
-  try { petDraw(); } catch (e) {}                         // 처음 그릴 땐 펫 코드가 아직 준비 전이다
 }
 gTakeHash();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) gPoll(); });
