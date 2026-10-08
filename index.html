@@ -277,7 +277,9 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <div class="hint" style="margin-top:4px" id="gHint">넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.</div>
       <button type="button" class="btn" id="gOff" style="width:100%;margin-top:6px;display:none">Gmail 연결 끊기 (이 기기에서만)</button>
       <label style="display:flex;gap:8px;align-items:flex-start;font-weight:600;margin-top:10px"><input type="checkbox" id="setViaApp" style="margin-top:3px">
-        <span>새 지시는 메일 앱(iCloud)으로 보내기<br><span class="hint" style="margin:0">회사 메일이 Gmail 새 지시를 스팸으로 붙잡아서 — 이어 말하기·답하기는 그대로 여기서 바로 갑니다</span></span></label></div>
+        <span>새 지시는 메일 앱(iCloud)으로 보내기<br><span class="hint" style="margin:0">회사 메일이 Gmail 새 지시를 스팸으로 붙잡아서 — 이어 말하기·답하기는 그대로 여기서 바로 갑니다</span></span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-weight:600;margin-top:10px"><input type="checkbox" id="setSelf" style="margin-top:3px">
+        <span>PC 가 내 Gmail 을 직접 읽어요 — 전부 나에게 보내기<br><span class="hint" style="margin:0">PC 에 Gmail 앱 비밀번호를 넣은 뒤 켜세요. 회사 메일을 안 거쳐 새 지시도 바로 가고, 위 메일 앱 설정은 쓰지 않습니다</span></span></label></div>
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-top:8px"><input type="checkbox" id="petShow"> 화면에 보이기</label></div>
@@ -359,7 +361,7 @@ function openMail(subject, body, rec) {
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
   // 새 지시(사진 없음)는 메일 앱(iCloud)으로 — 회사 스팸 장비가 Gmail(API) 새 지시만 붙잡는다(2026-10-08 측정).
   // 이어 말하기·답하기·멈춤(답장)과 사진 메일은 Gmail 로 바로 가도 걸리지 않았다.
-  const viaApp = gOn() && cfg.viaApp !== false && !(rec.thread > 0) && !(rec.files || []).length && (rec.kind === 'say' || rec.kind === 'jira');
+  const viaApp = gOn() && !cfg.self && cfg.viaApp !== false && !(rec.thread > 0) && !(rec.files || []).length && (rec.kind === 'say' || rec.kind === 'jira');
   if (viaApp) {
     gloc.push({ at: Date.now(), subj: subject, text: rec.text, mode: rec.mode });
     gloc = gloc.filter(x => Date.now() - x.at < 7 * 86400e3).slice(-100); store.set('gloc', gloc);
@@ -498,7 +500,7 @@ for (const id of ['#sayText', '#ansText']) $(id).addEventListener('input', e => 
 for (const id of ['#ansThread', '#jiraNo', '#sayThread']) $(id).addEventListener('input', refresh);
 
 function openSettings() {
-  $('#setKey').value = cfg.key || ''; $('#setGcid').value = cfg.gcid || ''; $('#setViaApp').checked = cfg.viaApp !== false;
+  $('#setKey').value = cfg.key || ''; $('#setGcid').value = cfg.gcid || ''; $('#setViaApp').checked = cfg.viaApp !== false; $('#setSelf').checked = !!cfg.self;
   $('#gOff').style.display = gtok ? '' : 'none';
   $('#gHint').textContent = gtok && gtok.email ? gtok.email + ' 로 연결돼 있습니다.' : '넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.';
   $('#clearSent').textContent = gOn() ? '대화 기록 비우기 (이 기기 화면에서만)' : '보낸 기록 모두 지우기 (이 기기에서만)';
@@ -508,14 +510,14 @@ function openSettings() {
 $('#setBtn').onclick = openSettings;
 $('#dlg').addEventListener('close', () => {
   if ($('#dlg').returnValue !== 'ok') return;
-  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim(), viaApp: $('#setViaApp').checked };
+  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim(), viaApp: $('#setViaApp').checked, self: $('#setSelf').checked };
   store.set('cfg', cfg); applyCfg(); draw(); toast('저장했습니다');
   if (gOn() && cfg.mail) { if (gLive()) gPoll(); else gAuth(false); }   // 처음 넣었으면 바로 Google 로그인
 });
 const short = a => a.replace(/^(.{2}).*(@.*)$/, '$1…$2');
 function applyCfg() {
   if (!(gOn() && room)) $('#who').textContent = !cfg.mail ? '설정에서 메일 주소를 넣어 주세요'
-    : gOn() ? (gtok && gtok.email ? short(gtok.email) : 'Gmail') + ' · 실시간'
+    : gOn() ? (gtok && gtok.email ? short(gtok.email) : 'Gmail') + (cfg.self ? ' · 나에게 보냄' : '') + ' · 실시간'
     : short(cfg.mail) + ' 로 보냅니다';
   $('#jiraPrefix').textContent = cfg.prefix || '';
   if (!(cfg.folders || []).includes(folder)) folder = '';
@@ -678,9 +680,11 @@ function rfcDate(d) {                                     // 'Thu, 08 Oct 2026 1
     ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getFullYear() + ' ' +
     pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' ' + (off < 0 ? '-' : '+') + pad(Math.floor(a / 60)) + pad(a % 60);
 }
+// 'PC 가 내 Gmail 을 직접 읽음'이면 나에게 보낸다 — 회사 메일·스팸 장비를 거치지 않는다(PC mail-gateway.py cfg.gmail, 2026-10-08)
+function gTo() { return cfg.self && gtok && gtok.email ? gtok.email : cfg.mail; }
 async function gSend(o) {
   // Date 를 빼면 Gmail 서버(대개 미국)가 자기 시간대(-0700 등)로 채운다 — 한국 회사 메일이 스팸으로 의심하기 쉽다. 이 기기 시각으로 넣는다
-  const head = ['To: ' + cfg.mail, 'Date: ' + rfcDate(new Date()), 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0'];
+  const head = ['To: ' + gTo(), 'Date: ' + rfcDate(new Date()), 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0'];
   if (o.reply) head.push('In-Reply-To: ' + o.reply, 'References: ' + o.reply);
   const wrap = x => (x.match(/.{1,76}/g) || []).join('\r\n');
   const text = ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(enc8(o.body || '')))];
@@ -716,7 +720,8 @@ async function gPoll() {
     }
     const q = '{from:' + cfg.mail + ' to:' + cfg.mail + '} newer_than:30d';
     const r = await gFetch('messages?maxResults=80&includeSpamTrash=true&q=' + encodeURIComponent(q));
-    const ids = (r.messages || []).map(x => x.id).filter(id => !(id in gmsgs));
+    const mine = cfg.self ? await gFetch('messages?maxResults=80&q=' + encodeURIComponent('from:me to:me newer_than:30d')) : {};   // 나에게 보낸 지시
+    const ids = [...new Set((r.messages || []).concat(mine.messages || []).map(x => x.id))].filter(id => !(id in gmsgs));
     for (let i = 0; i < ids.length; i += 6) await Promise.all(ids.slice(i, i + 6).map(gGet));
     if (ids.length) changed = true;
     gstate = 'ok';
