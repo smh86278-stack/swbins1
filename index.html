@@ -277,7 +277,9 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <div class="hint" style="margin-top:4px" id="gHint">넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.</div>
       <button type="button" class="btn" id="gOff" style="width:100%;margin-top:6px;display:none">Gmail 연결 끊기 (이 기기에서만)</button>
       <label style="display:flex;gap:8px;align-items:flex-start;font-weight:600;margin-top:10px"><input type="checkbox" id="setViaApp" style="margin-top:3px">
-        <span>새 지시는 메일 앱(iCloud)으로 보내기<br><span class="hint" style="margin:0">회사 메일이 Gmail 새 지시를 스팸으로 붙잡아서 — 이어 말하기·답하기는 그대로 여기서 바로 갑니다</span></span></label></div>
+        <span>새 지시는 메일 앱(iCloud)으로 보내기<br><span class="hint" style="margin:0">회사 메일이 Gmail 새 지시를 스팸으로 붙잡아서 — 이어 말하기·답하기는 그대로 여기서 바로 갑니다</span></span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-weight:600;margin-top:10px"><input type="checkbox" id="setSign" style="margin-top:3px">
+        <span>새 지시에 서명 그림을 붙여 Gmail 로 바로 보내기 (시험)<br><span class="hint" style="margin:0">켜면 위 메일 앱 설정보다 먼저 — 작은 아이콘이 메일 서명 로고처럼 붙고, PC 는 그 그림을 버립니다</span></span></label></div>
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-top:8px"><input type="checkbox" id="petShow"> 화면에 보이기</label></div>
@@ -359,7 +361,7 @@ function openMail(subject, body, rec) {
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
   // 새 지시(사진 없음)는 메일 앱(iCloud)으로 — 회사 스팸 장비가 Gmail(API) 새 지시만 붙잡는다(2026-10-08 측정).
   // 이어 말하기·답하기·멈춤(답장)과 사진 메일은 Gmail 로 바로 가도 걸리지 않았다.
-  const viaApp = gOn() && cfg.viaApp !== false && !(rec.thread > 0) && !(rec.files || []).length && (rec.kind === 'say' || rec.kind === 'jira');
+  const viaApp = gOn() && cfg.viaApp !== false && !cfg.sign && !(rec.thread > 0) && !(rec.files || []).length && (rec.kind === 'say' || rec.kind === 'jira');
   if (viaApp) {
     gloc.push({ at: Date.now(), subj: subject, text: rec.text, mode: rec.mode });
     gloc = gloc.filter(x => Date.now() - x.at < 7 * 86400e3).slice(-100); store.set('gloc', gloc);
@@ -367,7 +369,7 @@ function openMail(subject, body, rec) {
   if (gOn() && !viaApp) {                                   // Gmail 로 바로 보낸다. 연결이 끊겼으면 다시 연결하고 돌아와서 보낸다
     // 암호 단어는 제목 대신 본문 마지막 줄로 — 제목의 알 수 없는 영숫자 조각이 회사 스팸 장비 의심을 사는 것 같아서(PC 가 떼어 낸다)
     if (cfg.key) body = (body ? body + '\n\n' : '') + '[k:' + cfg.key + ']';
-    gout.push({ subject, body, files: rec.files || [], reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
+    gout.push({ subject, body, files: rec.files || [], sign: !!cfg.sign && !(rec.thread > 0), reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
     store.set('gout', gout); draw(); petCheer();
     if (gLive()) gPoll(); else if (gtok) gAuth(true); else gAuth(false);
     return true;
@@ -498,7 +500,7 @@ for (const id of ['#sayText', '#ansText']) $(id).addEventListener('input', e => 
 for (const id of ['#ansThread', '#jiraNo', '#sayThread']) $(id).addEventListener('input', refresh);
 
 function openSettings() {
-  $('#setKey').value = cfg.key || ''; $('#setGcid').value = cfg.gcid || ''; $('#setViaApp').checked = cfg.viaApp !== false;
+  $('#setKey').value = cfg.key || ''; $('#setGcid').value = cfg.gcid || ''; $('#setViaApp').checked = cfg.viaApp !== false; $('#setSign').checked = !!cfg.sign;
   $('#gOff').style.display = gtok ? '' : 'none';
   $('#gHint').textContent = gtok && gtok.email ? gtok.email + ' 로 연결돼 있습니다.' : '넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.';
   $('#clearSent').textContent = gOn() ? '대화 기록 비우기 (이 기기 화면에서만)' : '보낸 기록 모두 지우기 (이 기기에서만)';
@@ -508,7 +510,7 @@ function openSettings() {
 $('#setBtn').onclick = openSettings;
 $('#dlg').addEventListener('close', () => {
   if ($('#dlg').returnValue !== 'ok') return;
-  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim(), viaApp: $('#setViaApp').checked };
+  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim(), viaApp: $('#setViaApp').checked, sign: $('#setSign').checked };
   store.set('cfg', cfg); applyCfg(); draw(); toast('저장했습니다');
   if (gOn() && cfg.mail) { if (gLive()) gPoll(); else gAuth(false); }   // 처음 넣었으면 바로 Google 로그인
 });
@@ -602,7 +604,7 @@ function gParse(g) {
   if (!tag) return { skip: 1, ts };
   const body = gPlain(g.payload).replace(/\r/g, '').replace(/^[ \t]*\[k:[^\]\s]{1,64}\][ \t]*$/gm, '');   // 본문 끝 암호 단어 줄은 안 보인다
   let photos = 0;
-  (function walk(p) { if (/^image\//.test(p.mimeType || '') && p.filename) photos++; (p.parts || []).forEach(walk); })(g.payload);
+  (function walk(p) { if (/^image\//.test(p.mimeType || '') && p.filename && p.filename !== SIGN_NAME) photos++; (p.parts || []).forEach(walk); })(g.payload);
   const tm = clean.match(THREAD_RE), th = String(H['x-dispatch-thread'] || '').trim();
   const m = { id: (H['message-id'] || '').trim(), ts, mode: tag === TAG.write ? 'write' : 'read',
     thread: parseInt(/^\d+$/.test(th) ? th : (tm ? tm[1] : '0'), 10) || null,
@@ -678,19 +680,37 @@ function rfcDate(d) {                                     // 'Thu, 08 Oct 2026 1
     ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getFullYear() + ' ' +
     pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' ' + (off < 0 ? '-' : '+') + pad(Math.floor(a / 60)) + pad(a % 60);
 }
+const SIGN_NAME = 'dnc-sign.png';                         // mail-gateway.py SIGN_IMAGE 와 같은 이름
+let signB64 = null;
+function signImg() {                                       // 앱 아이콘을 64px PNG 로 줄인 작은 서명 그림(한 번 만들어 둔다)
+  if (signB64) return Promise.resolve(signB64);
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      c.getContext('2d').drawImage(img, 0, 0, 64, 64);
+      const url = c.toDataURL('image/png'); signB64 = url.slice(url.indexOf(',') + 1); res(signB64);
+    };
+    img.onerror = () => res(null);                           // 못 읽으면 그림 없이 보낸다
+    img.src = 'icon-180.png';
+  });
+}
 async function gSend(o) {
   // Date 를 빼면 Gmail 서버(대개 미국)가 자기 시간대(-0700 등)로 채운다 — 한국 회사 메일이 스팸으로 의심하기 쉽다. 이 기기 시각으로 넣는다
   const head = ['To: ' + cfg.mail, 'Date: ' + rfcDate(new Date()), 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0'];
   if (o.reply) head.push('In-Reply-To: ' + o.reply, 'References: ' + o.reply);
   const wrap = x => (x.match(/.{1,76}/g) || []).join('\r\n');
   const text = ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(enc8(o.body || '')))];
+  const sign = o.sign ? await signImg() : null;           // 새 지시엔 서명 그림 — 회사 스팸 장비 시험(2026-10-08), PC 는 이 이름을 버린다
   let raw;
-  if (!(o.files || []).length) raw = head.concat(text).join('\r\n') + '\r\n';
+  if (!(o.files || []).length && !sign) raw = head.concat(text).join('\r\n') + '\r\n';
   else {                                                 // 사진 — PC 게이트웨이가 저장해 Claude 가 Read 로 연다
     const bd = 'dnc-' + Math.random().toString(36).slice(2);
     const parts = ['--' + bd].concat(text);
     o.files.forEach((f, i) => parts.push('--' + bd, 'Content-Type: image/jpeg; name="photo' + (i + 1) + '.jpg"',
       'Content-Disposition: attachment; filename="photo' + (i + 1) + '.jpg"', 'Content-Transfer-Encoding: base64', '', wrap(f.b64)));
+    if (sign) parts.push('--' + bd, 'Content-Type: image/png; name="' + SIGN_NAME + '"',
+      'Content-Disposition: inline; filename="' + SIGN_NAME + '"', 'Content-Transfer-Encoding: base64', '', wrap(sign));
     parts.push('--' + bd + '--');
     raw = head.concat('Content-Type: multipart/mixed; boundary="' + bd + '"', '').join('\r\n') + '\r\n' + parts.join('\r\n') + '\r\n';
   }
