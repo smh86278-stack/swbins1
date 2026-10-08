@@ -565,8 +565,15 @@ function mimeHead(s) {                                     // 제목 → =?UTF-8
   if (cur) out.push(cur);
   return out.map(x => '=?UTF-8?B?' + b64(enc8(x)) + '?=').join('\r\n ') || '""';
 }
+function rfcDate(d) {                                     // 'Thu, 08 Oct 2026 11:10:00 +0900' (이 기기 시간대)
+  const off = -d.getTimezoneOffset(), a = Math.abs(off);
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] + ', ' + pad(d.getDate()) + ' ' +
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getFullYear() + ' ' +
+    pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' ' + (off < 0 ? '-' : '+') + pad(Math.floor(a / 60)) + pad(a % 60);
+}
 async function gSend(o) {
-  const head = ['To: ' + cfg.mail, 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0',
+  // Date 를 빼면 Gmail 서버(대개 미국)가 자기 시간대(-0700 등)로 채운다 — 한국 회사 메일이 스팸으로 의심하기 쉽다. 이 기기 시각으로 넣는다
+  const head = ['To: ' + cfg.mail, 'Date: ' + rfcDate(new Date()), 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'];
   if (o.reply) head.push('In-Reply-To: ' + o.reply, 'References: ' + o.reply);
   const raw = head.join('\r\n') + '\r\n\r\n' + ((b64(enc8(o.body || '')).match(/.{1,76}/g) || []).join('\r\n')) + '\r\n';
