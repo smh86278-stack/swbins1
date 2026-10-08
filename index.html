@@ -81,6 +81,16 @@ body:has(#petStage:not(.off)) #log::after{height:96px}
 .quick{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;scrollbar-width:none}
 .quick .chip{flex:none}
 .typingrow{display:flex;gap:8px;align-items:center}
+/* 목록 편집(여러 방 지우기) */
+.chk{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:900;color:var(--onaccent);margin-top:1px}
+.room.sel{border-color:var(--accent);background:var(--accentsoft)}
+.room.sel .chk{background:var(--accent);border-color:var(--accent)}
+#editBar{display:none;gap:8px;position:sticky;bottom:0;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);padding:10px 12px calc(env(safe-area-inset-bottom) + 10px)}
+#editBar.on{display:flex}
+#editBar .btn{flex:1}
+#editBar .btn.danger{background:var(--warn);border:0;color:#fff}
+#editBar .btn:disabled{opacity:.45}
 .back{border:0;background:none;font-size:30px;line-height:1;padding:0 2px 4px 0;color:var(--accent);font-weight:600}
 header .ttl{min-width:0;flex:1}
 header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -241,6 +251,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div class="actions"><button class="btn" value="cancel" formnovalidate>닫기</button><button class="btn pri" value="ok">저장</button></div>
   </form>
 </dialog>
+<div id="editBar">
+  <button class="btn" id="selAll">모두 선택</button>
+  <button class="btn danger" id="selDel" disabled>지우기</button>
+</div>
 <div id="toast"></div>
 <script src="pet/petwarp.js"></script>
 <script src="pet/pets.js"></script>
@@ -297,6 +311,7 @@ function plainBar() {                                 // 메일 앱 모드: 대�
   for (const id of ['#sayRow', '#ansRow', '#modeChips', '#logo']) $(id).style.display = '';
   $('#quick').style.display = 'none';
   for (const b of document.querySelectorAll('.tabs button')) b.style.display = '';
+  editing = false; $('#editBar').classList.remove('on'); $('.composer').style.display = '';
   $('#backBtn').style.display = $('#delBtn').style.display = 'none'; $('#ttl').textContent = 'D&C 메신저'; $('.tabs').style.display = '';
   document.querySelector('.tabs [data-pane=say]').textContent = '지시';
   $('#sayText').disabled = false; $('#sayText').placeholder = '할 일을 적으세요 (첫 줄이 제목)';
@@ -647,10 +662,26 @@ function closeRoom() {
 }
 addEventListener('popstate', e => { room = (e.state && e.state.room) || null; draw(); });
 $('#backBtn').onclick = closeRoom;
+let editing = false;
+const picked = new Set();                              // 편집 중 고른 방 키
 $('#delBtn').onclick = () => {
-  if (!room || !confirm('이 대화를 이 기기 화면에서 지울까요?\n(Gmail·PC 의 메일은 그대로이고, 새 답이 오면 그 뒤부터 다시 보입니다)')) return;
+  if (!room) { editing = !editing; picked.clear(); draw(); return; }
+  if (!confirm('이 대화를 이 기기 화면에서 지울까요?\n(Gmail·PC 의 메일은 그대로이고, 새 답이 오면 그 뒤부터 다시 보입니다)')) return;
   ghide[room] = Date.now(); store.set('ghide', ghide);
   closeRoom(); toast('지웠습니다');
+};
+$('#selAll').onclick = () => {
+  const keys = [...document.querySelectorAll('#log .room')].map(n => n.dataset.key);
+  if (keys.every(k => picked.has(k))) picked.clear(); else keys.forEach(k => picked.add(k));
+  draw();
+};
+$('#selDel').onclick = () => {
+  if (!picked.size || !confirm('고른 대화 ' + picked.size + '개를 이 기기 화면에서 지울까요?\n(Gmail·PC 의 메일은 그대로이고, 새 답이 오면 그 뒤부터 다시 보입니다)')) return;
+  const now = Date.now();
+  for (const k of picked) ghide[k] = now;
+  store.set('ghide', ghide);
+  toast(picked.size + '개 지웠습니다');
+  editing = false; picked.clear(); draw();
 };
 const when = ts => {
   const d = new Date(ts), n = new Date();
@@ -658,7 +689,12 @@ const when = ts => {
 };
 function roomBar(r) {                                  // 머리줄 · 입력부를 지금 화면(목록/방)에 맞춘다
   const inRoom = !!r, tab = name => document.querySelector('.tabs [data-pane=' + name + ']');
-  $('#backBtn').style.display = $('#delBtn').style.display = inRoom ? '' : 'none';
+  if (inRoom) editing = false;
+  $('#backBtn').style.display = inRoom ? '' : 'none';
+  $('#delBtn').textContent = inRoom ? '지우기' : editing ? '완료' : '편집';
+  $('#delBtn').style.display = inRoom ? '' : 'none';             // 목록에선 방이 있을 때 drawRooms 가 켠다
+  $('.composer').style.display = editing ? 'none' : '';
+  $('#editBar').classList.toggle('on', editing);
   $('#logo').style.display = inRoom ? 'none' : '';
   $('#ttl').textContent = inRoom ? r.title : 'D&C 메신저';
   if (inRoom) $('#who').textContent = (r.no ? 'T' + r.no + ' · ' : '') + (r.mode === 'write' ? '수정 허용' : '읽기') + (r.st ? ' · ' + r.st : '');
@@ -719,9 +755,23 @@ function drawRooms(box, rooms) {
     if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy', '전송됨': '' }[r.st] || ''), r.st));
     if (r.unread) bot.append(el('span', 'dot'));
     body.append(top, bot);
+    row.dataset.key = r.key;
+    if (editing) {
+      row.classList.toggle('sel', picked.has(r.key));
+      row.append(el('span', 'chk', picked.has(r.key) ? '✓' : ''));
+    }
     row.append(el('span', 'tagchip' + (r.mode === 'write' ? ' w' : ''), r.no ? 'T' + r.no : '새'), body);
-    row.onclick = () => openRoom(r.key);
+    row.onclick = () => {
+      if (!editing) return openRoom(r.key);
+      picked.has(r.key) ? picked.delete(r.key) : picked.add(r.key); draw();
+    };
     box.append(row);
+  }
+  $('#delBtn').style.display = '';
+  if (editing) {
+    $('#selDel').disabled = !picked.size;
+    $('#selDel').textContent = picked.size ? picked.size + '개 지우기' : '지우기';
+    $('#selAll').textContent = rooms.every(r => picked.has(r.key)) ? '모두 해제' : '모두 선택';
   }
   box.scrollTop = 0;
 }
