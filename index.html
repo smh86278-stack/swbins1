@@ -91,6 +91,27 @@ body:has(#petStage:not(.off)) #log::after{height:96px}
 #editBar .btn{flex:1}
 #editBar .btn.danger{background:var(--warn);border:0;color:#fff}
 #editBar .btn:disabled{opacity:.45}
+/* PC 답 보기 좋게(표·목록·코드) · 긴 답 접기 */
+.bubble.md{white-space:normal}
+.md .h{font-weight:800;margin:6px 0 2px}
+.md .li{display:flex;gap:6px}
+.md .bul{flex:none;color:var(--muted)}
+.md .sp{height:6px}
+.md code{font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--soft);border-radius:6px;padding:1px 5px;overflow-wrap:anywhere}
+.md td code{white-space:nowrap;overflow-wrap:normal}      /* 표 안 코드는 가르지 않는다(표는 옆으로 밀린다) */
+.md pre{background:var(--soft);border-radius:10px;padding:8px 10px;overflow-x:auto;margin:6px 0}
+.md pre code{background:none;padding:0;white-space:pre;word-break:normal}
+.md .tbl{overflow-x:auto;margin:6px 0;max-width:100%}
+.md table{border-collapse:collapse;font-size:13px}
+.md th,.md td{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
+.md th{background:var(--soft);white-space:nowrap}
+.mdbody.fold{max-height:300px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+.more{border:0;background:none;color:var(--accent);font-weight:800;font-size:13px;padding:6px 0 0}
+/* 방 고정 · 검색 */
+#searchBar{display:none;padding:10px 16px 0}
+#searchBar.on{display:block}
+#searchBar input{border-radius:99px;padding:8px 14px;font-size:16px}
+.pin{flex:none;font-size:12px}
 /* 사진 붙이기 */
 .clip{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--solid);font-size:19px;display:grid;place-items:center}
 #attPrev{display:flex;gap:8px;margin-bottom:8px;overflow-x:auto;padding-top:6px}
@@ -170,6 +191,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <button class="back" id="backBtn" aria-label="대화 목록으로" style="display:none">‹</button>
   <div class="logo" id="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg></div>
   <div class="ttl"><h1 id="ttl">D&amp;C 메신저</h1><div class="sub" id="who">메일로 일을 맡깁니다</div></div>
+  <button class="icon-btn" id="pinBtn" aria-label="이 대화 고정" style="display:none">고정</button>
   <button class="icon-btn" id="delBtn" aria-label="이 대화 지우기" style="display:none">지우기</button>
   <button class="icon-btn" id="setBtn" aria-label="설정">설정</button>
 </header>
@@ -178,6 +200,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div>
   <div class="pet cat" id="pCat"><div class="art" id="pCatArt"></div></div>
 </div>
+<div id="searchBar"><input type="search" id="q" placeholder="대화 찾기 (제목·내용)" autocomplete="off" enterkeyhint="search"></div>
 <div id="gbar"><span id="gbarText"></span><button class="btn" id="gbarBtn">다시 연결</button></div>
 <main id="log" aria-live="polite"></main>
 
@@ -322,6 +345,7 @@ function plainBar() {                                 // 메일 앱 모드: 대�
   $('#clipBtn').style.display = 'none'; attach = []; drawAttach();      // 메일 앱으로는 사진을 못 붙인다
   for (const b of document.querySelectorAll('.tabs button')) b.style.display = '';
   editing = false; $('#editBar').classList.remove('on'); $('.composer').style.display = '';
+  $('#pinBtn').style.display = 'none'; $('#searchBar').classList.remove('on');
   $('#backBtn').style.display = $('#delBtn').style.display = 'none'; $('#ttl').textContent = 'D&C 메신저'; $('.tabs').style.display = '';
   document.querySelector('.tabs [data-pane=say]').textContent = '지시';
   $('#sayText').disabled = false; $('#sayText').placeholder = '할 일을 적으세요 (첫 줄이 제목)';
@@ -694,10 +718,62 @@ $('#gOff').onclick = () => {
   for (const k of ['gtok', 'gm', 'gout']) store.set(k, k === 'gtok' ? null : k === 'gm' ? {} : []);
   store.set('cfg', cfg); $('#dlg').close(); applyCfg(); draw(); drawBanner(); toast('끊었습니다');
 };
+/* PC 답을 보기 좋게 — Claude 답은 마크다운(표·목록·**굵게**·`코드`·```블록```)이다.
+   글자는 먼저 전부 이스케이프하고 정해진 태그만 만든다(메일 내용을 HTML 로 그대로 넣지 않는다). */
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const inl = t => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+function md(src) {
+  const L = String(src || '').replace(/\r/g, '').split('\n'), out = [];
+  const isRow = x => /^\s*\|.*\|\s*$/.test(x);
+  for (let i = 0; i < L.length;) {
+    const l = L[i];
+    if (/^\s*```/.test(l)) {                            // 코드 블록
+      const buf = []; i++;
+      while (i < L.length && !/^\s*```/.test(L[i])) buf.push(L[i++]);
+      i++; out.push('<pre><code>' + esc(buf.join('\n')) + '</code></pre>'); continue;
+    }
+    if (isRow(l) && i + 1 < L.length && /^\s*\|?\s*:?-{2,}/.test(L[i + 1])) {   // 표
+      const cells = x => x.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => inl(c.trim()));
+      const head = cells(l), rows = []; i += 2;
+      while (i < L.length && isRow(L[i])) rows.push(cells(L[i++]));
+      out.push('<div class="tbl"><table><tr>' + head.map(c => '<th>' + c + '</th>').join('') + '</tr>' +
+        rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</table></div>');
+      continue;
+    }
+    const h = l.match(/^#{1,4}\s+(.*)$/);
+    if (h) { out.push('<div class="h">' + inl(h[1]) + '</div>'); i++; continue; }
+    const li = l.match(/^(\s*)([-*•]|\d+[.)])\s+(.*)$/);
+    if (li) {
+      out.push('<div class="li" style="padding-left:' + Math.min(li[1].length, 8) * 7 + 'px"><span class="bul">' +
+        (/\d/.test(li[2]) ? esc(li[2]) : '•') + '</span><span>' + inl(li[3]) + '</span></div>');
+      i++; continue;
+    }
+    out.push(l.trim() ? '<div>' + inl(l) + '</div>' : '<div class="sp"></div>'); i++;
+  }
+  return out.join('');
+}
+const opened = new Set();                              // '더 보기' 로 펼친 답(다시 그려도 펼친 채로)
+function mdBubble(b, text, id) {                       // 봇 말풍선 — 길면 접고 '더 보기'
+  b.classList.add('md');
+  const body = el('div', 'mdbody'); body.innerHTML = md(text); b.append(body);
+  if (text.length > 700 || text.split('\n').length > 16) {
+    const f0 = !opened.has(id);
+    body.classList.toggle('fold', f0);
+    const more = el('button', 'more', f0 ? '더 보기 ▼' : '접기 ▲');
+    more.onclick = () => {
+      const f = body.classList.toggle('fold'); more.textContent = f ? '더 보기 ▼' : '접기 ▲';
+      if (f) opened.delete(id); else opened.add(id);
+    };
+    b.append(more);
+  }
+}
+
 /* 대화방 — 카톡처럼 대화 번호([T12])별 방 목록과 방 안 화면. 번호가 아직 없는 첫 지시는 'm:<Message-ID>' 방이고
    첫 답이 오면 번호 방으로 옮겨 간다. 보내는 중인 새 지시는 'o:<시각>' 방. */
 let room = null;
 let gseen = store.get('gseen', {});                    // 방마다 마지막으로 본 시각 — 안 읽은 답 표시
+let gpin = store.get('gpin', {});                      // 고정한 방 → 고정한 시각(먼저 고정한 것이 위)
+let query = '';                                        // 목록 검색어
 let ghide = store.get('ghide', {});                    // 지운 방 → 지운 시각. 그 뒤에 온 말만 다시 보인다(Gmail·PC 는 그대로)
 const roomKey = m => m.thread ? 'T' + m.thread : 'm:' + (m.id || m.ts);
 function gRooms(list) {
@@ -718,7 +794,11 @@ function gRooms(list) {
     r.ask = last && last.bot && last.ask ? last : null;
     r.unread = !!(last && last.bot && last.ts > (gseen[r.key] || 0));
   }
-  return Object.values(rooms).sort((a, b) => b.ts - a.ts);
+  return Object.values(rooms).sort((a, b) => {
+    const pa = gpin[a.key], pb = gpin[b.key];
+    if (pa || pb) return !pa ? 1 : !pb ? -1 : pa - pb;
+    return b.ts - a.ts;
+  });
 }
 function gFollow(key, list) {                          // 방 번호가 바뀌었으면(첫 답이 와서 번호가 붙음 · 보내는 중이던 것이 실제 메일로) 따라간다
   if (key.startsWith('m:')) { const m = list.find(x => x.id === key.slice(2)); if (m && m.thread) return 'T' + m.thread; }
@@ -744,6 +824,12 @@ $('#delBtn').onclick = () => {
   ghide[room] = Date.now(); store.set('ghide', ghide);
   closeRoom(); toast('지웠습니다');
 };
+$('#pinBtn').onclick = () => {
+  if (!room) return;
+  if (gpin[room]) delete gpin[room]; else gpin[room] = Date.now();
+  store.set('gpin', gpin); toast(gpin[room] ? '목록 맨 위에 고정했습니다' : '고정을 풀었습니다'); draw();
+};
+$('#q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); draw(); });
 $('#selAll').onclick = () => {
   const keys = [...document.querySelectorAll('#log .room')].map(n => n.dataset.key);
   if (keys.every(k => picked.has(k))) picked.clear(); else keys.forEach(k => picked.add(k));
@@ -766,6 +852,8 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   if (inRoom) editing = false;
   $('#backBtn').style.display = inRoom ? '' : 'none';
   $('#delBtn').textContent = inRoom ? '지우기' : editing ? '완료' : '편집';
+  $('#pinBtn').style.display = inRoom ? '' : 'none';
+  if (inRoom) $('#pinBtn').textContent = gpin[r.key] ? '고정 해제' : '고정';
   $('#delBtn').style.display = inRoom ? '' : 'none';             // 목록에선 방이 있을 때 drawRooms 가 켠다
   $('.composer').style.display = editing ? 'none' : '';
   $('#editBar').classList.toggle('on', editing);
@@ -784,7 +872,7 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   const wait = inRoom && !r.no;                        // 번호가 붙기 전엔 이어 말할 수 없다
   $('#clipBtn').style.display = wait ? 'none' : '';
   $('#sayText').disabled = wait;
-  $('#sayText').placeholder = wait ? '첫 답이 오면 이어서 말할 수 있어요' : inRoom ? '이어서 말하기' : '새로 맡길 일을 적으세요 (첫 줄이 제목)';
+  $('#sayText').placeholder = wait ? '첫 답이 오면 이어서 말할 수 있어요' : inRoom ? '이어서 말하기' : '새로 맡길 일 (첫 줄이 제목)';
   const on = document.querySelector('.tabs button.on');
   if (!on || on.style.display === 'none') setTab('say');
   refresh();
@@ -814,10 +902,16 @@ function drawGmail(box) {
   }
   const r = room && rooms.find(x => x.key === room);
   roomBar(r); drawQuick(r);
-  if (r) drawRoom(box, r); else drawRooms(box, rooms);
+  if (r) { $('#searchBar').classList.remove('on'); drawRoom(box, r); } else drawRooms(box, rooms);
   try { petDraw(); } catch (e) {}                         // 처음 그릴 땐 펫 코드가 아직 준비 전이다
 }
 function drawRooms(box, rooms) {
+  $('#searchBar').classList.toggle('on', rooms.length > 4 || !!query);   // 방이 몇 개 넘으면 검색칸
+  if (query) {
+    const hit = t => (t || '').toLowerCase().includes(query);
+    rooms = rooms.filter(r => hit(r.title) || hit(r.last) || r.msgs.some(m => hit(m.text) || hit(m.rest)) || hit(r.no ? 'T' + r.no : ''));
+    if (!rooms.length) { box.append(el('div', 'empty', '「' + $('#q').value.trim() + '」 이(가) 들어간 대화가 없습니다')); return; }
+  }
   if (!rooms.length) {
     const e = el('div', 'empty');
     e.innerHTML = '<b>Gmail 로 주고받습니다</b><br><br>아래에 할 일을 적고 보내면 PC 가 받아 일하고, 대화마다 <b>방</b>이 생겨 답이 말풍선으로 옵니다.<br><br>선택지가 오면 방 안 말풍선의 단추를 누르고 보내기만 누르세요.';
@@ -825,8 +919,11 @@ function drawRooms(box, rooms) {
   }
   for (const r of rooms) {
     const row = el('button', 'room'), body = el('div', 'rbody'), top = el('div', 'rtop'), bot = el('div', 'rbot');
-    top.append(el('span', 'rtitle', r.title), el('span', 'rtime', when(r.ts)));
-    bot.append(el('span', 'rlast', (r.last || '').split('\n')[0]));
+    top.append(el('span', 'rtitle', r.title));
+    if (gpin[r.key]) top.append(el('span', 'pin', '📌'));
+    top.append(el('span', 'rtime', when(r.ts)));
+    const firstLine = (r.last || '').split('\n').map(x => x.replace(/^\s*(#+|[-*•]|\|)\s*/, '').replace(/\*\*|`/g, '').trim()).find(Boolean) || '';
+    bot.append(el('span', 'rlast', firstLine));          // 미리보기는 마크다운 기호를 뗀 첫 줄
     if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy', '전송됨': '' }[r.st] || ''), r.st));
     if (r.unread) bot.append(el('span', 'dot'));
     body.append(top, bot);
@@ -860,8 +957,9 @@ function drawRoom(box, r) {
   };
   const hm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
   for (const m of r.msgs) {
-    const w = el('div', 'msg' + (m.bot ? ' bot' : '')),
-      b = el('div', 'bubble' + (m.bot ? ' bot' : ''), (m.text || m.rest || '(빈 메일)') + (m.photos ? '\n📷 사진 ' + m.photos + '장' : ''));
+    const w = el('div', 'msg' + (m.bot ? ' bot' : '')), b = el('div', 'bubble' + (m.bot ? ' bot' : ''));
+    if (m.bot) mdBubble(b, m.text || '(빈 회신)', m.id || m.ts);
+    else b.textContent = (m.text || m.rest || '(빈 메일)') + (m.photos ? '\n📷 사진 ' + m.photos + '장' : '');
     const meta = el('div', 'meta');
     const st = !m.bot ? '' : m.kind === 'confirm' ? '실행 확인' : m.status === 'error' ? '오류' : m.ask ? '질문' : '';
     if (st) meta.append(el('span', 'tagchip' + (m.mode === 'write' ? ' w' : ''), st));
