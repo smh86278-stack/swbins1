@@ -91,6 +91,12 @@ body:has(#petStage:not(.off)) #log::after{height:96px}
 #editBar .btn{flex:1}
 #editBar .btn.danger{background:var(--warn);border:0;color:#fff}
 #editBar .btn:disabled{opacity:.45}
+/* 사진 붙이기 */
+.clip{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--solid);font-size:19px;display:grid;place-items:center}
+#attPrev{display:flex;gap:8px;margin-bottom:8px;overflow-x:auto;padding-top:6px}
+.thumb{position:relative;flex:none}
+.thumb img{width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block}
+.thumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--text);color:var(--bg);font-size:11px;line-height:20px;padding:0}
 .back{border:0;background:none;font-size:30px;line-height:1;padding:0 2px 4px 0;color:var(--accent);font-weight:600}
 header .ttl{min-width:0;flex:1}
 header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -196,7 +202,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <div class="prefix" style="max-width:130px"><span>T</span><input id="sayThread" type="number" inputmode="numeric" placeholder="새 대화"></div>
       <span class="hint" style="margin:0">비우면 새 대화</span>
     </div>
+    <div id="attPrev" style="display:none"></div>
     <div class="row">
+      <button class="clip" id="clipBtn" aria-label="사진 붙이기" style="display:none">📎</button>
+      <input type="file" id="clipIn" accept="image/*" multiple hidden>
       <textarea id="sayText" rows="1" placeholder="할 일을 적으세요 (첫 줄이 제목)"></textarea>
       <button class="send" id="saySend" aria-label="보내기" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
@@ -310,6 +319,7 @@ function draw() {
 function plainBar() {                                 // 메일 앱 모드: 대화방 없이 처음 화면 그대로
   for (const id of ['#sayRow', '#ansRow', '#modeChips', '#logo']) $(id).style.display = '';
   $('#quick').style.display = 'none';
+  $('#clipBtn').style.display = 'none'; attach = []; drawAttach();      // 메일 앱으로는 사진을 못 붙인다
   for (const b of document.querySelectorAll('.tabs button')) b.style.display = '';
   editing = false; $('#editBar').classList.remove('on'); $('.composer').style.display = '';
   $('#backBtn').style.display = $('#delBtn').style.display = 'none'; $('#ttl').textContent = 'D&C 메신저'; $('.tabs').style.display = '';
@@ -323,7 +333,7 @@ function openMail(subject, body, rec) {
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
   if (cfg.key) subject += ' [k:' + cfg.key + ']';          // 암호 단어 — PC 게이트웨이가 확인하고 떼어 낸다
   if (gOn()) {                                              // Gmail 로 바로 보낸다. 연결이 끊겼으면 다시 연결하고 돌아와서 보낸다
-    gout.push({ subject, body, reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
+    gout.push({ subject, body, files: rec.files || [], reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
     store.set('gout', gout); draw(); petCheer();
     if (gLive()) gPoll(); else if (gtok) gAuth(true); else gAuth(false);
     return true;
@@ -346,16 +356,61 @@ function drawFolders() {
   }
 }
 $('#saySend').onclick = () => {
-  const text = $('#sayText').value.trim(), t = parseInt($('#sayThread').value, 10);
-  if (!text) return;
+  let text = $('#sayText').value.trim();
+  const t = parseInt($('#sayThread').value, 10), files = attach.slice();
+  if (!text && !files.length) return;
+  if (!text) text = '사진 봐줘';                          // 사진만 보내면 이 말로
   const [first, ...rest] = text.split('\n');
   const head = [TAG[mode]];
   if (t > 0) head.push('[T' + t + ']');
   else if (folder) head.push('@' + folder);             // 이어 쓰는 대화는 원래 폴더를 그대로 쓴다
   const subject = head.join(' ') + ' ' + first.trim().slice(0, 90);
   const body = (first.trim().length > 90 ? first.trim() + '\n' : '') + rest.join('\n').trim();
-  if (!openMail(subject, body, { kind: 'say', text, mode, thread: t > 0 ? t : '', label: (t > 0 ? 'T' + t + ' · ' : '') + (mode === 'write' ? '수정' : '읽기') + (folder && !(t > 0) ? ' @' + folder : '') })) return;
-  $('#sayText').value = ''; grow($('#sayText')); refresh();
+  if (!openMail(subject, body, { kind: 'say', text, mode, files, thread: t > 0 ? t : '', label: (t > 0 ? 'T' + t + ' · ' : '') + (mode === 'write' ? '수정' : '읽기') + (folder && !(t > 0) ? ' @' + folder : '') })) return;
+  $('#sayText').value = ''; grow($('#sayText')); attach = []; drawAttach(); refresh();
+};
+
+/* ---- 사진 붙이기(Gmail 모드) — 폰에서 긴 변 1600px JPEG 로 줄여 지시 메일에 붙인다. PC 가 저장해 Claude 가 Read 로 본다 ---- */
+let attach = [];                                         // [{ b64, url }]
+const MAX_ATTACH = 5;
+function shrink(file) {
+  return new Promise((res, rej) => {
+    const src = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL('image/jpeg', 0.82);
+      URL.revokeObjectURL(src);
+      res({ b64: url.slice(url.indexOf(',') + 1), url });
+    };
+    img.onerror = () => { URL.revokeObjectURL(src); rej(new Error('사진을 읽지 못했습니다')); };
+    img.src = src;
+  });
+}
+function drawAttach() {
+  const box = $('#attPrev');
+  box.style.display = attach.length ? '' : 'none';
+  box.replaceChildren(...attach.map((a, i) => {
+    const t = el('div', 'thumb'), im = document.createElement('img'), x = el('button', '', '✕');
+    im.src = a.url; im.alt = '붙인 사진 ' + (i + 1);
+    x.onclick = () => { attach.splice(i, 1); drawAttach(); refresh(); };
+    t.append(im, x); return t;
+  }));
+}
+$('#clipBtn').onclick = () => {
+  if (attach.length >= MAX_ATTACH) { toast('사진은 ' + MAX_ATTACH + '장까지 붙일 수 있어요'); return; }
+  $('#clipIn').click();
+};
+$('#clipIn').onchange = async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (files.length > MAX_ATTACH - attach.length) toast('사진은 ' + MAX_ATTACH + '장까지 — 앞의 것만 붙였어요');
+  for (const f of files.slice(0, MAX_ATTACH - attach.length)) {
+    try { attach.push(await shrink(f)); } catch (err) { toast(err.message); }
+  }
+  drawAttach(); refresh();
 };
 
 /* ---- 답하기(체크박스) ---- */
@@ -399,7 +454,7 @@ for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => set
 for (const b of document.querySelectorAll('#modeChips [data-mode]')) b.onclick = () => setMode(b.dataset.mode);
 function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; }
 function refresh() {
-  $('#saySend').disabled = !$('#sayText').value.trim();
+  $('#saySend').disabled = !$('#sayText').value.trim() && !attach.length;
   $('#ansSend').disabled = !(parseInt($('#ansThread').value, 10) > 0 && (picks.size || stop || $('#ansText').value.trim()));
   $('#jiraSend').disabled = !$('#jiraNo').value.trim();
 }
@@ -509,10 +564,12 @@ function gParse(g) {
   const tag = [TAG.write, TAG.read].find(t => clean === t || (clean.startsWith(t) && /\s/.test(clean[t.length])));   // 긴 태그 먼저
   if (!tag) return { skip: 1, ts };
   const body = gPlain(g.payload).replace(/\r/g, '');
+  let photos = 0;
+  (function walk(p) { if (/^image\//.test(p.mimeType || '') && p.filename) photos++; (p.parts || []).forEach(walk); })(g.payload);
   const tm = clean.match(THREAD_RE), th = String(H['x-dispatch-thread'] || '').trim();
   const m = { id: (H['message-id'] || '').trim(), ts, mode: tag === TAG.write ? 'write' : 'read',
     thread: parseInt(/^\d+$/.test(th) ? th : (tm ? tm[1] : '0'), 10) || null,
-    rest: clean.slice(tag.length).replace(THREAD_RE, '').trim(), bot: H['x-dispatch'] === 'bot',
+    rest: clean.slice(tag.length).replace(THREAD_RE, '').trim(), bot: H['x-dispatch'] === 'bot', photos,
     refs: ((H['in-reply-to'] || '') + ' ' + (H.references || '')).match(/<[^<>]+>/g) || [] };
   if (m.bot) {
     m.kind = H['x-dispatch-kind'] || 'reply'; m.status = H['x-dispatch-status'] || '';
@@ -573,10 +630,20 @@ function rfcDate(d) {                                     // 'Thu, 08 Oct 2026 1
 }
 async function gSend(o) {
   // Date 를 빼면 Gmail 서버(대개 미국)가 자기 시간대(-0700 등)로 채운다 — 한국 회사 메일이 스팸으로 의심하기 쉽다. 이 기기 시각으로 넣는다
-  const head = ['To: ' + cfg.mail, 'Date: ' + rfcDate(new Date()), 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'];
+  const head = ['To: ' + cfg.mail, 'Date: ' + rfcDate(new Date()), 'Subject: ' + mimeHead(o.subject), 'MIME-Version: 1.0'];
   if (o.reply) head.push('In-Reply-To: ' + o.reply, 'References: ' + o.reply);
-  const raw = head.join('\r\n') + '\r\n\r\n' + ((b64(enc8(o.body || '')).match(/.{1,76}/g) || []).join('\r\n')) + '\r\n';
+  const wrap = x => (x.match(/.{1,76}/g) || []).join('\r\n');
+  const text = ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(enc8(o.body || '')))];
+  let raw;
+  if (!(o.files || []).length) raw = head.concat(text).join('\r\n') + '\r\n';
+  else {                                                 // 사진 — PC 게이트웨이가 저장해 Claude 가 Read 로 연다
+    const bd = 'dnc-' + Math.random().toString(36).slice(2);
+    const parts = ['--' + bd].concat(text);
+    o.files.forEach((f, i) => parts.push('--' + bd, 'Content-Type: image/jpeg; name="photo' + (i + 1) + '.jpg"',
+      'Content-Disposition: attachment; filename="photo' + (i + 1) + '.jpg"', 'Content-Transfer-Encoding: base64', '', wrap(f.b64)));
+    parts.push('--' + bd + '--');
+    raw = head.concat('Content-Type: multipart/mixed; boundary="' + bd + '"', '').join('\r\n') + '\r\n' + parts.join('\r\n') + '\r\n';
+  }
   const r = await gFetch('messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw: b64(enc8(raw)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') }) });
   if (r.id) await gGet(r.id);                              // 보낸 편지함에서 바로 가져와 말풍선으로
@@ -715,6 +782,7 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   $('#sayThread').value = inRoom && r.no ? r.no : '';
   if (inRoom && r.no) $('#ansThread').value = r.no;
   const wait = inRoom && !r.no;                        // 번호가 붙기 전엔 이어 말할 수 없다
+  $('#clipBtn').style.display = wait ? 'none' : '';
   $('#sayText').disabled = wait;
   $('#sayText').placeholder = wait ? '첫 답이 오면 이어서 말할 수 있어요' : inRoom ? '이어서 말하기' : '새로 맡길 일을 적으세요 (첫 줄이 제목)';
   const on = document.querySelector('.tabs button.on');
@@ -792,7 +860,8 @@ function drawRoom(box, r) {
   };
   const hm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
   for (const m of r.msgs) {
-    const w = el('div', 'msg' + (m.bot ? ' bot' : '')), b = el('div', 'bubble' + (m.bot ? ' bot' : ''), m.text || m.rest || '(빈 메일)');
+    const w = el('div', 'msg' + (m.bot ? ' bot' : '')),
+      b = el('div', 'bubble' + (m.bot ? ' bot' : ''), (m.text || m.rest || '(빈 메일)') + (m.photos ? '\n📷 사진 ' + m.photos + '장' : ''));
     const meta = el('div', 'meta');
     const st = !m.bot ? '' : m.kind === 'confirm' ? '실행 확인' : m.status === 'error' ? '오류' : m.ask ? '질문' : '';
     if (st) meta.append(el('span', 'tagchip' + (m.mode === 'write' ? ' w' : ''), st));
@@ -816,7 +885,9 @@ function drawRoom(box, r) {
     w.append(b, meta); add(m.ts, w);
   }
   for (const o of r.out) {                             // 아직 못 보낸 것
-    const w = el('div', 'msg'); w.append(el('div', 'bubble wait', o.text), el('div', 'meta', '보내는 중…')); add(o.at, w);
+    const w = el('div', 'msg');
+    w.append(el('div', 'bubble wait', o.text + ((o.files || []).length ? '\n📷 사진 ' + o.files.length + '장' : '')), el('div', 'meta', '보내는 중…'));
+    add(o.at, w);
   }
   if (r.st === '일하는 중' || r.st === '전송됨') {
     const w = el('div', 'msg bot'), row = el('div', 'typingrow');
