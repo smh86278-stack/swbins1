@@ -1,0 +1,4 @@
+# D&C 메신저 빌드 결과(python pc/build.py)
+/pc/dist/
+/pc/build/
+__pycache__/
