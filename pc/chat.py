@@ -512,6 +512,39 @@ def tool_line(name, inp):
     return ""
 
 
+DETAIL_MAX = 2000                                     # 자세히 보기 한 칸의 글자 수 — 2초마다 다시 받으니 너무 크게 두지 않는다
+
+
+def _clip(text, n=DETAIL_MAX):
+    text = str(text or "")
+    return text if len(text) <= n else text[:n] + "\n… (%d자 더)" % (len(text) - n)
+
+
+def tool_detail(name, inp):
+    """도구에 넘긴 전체 입력 — 고친 내용은 -/+ 줄로, 나머지는 값 그대로(긴 건 자른다)."""
+    inp = inp if isinstance(inp, dict) else {}
+    if name in ("Edit", "MultiEdit") and ("old_string" in inp or "new_string" in inp):
+        old, new = str(inp.get("old_string") or ""), str(inp.get("new_string") or "")
+        return _clip("%s\n%s\n%s" % (inp.get("file_path") or "", "\n".join("- " + l for l in old.splitlines()),
+                                      "\n".join("+ " + l for l in new.splitlines())))
+    if name == "Write":
+        return _clip("%s\n%s" % (inp.get("file_path") or "", inp.get("content") or ""))
+    if name == "TodoWrite":
+        marks = {"completed": "✓", "in_progress": "▶", "pending": "·"}
+        return _clip("\n".join("%s %s" % (marks.get(t.get("status"), "·"), t.get("content") or "")
+                               for t in inp.get("todos") or [] if isinstance(t, dict)))
+    if len(inp) == 1 and isinstance(next(iter(inp.values())), str):
+        return _clip(next(iter(inp.values())))
+    return _clip("\n".join("%s: %s" % (k, v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)) for k, v in inp.items()))
+
+
+def result_text(content):
+    """tool_result 의 내용 — 문자열이거나 {type:text} 조각 목록."""
+    if isinstance(content, list):
+        content = "\n".join(str(x.get("text") or "") for x in content if isinstance(x, dict) and x.get("type") == "text")
+    return _clip(content)
+
+
 def _ts(iso):
     """세션 기록의 시각(UTC, ...Z) → epoch 초."""
     try:
@@ -539,12 +572,16 @@ def parse_progress(lines, since=0.0):
             if not isinstance(c, dict):
                 continue
             if typ == "assistant" and c.get("type") == "text" and (c.get("text") or "").strip():
-                steps.append({"kind": "text", "text": c["text"].strip()[:400]})
+                full = c["text"].strip()
+                steps.append({"kind": "text", "text": full[:400], "detail": _clip(full) if len(full) > 400 else ""})
             elif typ == "assistant" and c.get("type") == "tool_use":
                 by_id[c.get("id")] = len(steps)
-                steps.append({"kind": "tool", "name": c.get("name") or "?", "text": tool_line(c.get("name"), c.get("input")), "state": "run"})
+                steps.append({"kind": "tool", "name": c.get("name") or "?", "text": tool_line(c.get("name"), c.get("input")),
+                              "state": "run", "detail": tool_detail(c.get("name"), c.get("input")), "result": ""})
             elif typ == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in by_id:
-                steps[by_id[c["tool_use_id"]]]["state"] = "err" if c.get("is_error") else "ok"
+                st = steps[by_id[c["tool_use_id"]]]
+                st["state"] = "err" if c.get("is_error") else "ok"
+                st["result"] = result_text(c.get("content"))
     return steps
 
 

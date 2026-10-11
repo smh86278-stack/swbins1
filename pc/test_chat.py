@@ -46,6 +46,17 @@ class Progress(unittest.TestCase):
             ("tool", "Edit", "C:/a.py", "err"),
             ("tool", "TodoWrite", "할 일 1/2 — b 하는 중", "run"),
         ])
+        self.assertEqual(steps[1]["detail"], "command: git status\ndescription: 작업 트리 보기")   # 자세히: 넘긴 입력 전부
+        self.assertEqual(steps[1]["result"], "ok")
+        self.assertEqual(steps[2]["result"], "x")
+        self.assertEqual(steps[3]["detail"], "✓ a\n▶ b")
+
+    def test_detail_edit_and_clip(self):
+        self.assertEqual(chat.tool_detail("Edit", {"file_path": "a.py", "old_string": "x = 1", "new_string": "x = 2\ny = 3"}),
+                         "a.py\n- x = 1\n+ x = 2\n+ y = 3")
+        self.assertEqual(chat.tool_detail("Bash", {"command": "ls"}), "ls")
+        long = "가" * 2500
+        self.assertTrue(chat.result_text([{"type": "text", "text": long}]).endswith("… (500자 더)"))
 
     def test_find_transcript_by_prompt(self):
         tmp = tempfile.mkdtemp()
