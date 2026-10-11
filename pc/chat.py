@@ -99,15 +99,15 @@ PORT = int(os.environ.get("DISPATCH_CHAT_PORT") or 8620)   # 그 PC 에서 8620 
 
 DEFAULTS = {
     "user": "", "login_user": "", "password_enc": "",
-    "imap_host": "mail.daou.co.kr", "imap_port": 993, "imap_mode": "ssl",
-    "smtp_host": "mail.daou.co.kr", "smtp_port": 25, "smtp_mode": "starttls",
+    "imap_host": "", "imap_port": 993, "imap_mode": "ssl",                 # 서버는 설정 화면에서 — 메일 주소를 넣으면 알려진 곳은 채워진다
+    "smtp_host": "", "smtp_port": 587, "smtp_mode": "starttls",
     # 보내는 방법: smtp = 실제 발송(내게 보내기). append = 받은편지함에 바로 써 넣기(발송이 막힌 곳에서)
     "send_mode": "smtp",
     # 내가 나에게 보낸 메일은 메일 규칙이 'Inbox.본인' 으로 옮긴다 — 게이트웨이와 같은 두 폴더를 본다
     "folders": ["INBOX", "Inbox.본인"],
     "tags": ["#c", "c"], "write_tags": ["#cw", "cw"],
     "workdir_keys": ["hub", "mobile"],
-    "jira_prefix": "SABANGNET-",
+    "jira_prefix": "",
     "lookback_days": 14,
     "poll_sec": 20,
 }
@@ -225,7 +225,7 @@ def load_cfg():
     if gw and gw.get("user"):
         src = "gateway"
         for k in ("user", "login_user", "password_enc", "imap_host", "imap_port", "imap_mode",
-                  "smtp_host", "smtp_port", "smtp_mode", "folders", "tags", "write_tags"):
+                  "smtp_host", "smtp_port", "smtp_mode", "folders", "tags", "write_tags", "jira_prefix"):
             if gw.get(k) not in (None, ""):
                 cfg[k] = gw[k]
         if isinstance(gw.get("workdir_keys"), dict):

@@ -21,7 +21,7 @@
   | 네이버 | imap.naver.com 993 | smtp.naver.com 587 | 메일 설정에서 IMAP/SMTP 켜기 |
   | 다음·카카오 | imap.daum.net 993 | smtp.daum.net 465 | 메일 설정에서 IMAP 켜기 |
   | iCloud | imap.mail.me.com 993 | smtp.mail.me.com 587 | 앱 암호 |
-  | 회사(daou) | mail.daou.co.kr 993 | mail.daou.co.kr 25 | 평소 비밀번호 |
+  | 회사 메일 | 회사 안내대로 | 회사 안내대로 | 평소 비밀번호 |
 
   Outlook.com(개인)은 마이크로소프트가 비밀번호 로그인(IMAP 기본 인증)을 막아 지금은 안 됩니다.
 - 앱은 지시를 **내 주소로 나에게** 보내고 그 메일함을 읽습니다. 실제로 일을 하는 건 게이트웨이 PC 의 메일 게이트웨이라,
