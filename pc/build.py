@@ -15,7 +15,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.path.join(HERE, "build")
-PET = os.path.join(HERE, "..", "pet")                     # 펫 코드·그림은 폰 페이지와 같이 쓰는 ..\pet 을 묶는다
+# 펫 코드·그림 — 저장소 구조를 알아서 찾는다(swbins1: ..\pet, 그림 skin\plush · swbins2: ..\macro-hub\web, 그림 skins\plush). exe 안에선 pet\skin\plush
+PET, PET_SKIN = next(((os.path.normpath(os.path.join(HERE, r)), sk) for r, sk in (("../pet", "skin"), ("../macro-hub/web", "skins"))
+                      if os.path.isfile(os.path.join(HERE, r, "pets.js"))), (os.path.join(HERE, "..", "pet"), "skin"))
+COMPANY = os.path.join(HERE, "company.json")              # 회사 값(회사 저장소에만 있다) — 있으면 exe 에 같이 묶는다
 ICO = os.path.join(HERE, "app.ico")                       # D&C 메신저 — 인형 크림 고양이 얼굴(D&C 허브 skinicon.py 의 app_icon 으로 만듦)
 
 
@@ -33,7 +36,8 @@ def main():
            "--name", "DispatchChat",
            "--add-data", os.path.join(HERE, "ui.html") + os.pathsep + ".",
            *[x for f in ("pets.js", "petwarp.js", "pets.css") for x in ("--add-data", os.path.join(PET, f) + os.pathsep + "pet")],
-           "--add-data", os.path.join(PET, "skin", "plush") + os.pathsep + os.path.join("pet", "skin", "plush"),   # 인형 강아지·고양이
+           "--add-data", os.path.join(PET, PET_SKIN, "plush") + os.pathsep + os.path.join("pet", "skin", "plush"),   # 인형 강아지·고양이
+           *(["--add-data", COMPANY + os.pathsep + "."] if os.path.isfile(COMPANY) else []),
            "--distpath", os.path.join(HERE, "dist"), "--workpath", WORK, "--specpath", WORK,
            os.path.join(HERE, "chat.py")]
     print(" ".join(cmd))

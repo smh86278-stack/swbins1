@@ -489,6 +489,7 @@ async function openSetup(first) {
   $('#sImap').value = s.imap_host || ''; $('#sImapPort').value = s.imap_port || 993;
   $('#sSmtp').value = s.smtp_host || ''; $('#sSmtpPort').value = s.smtp_port || 25;
   $('#sJira').value = s.jira_prefix || ''; $('#sSend').value = s.send_mode || 'smtp'; $('#sKey').value = s.key_word || '';
+  companyPresets = Array.isArray(s.presets) ? s.presets.filter(x => Array.isArray(x) && x.length >= 5) : [];
   $('#sPreset').textContent = '';
   $('#setNote').textContent = s.source === 'gateway'
     ? '지금은 이 PC 메일 게이트웨이의 계정을 쓰고 있습니다. 여기서 저장하면 이 앱만 따로 쓰는 계정이 됩니다.'
@@ -504,9 +505,10 @@ const MAIL_PRESETS = [
   [/^(daum\.net|hanmail\.net|kakao\.com)$/, 'imap.daum.net', 993, 'smtp.daum.net', 465, '다음/카카오 — 메일 설정에서 IMAP 사용을 켜 주세요.'],
   [/^(icloud|me|mac)\.com$/, 'imap.mail.me.com', 993, 'smtp.mail.me.com', 587, 'iCloud — Apple 계정의 "앱 암호"를 넣으세요. 로그인 아이디는 @ 앞부분만일 수 있습니다.'],
 ];
+let companyPresets = [];                                  // 서버의 company.json 에서(회사 저장소에만 있다) — [도메인 정규식 문자열, imap, 포트, smtp, 포트, 안내]
 $('#sUser').addEventListener('change', () => {
   const dom = ($('#sUser').value.split('@')[1] || '').trim().toLowerCase();
-  const p = MAIL_PRESETS.find(x => x[0].test(dom));
+  const p = companyPresets.concat(MAIL_PRESETS).find(x => { try { return (x[0] instanceof RegExp ? x[0] : new RegExp(x[0])).test(dom); } catch (e) { return false; } });
   $('#sPreset').textContent = p ? p[5] : (dom ? '모르는 메일입니다 — 그 메일의 IMAP·SMTP 서버 주소를 넣어 주세요.' : '');
   if (p) { $('#sImap').value = p[1]; $('#sImapPort').value = p[2]; $('#sSmtp').value = p[3]; $('#sSmtpPort').value = p[4]; }
 });

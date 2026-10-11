@@ -59,7 +59,22 @@ FROZEN = getattr(sys, "frozen", False)
 HERE = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
 RES = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))     # ui.html 이 있는 곳(exe 면 풀린 임시 폴더)
 # 인형 강아지·고양이(D&C 허브와 같은 그림·코드) — exe 면 같이 묶인 pet\, 아니면 폰 페이지와 같이 쓰는 ..\pet\
-PET_WEB = os.path.join(RES, "pet") if FROZEN else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pet")
+SRC = os.path.dirname(os.path.abspath(__file__))
+
+
+def _pet_dir():
+    """펫 코드·그림이 있는 곳. exe 면 같이 묶인 pet\(그림은 skin\plush). 소스로 돌 땐 저장소 구조를 알아서 찾는다 —
+    swbins1(폰 페이지와 같이 쓰는 ..\pet, 그림 skin\plush) · swbins2(허브의 ..\macro-hub\web, 그림 skins\plush)."""
+    if FROZEN:
+        return os.path.join(RES, "pet"), "skin"
+    for rel, skin in (("../pet", "skin"), ("../macro-hub/web", "skins")):
+        d = os.path.normpath(os.path.join(SRC, rel))
+        if os.path.isfile(os.path.join(d, "pets.js")):
+            return d, skin
+    return os.path.normpath(os.path.join(SRC, "../pet")), "skin"
+
+
+PET_WEB, PET_SKIN = _pet_dir()
 PET_FILES = {"pets.js": "text/javascript; charset=utf-8", "petwarp.js": "text/javascript; charset=utf-8", "pets.css": "text/css; charset=utf-8"}
 PET_TYPES = {"webp": "image/webp", "png": "image/png", "json": "application/json; charset=utf-8"}
 HUB_SKIN = "http://127.0.0.1:8610/api/skin"                                    # 이 PC 에 허브가 있으면 고른 품종을 따른다
@@ -69,13 +84,14 @@ GATEWAY_GUESS = r"C:\swbins2\inbox"                       # 게이트웨이 PC �
 
 
 def _inbox_dir():
-    """게이트웨이 PC 의 작업 인박스: --inbox 다음 값 → DISPATCH_INBOX → (윈도우) 늘 쓰던 자리에 있으면 그것.
-    없으면 메일만으로 돈다(진행 상황 카드만 빠진다)."""
+    """게이트웨이 PC 의 작업 인박스: --inbox 다음 값 → DISPATCH_INBOX → 게이트웨이 저장소 안에서 돌면 그 inbox(..\..\inbox)
+    → (윈도우) 늘 쓰던 자리. 없으면 메일만으로 돈다(진행 상황 카드만 빠진다)."""
     a = sys.argv
     i = a.index("--inbox") + 1 if "--inbox" in a else 0
     v = a[i] if 0 < i < len(a) else os.environ.get("DISPATCH_INBOX", "")
-    if not v and IS_WIN and os.path.isdir(os.path.join(GATEWAY_GUESS, "jobs")):
-        v = GATEWAY_GUESS
+    for cand in ((os.path.normpath(os.path.join(SRC, "../../inbox")),) if not FROZEN else ()) + ((GATEWAY_GUESS,) if IS_WIN else ()):
+        if not v and os.path.isdir(os.path.join(cand, "jobs")):
+            v = cand
     return os.path.normpath(v) if v else ""
 
 
@@ -97,6 +113,19 @@ KEY_RE = re.compile(r"\s*\[k:[^\]\s]{1,64}\]\s*$")       # 폰이 제목 끝에 
 BODY_KEY_RE = re.compile(r"^[ \t]*\[k:[^\]\s]{1,64}\][ \t\r]*$", re.M)   # 폰(Gmail) 페이지는 본문 마지막 줄에 붙인다
 PORT = int(os.environ.get("DISPATCH_CHAT_PORT") or 8620)   # 그 PC 에서 8620 이 이미 쓰이면 바꿔 띄운다
 
+# 회사 값 — 이 코드는 어느 회사든 같고, 회사마다 다른 것(메일 서버·Jira 접두어·설정 화면 프리셋)만 옆의 company.json 에 둔다.
+# 공개 저장소(swbins1)에는 그 파일이 없고(설정 화면에서 넣는다), 회사 저장소(swbins2)에는 담겨 있다. exe 에도 있으면 같이 묶인다.
+def read_json_quiet(path):
+    """있으면 JSON, 없거나 깨졌으면 None(로그 없이 — 모듈을 읽는 중에도 부른다)."""
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+COMPANY = read_json_quiet(os.path.join(RES, "company.json")) or {}
+
 DEFAULTS = {
     "user": "", "login_user": "", "password_enc": "",
     "imap_host": "", "imap_port": 993, "imap_mode": "ssl",                 # 서버는 설정 화면에서 — 메일 주소를 넣으면 알려진 곳은 채워진다
@@ -111,6 +140,8 @@ DEFAULTS = {
     "lookback_days": 14,
     "poll_sec": 20,
 }
+DEFAULTS.update({k: COMPANY[k] for k in ("imap_host", "imap_port", "imap_mode", "smtp_host", "smtp_port", "smtp_mode", "jira_prefix")
+                 if COMPANY.get(k) not in (None, "")})
 
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -479,6 +510,8 @@ def build_threads(msgs, jobs=None, by_mid=None):
         job = jobs.get(t["no"]) if t["no"] else None
         if not job:                              # 번호가 아직 없는 첫 지시 — 그 메일로 접수된 작업
             job = next((by_mid[m["id"]] for m in t["msgs"] if not m["bot"] and m["id"] in by_mid), None)
+        if isinstance(job, str):                 # 옛 호출 방식(번호 → 상태 문자열)도 받는다
+            job = {"status": job}
         if job and job.get("status") in ("queued", "running"):
             st = job["status"]
         t["job"] = (job or {}).get("id") or ""
@@ -888,7 +921,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"error": "no pet"})
         m = re.fullmatch(r"/skin/plush/([\w\-]+\.(webp|png|json))", u.path)     # 펫 그림(인형 스킨만)
         if m:
-            p = os.path.join(PET_WEB, "skin", "plush", m.group(1))
+            p = os.path.join(PET_WEB, PET_SKIN, "plush", m.group(1))
             if os.path.isfile(p):
                 with open(p, "rb") as f:
                     return self._send(200, f.read(), PET_TYPES[m.group(2)])
@@ -920,7 +953,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if u.path == "/api/setup":
             cfg, src = load_cfg()
             return self._send(200, {k: cfg.get(k) for k in ("user", "login_user", "imap_host", "imap_port", "smtp_host", "smtp_port",
-                                                           "send_mode", "jira_prefix", "key_word")} | {"source": src, "has_password": bool(cfg.get("password_enc"))})
+                                                           "send_mode", "jira_prefix", "key_word")}
+                              | {"source": src, "has_password": bool(cfg.get("password_enc")), "presets": COMPANY.get("presets") or []})
         return self._send(404, {"error": "not found"})
 
     def do_POST(self):

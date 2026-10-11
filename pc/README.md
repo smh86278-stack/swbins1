@@ -41,6 +41,15 @@
 - 단계를 누르면 **자세히** — 도구에 넘긴 전체 입력(명령 전문, 고친 내용은 -/+ 줄)과 결과 출력(2,000자까지)이 그 자리에 펼쳐집니다. 펼쳐 둔 건 갱신돼도 유지됩니다.
 - 다른 PC 에서는 진행 기록이 없으니 '작업 중' 표시만 보입니다.
 
+## 회사마다 세팅
+
+- 설정 화면(⚙)에서 메일 서버·Jira 접두어·암호 단어를 넣으면 됩니다 — 어느 회사든.
+- 회사 값을 처음부터 채워 두려면 `company.example.json` 을 `company.json` 으로 복사해 채웁니다(설정 화면 기본값 + 메일 주소 프리셋).
+  `build.py` 가 있으면 exe 에 같이 묶습니다. 공개 저장소에는 커밋하지 않습니다(`.gitignore`).
+- **같은 코드가 두 곳에 있습니다** — 여기(swbins1/pc, 모든 회사용)와 회사 저장소 swbins2 의 `tools/dispatch-chat`(우리 회사 `company.json` 포함).
+  차이는 `company.json` 뿐이어야 합니다. 한쪽을 고치면 다른 쪽에도 복사하고 `diff` 로 확인합니다:
+  `diff -rq --exclude=company.json --exclude=dist --exclude=build --exclude=__pycache__ C:/swbins1/pc C:/swbins2/tools/dispatch-chat`
+
 ## 그 밖
 
 - 화면은 127.0.0.1 에만 열리고, 보내기 같은 요청은 띄울 때마다 새로 만드는 토큰이 있어야 합니다.
