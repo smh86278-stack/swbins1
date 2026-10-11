@@ -310,7 +310,7 @@ function drawThread(scroll) {
     box.append(row);
     if (m.bot && m.ask && i === t.msgs.length - 1) box.append(choiceCard(m.ask, m.kind === 'confirm'));
   });
-  if (t.status === 'running' && prog && progNo === t.no) box.append(progCard());
+  if (t.status === 'running' && prog && progKey === t.key) box.append(progCard());
   if (['sent', 'queued', 'running'].includes(t.status)) {
     const ty = el('div', 'typing'); ty.append(el('span'), el('span'), el('span'), document.createTextNode(t.status === 'running' ? ' 작업 중' : ' 답을 기다리는 중'));
     box.append(ty);
@@ -404,7 +404,7 @@ $('#delBtn').onclick = async () => {                       // 대화 지우기 �
 };
 
 /* ---------- 진행 상황(게이트웨이 PC 에서만 — 워커가 쌓는 claude 진행 줄을 2초마다 읽는다) ---------- */
-let prog = null, progNo = 0, progOpen = new Set();      // progOpen: 펼쳐 둔 단계 번호(처음부터 센 번호라 다시 그려도 유지)
+let prog = null, progKey = '', progOpen = new Set();      // progOpen: 펼쳐 둔 단계 번호(처음부터 센 번호라 다시 그려도 유지)
 function progElapsed() {
   const st = prog && prog.started_at ? new Date(prog.started_at.replace(' ', 'T')) : null;
   if (!st || isNaN(st)) return '';
@@ -448,13 +448,13 @@ function progCard() {
 }
 async function pollProgress() {
   const t = cur;
-  if (!t || !t.no || t.status !== 'running' || !state.local) { if (prog) progOpen.clear(); prog = null; return; }
-  let r; try { r = await api('/api/progress?no=' + t.no); } catch (e) { return; }
+  if (!t || !t.job || t.status !== 'running' || !state.local) { if (prog) progOpen.clear(); prog = null; return; }
+  let r; try { r = await api('/api/progress?job=' + encodeURIComponent(t.job)); } catch (e) { return; }
   const p = r.progress;
   if (!p || cur !== t) return;
   const sig = p.id + '|' + p.count + '|' + p.updated;
-  if (prog && progNo === t.no && prog.sig === sig) { const e = $('#progTime'); if (e) e.textContent = progElapsed(); return; }
-  p.sig = sig; prog = p; progNo = t.no;
+  if (prog && progKey === t.key && prog.sig === sig) { const e = $('#progTime'); if (e) e.textContent = progElapsed(); return; }
+  p.sig = sig; prog = p; progKey = t.key;
   drawThread(false);
 }
 

@@ -433,9 +433,16 @@ def parse_message(raw, cfg):
     return m
 
 
-def build_threads(msgs, jobs=None):
-    """메시지들을 대화방으로 묶는다. 번호가 아직 없는 첫 지시는 그 지시에 답한 봇 메일(In-Reply-To)로 번호를 찾는다."""
+def build_threads(msgs, jobs=None, by_mid=None):
+    """메시지들을 대화방으로 묶는다. 번호가 아직 없는 첫 지시는 그 지시에 답한 봇 메일(In-Reply-To)로 번호를 찾는다.
+    게이트웨이 PC 에선 접수된 작업도 본다 — jobs: 번호 → {id, status}, by_mid: 지시 메일 Message-ID → {id, status, thread}.
+    게이트웨이는 번호를 회신할 때 붙이므로 첫 지시는 일하는 내내 번호가 없다 — 그래도 작업 id 로 '작업 중'·진행 카드가 붙는다."""
     by_id = {m["id"]: m for m in msgs if m["id"]}
+    jobs, by_mid = jobs or {}, by_mid or {}
+    for m in msgs:
+        j = by_mid.get(m["id"])
+        if j and j.get("thread") and not m["thread"]:
+            m["thread"] = j["thread"]
     for m in msgs:                               # 봇 회신이 가리키는 원본 지시에 번호를 물려준다
         if m["thread"]:
             for r in m["refs"]:
@@ -469,9 +476,12 @@ def build_threads(msgs, jobs=None):
                 st = "done"
         else:
             st = "sent"
-        job = (jobs or {}).get(t["no"]) if t["no"] else None
-        if job in ("queued", "running"):
-            st = job
+        job = jobs.get(t["no"]) if t["no"] else None
+        if not job:                              # 번호가 아직 없는 첫 지시 — 그 메일로 접수된 작업
+            job = next((by_mid[m["id"]] for m in t["msgs"] if not m["bot"] and m["id"] in by_mid), None)
+        if job and job.get("status") in ("queued", "running"):
+            st = job["status"]
+        t["job"] = (job or {}).get("id") or ""
         t["status"] = st
         t["ts"] = last["ts"]
         t["ask"] = last.get("ask") if last["bot"] else None
@@ -484,17 +494,23 @@ def build_threads(msgs, jobs=None):
 
 
 def local_jobs():
-    """이 PC 에서 돌면 작업 인박스로 '대기·실행 중' 을 덧붙인다(다른 PC 에선 없다)."""
-    out = {}
+    """이 PC 에서 돌면 작업 인박스(최근 80개)를 읽어 (번호 → 작업, 지시 메일 Message-ID → 작업)을 돌려준다.
+    작업은 {id, status, thread} 만. 다른 PC 에선 둘 다 빈 것."""
+    by_no, by_mid = {}, {}
     try:
-        names = sorted(os.listdir(JOBS_DIR), reverse=True)[:80]
+        names = sorted(os.listdir(JOBS_DIR), reverse=True)[:80] if JOBS_DIR else []
     except OSError:
-        return out
+        return by_no, by_mid
     for fn in names:
         j = read_json(os.path.join(JOBS_DIR, fn)) if fn.endswith(".json") else None
-        if j and j.get("thread") and j["thread"] not in out:
-            out[j["thread"]] = j.get("status")
-    return out
+        if not j or not j.get("id"):
+            continue
+        brief = {"id": j["id"], "status": j.get("status"), "thread": j.get("thread")}
+        if j.get("thread"):
+            by_no.setdefault(j["thread"], brief)
+        if j.get("mail_msgid"):
+            by_mid.setdefault(j["mail_msgid"], brief)
+    return by_no, by_mid
 
 
 def tool_line(name, inp):
@@ -635,20 +651,11 @@ def find_transcript(job, since):
     return ""
 
 
-def job_progress(no):
-    """대화 T{no} 의 가장 최근 작업 진행 상황(이 PC 에 게이트웨이 인박스가 있을 때만)."""
-    if not JOBS_DIR or not no:
+def job_progress(job_id):
+    """작업 하나의 진행 상황(이 PC 에 게이트웨이 인박스가 있을 때만). 작업 파일 이름이 곧 id 다."""
+    if not JOBS_DIR or not re.fullmatch(r"[\w\-]{1,80}", str(job_id or "")):
         return None
-    job = None
-    try:
-        names = sorted(os.listdir(JOBS_DIR), reverse=True)[:80]
-    except OSError:
-        return None
-    for fn in names:
-        j = read_json(os.path.join(JOBS_DIR, fn)) if fn.endswith(".json") else None
-        if j and j.get("thread") == no:
-            job = j
-            break
+    job = read_json(os.path.join(JOBS_DIR, "%s.json" % job_id))
     if not job or not job.get("id"):
         return None
     try:
@@ -744,7 +751,7 @@ class Box:
         with self.lock:
             msgs = [dict(m) for m in self.msgs.values()] + [dict(e) for e in self.echo]
         hidden = load_hidden()
-        return [t for t in build_threads(msgs, local_jobs()) if t["key"] not in hidden]
+        return [t for t in build_threads(msgs, *local_jobs()) if t["key"] not in hidden]
 
 
 def load_hidden():
@@ -908,11 +915,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(404, {"error": "없는 대화"})
             return self._send(200, t)
         if u.path == "/api/progress":                                               # 일하는 중인 대화의 실시간 진행(게이트웨이 PC 만)
-            try:
-                no = int((parse_qs(u.query).get("no") or ["0"])[0])
-            except ValueError:
-                no = 0
-            return self._send(200, {"progress": job_progress(no), "local": bool(JOBS_DIR)})
+            job_id = (parse_qs(u.query).get("job") or [""])[0]
+            return self._send(200, {"progress": job_progress(job_id), "local": bool(JOBS_DIR)})
         if u.path == "/api/setup":
             cfg, src = load_cfg()
             return self._send(200, {k: cfg.get(k) for k in ("user", "login_user", "imap_host", "imap_port", "smtp_host", "smtp_port",

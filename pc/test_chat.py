@@ -58,6 +58,16 @@ class Progress(unittest.TestCase):
         long = "가" * 2500
         self.assertTrue(chat.result_text([{"type": "text", "text": long}]).endswith("… (500자 더)"))
 
+    def test_first_instruction_follows_its_job(self):
+        """게이트웨이는 번호를 회신할 때 붙인다 — 번호가 없는 동안에도 접수된 작업(mail_msgid)으로 '작업 중' 과 작업 id 가 붙어야 진행 카드가 뜬다."""
+        m = {"id": "<m1@x>", "thread": None, "ts": 1.0, "bot": False, "mode": "read", "tag": "#c", "text": "일 해 줘", "rest": "", "refs": []}
+        t = chat.build_threads([dict(m)])[0]
+        self.assertEqual((t["key"], t["status"], t["job"]), ("m:<m1@x>", "sent", ""))
+        t = chat.build_threads([dict(m)], {}, {"<m1@x>": {"id": "j1", "status": "running", "thread": None}})[0]
+        self.assertEqual((t["key"], t["no"], t["status"], t["job"]), ("m:<m1@x>", None, "running", "j1"))
+        t = chat.build_threads([dict(m)], {25: {"id": "j1", "status": "done", "thread": 25}}, {"<m1@x>": {"id": "j1", "status": "done", "thread": 25}})[0]
+        self.assertEqual((t["key"], t["no"], t["status"], t["job"]), ("T25", 25, "sent", "j1"))   # 번호를 받았고, 회신 전이라 '보냄'
+
     def test_find_transcript_by_prompt(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
