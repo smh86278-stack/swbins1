@@ -52,8 +52,17 @@
   설정 파일 `progress_after_min`, 0 이면 끔 — 게이트웨이와 같은 규칙), 진행 카드(작업 파일 + `~/.claude/projects` 세션 기록), 폰이 보낸 사진(`--add-dir`), 제한 시간 15분.
 - **작업 폴더**: 기본 작업 폴더 하나(설정에서 고름) + `키=폴더` 목록(지시에 `@키`). 다른 PC 의 게이트웨이 폴더 키(@hub 등)는 여기 목록에 있어야 통합니다.
 - **폰에서**: 폰 페이지·폰 메일 앱이 **같은 계정에서 자기 자신에게** 보내야 받습니다(예: 메신저 계정이 Gmail 이면 폰 페이지도 그 Gmail 로 '나에게').
-- **빠진 것(게이트웨이·워커 대비)**: 전용 브라우저(Playwright MCP) · Jira 전용 도구/거부 목록(`/jira 키` 는 보통 지시로 그대로 넘김) ·
-  다른 주소의 암호 단어 발신자(`keyed_senders`)·Gmail 따로 읽기·스팸함 보기·폰 주소로 회신 사본 · 작업 일시정지 깃발·알림 큐 · 회신을 SMTP 로 보내기(늘 메일함에 써 넣기).
+- **전용 브라우저(설정 스위치, 기본 꺼짐)**: 켜면 수정 허용(`#cw`) 새 지시에 `mcp__browser` 를 허용하고 `--mcp-config` 로
+  Playwright MCP(`npx @playwright/mcp@0.0.83`, 워커와 같은 판·같은 이름)를 붙입니다. 윈도우는 `cmd /c npx`.
+  프로필은 상태 폴더의 `runner/browser/profile` — 설정의 **로그인 창 열기**로 그 프로필 Chrome(없으면 윈도우 Edge)을 `127.0.0.1:9333` 디버깅 포트로 열어
+  한 번 로그인해 둡니다(게이트웨이 `browser-login.bat`). 그 창이 떠 있으면 지시는 새로 띄우지 않고 거기 붙습니다(`--cdp-endpoint`).
+  켤 때 npx·Chrome 이 없으면 막힙니다. 읽기 지시·Jira 지시에는 붙지 않습니다.
+- **Jira 처리(설정 스위치, 기본 꺼짐)**: 켜면 `#cw /jira 키`(화면의 Jira 처리 시작)를 게이트웨이 jira-mail 과 같은 도구
+  (`mcp__jira__jira_get_issue`·`_search`·`_get_transitions` + 읽기·고치기·Bash)와 거부 목록(curl·wget·ssh 등 밖으로 내보내는 명령, `rtk` 붙은 것까지)으로 돌립니다.
+  토큰을 넣으면 `uvx mcp-atlassian@0.23.1 --read-only` 를 그 주소(`JIRA_URL`)·토큰(`JIRA_PERSONAL_TOKEN`)으로 붙이고(토큰은 메일 비밀번호처럼 DPAPI·키체인,
+  MCP 설정 파일은 작업이 끝나면 지움), 비우면 이 PC 의 Claude Code 에 이미 있는 `jira` MCP 를 씁니다.
+  작업 폴더(기본, 또는 Jira 작업 폴더)에 `jira` 스킬·명령이 있으면 `/jira 키` 를 그대로, 없으면 이슈를 읽고 방향을 묻는 지시로 풀어서 넘깁니다.
+- **빠진 것(게이트웨이·워커 대비)**: 다른 주소의 암호 단어 발신자(`keyed_senders`)·Gmail 따로 읽기·스팸함 보기·폰 주소로 회신 사본 · 작업 일시정지 깃발·알림 큐 · 회신을 SMTP 로 보내기(늘 메일함에 써 넣기).
 - 상태 파일: 윈도우 `%LOCALAPPDATA%\DispatchChat\runner\`, 맥 `~/Library/Application Support/DispatchChat/runner/`. 대화 규칙은 이 폴더의 `chat-protocol.md`(exe 에 같이 묶임).
 
 ## 진행 상황(실시간)
@@ -79,7 +88,7 @@
 
 - 화면은 127.0.0.1 에만 열리고, 보내기 같은 요청은 띄울 때마다 새로 만드는 토큰이 있어야 합니다.
 - 포트가 겹치면 `DISPATCH_CHAT_PORT` 환경변수로 바꿉니다(이미 같은 포트에 메신저가 떠 있으면 새로 띄우지 않고 창만 엽니다).
-- 대화 규칙(선택지·멈춤)은 게이트웨이 쪽 `chat-protocol.md`. 이 PC 에서 직접 실행할 땐 이 폴더의 사본(회사 값·브라우저 항목 없음)을 씁니다.
+- 대화 규칙(선택지·멈춤)은 게이트웨이 쪽 `chat-protocol.md`. 이 PC 에서 직접 실행할 땐 이 폴더의 사본(회사 값 없음)을 씁니다.
 
 ## 만들기 · 확인
 

@@ -37,6 +37,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.request
 from datetime import datetime
 from email.message import EmailMessage
 from html import escape as html_escape
@@ -45,9 +46,26 @@ from urllib.parse import quote
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 
-# 읽기 지시(#c)는 읽기 도구만, 쓰기 지시(#cw)는 고치기·명령까지 — 게이트웨이·워커 기본값과 같다(브라우저 MCP 는 뺐다)
+# 읽기 지시(#c)는 읽기 도구만, 쓰기 지시(#cw)는 고치기·명령까지 — 게이트웨이·워커 기본값과 같다(브라우저는 설정에서 켤 때만)
 READ_TOOLS = ["Read", "Glob", "Grep", "Bash(git log:*)", "Bash(git status:*)", "Bash(git diff:*)", "Bash(git show:*)"]
 WRITE_TOOLS = ["Read", "Glob", "Grep", "Edit", "Write", "NotebookEdit", "Bash"]
+
+# 전용 브라우저(설정 run_browser, 기본 꺼짐) — 쓰기 지시에 Playwright MCP. 워커와 같은 이름(mcp__browser__*)·같은 판
+BROWSER_TOOL = "mcp__browser"
+PLAYWRIGHT_MCP = "@playwright/mcp@0.0.83"
+BROWSER_CDP = "http://127.0.0.1:9333"   # 로그인 창(이 포트로 연다)이 떠 있으면 새로 띄우지 않고 거기 붙는다
+
+# Jira 처리(설정 run_jira, 기본 꺼짐) — '#cw /jira 키' 를 게이트웨이 jira-mail 과 같은 도구·거부 목록으로.
+# 거부 목록은 밖으로 내보내는 명령(앞부분 일치라 python -c 같은 우회까지 막지는 못한다). rtk 훅이 'rtk <명령>' 으로 바꿔 쓰므로 둘 다
+JIRA_PROMPT_RE = re.compile(r"^/jira\s+([A-Z][A-Z0-9]+-\d+)\s*$")
+JIRA_TOOLS = ["Read", "Write", "Bash", "Glob", "Grep", "Edit",
+              "mcp__jira__jira_get_issue", "mcp__jira__jira_search", "mcp__jira__jira_get_transitions"]
+JIRA_DENY = ["Bash(%s%s:*)" % (p, c) for c in ("curl", "wget", "Invoke-WebRequest", "Invoke-RestMethod", "iwr", "irm",
+                                               "nc", "ncat", "ssh", "scp", "sftp", "ftp", "telnet") for p in ("", "rtk ")] \
+    + ["Bash(rtk proxy:*)"]
+JIRA_MCP_ARGS = ["mcp-atlassian@0.23.1", "--transport", "stdio", "--read-only"]
+JIRA_NO_SKILL = ("Jira 이슈 %s 를 처리해 줘. mcp__jira__jira_get_issue 로 이슈(설명·댓글)를 읽고 무엇을 해야 하는지 정리한 뒤, "
+                 "이 폴더의 코드에서 고칠 곳을 찾아. 고치기 전에 방향을 choices 로 물어봐.")   # 작업 폴더에 jira 스킬이 없을 때
 TOOL_RE = re.compile(r"^[A-Za-z0-9_]+(\([^\"'`\r\n]*\))?$")      # 명령줄에 붙이기 전에 거른다(워커 Test-JobInputs 와 같은 규칙)
 SESSION_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 TIMEOUT_SEC = 900
@@ -442,7 +460,10 @@ class Runner:
                 "dirs": "\n".join("%s=%s" % kv for kv in (cfg.get("run_dirs") or {}).items()),
                 "claude": claude[-1] if claude else "", "blocked": self.blocked(cfg, src),
                 "notice": cfg.get("run_conflict") or "", "error": self.error, "busy": self.current,
-                "has_key": bool(str(cfg.get("key_word") or "").strip())}
+                "has_key": bool(str(cfg.get("key_word") or "").strip()),
+                "browser": bool(cfg.get("run_browser")), "browser_path": find_browser()[0], "npx": bool(find_tool("npx")),
+                "jira": bool(cfg.get("run_jira")), "jira_url": cfg.get("run_jira_url") or "",
+                "jira_dir": cfg.get("run_jira_dir") or "", "has_jira_token": bool(cfg.get("run_jira_token_enc"))}
 
     def configure(self, data):
         """설정 화면의 스위치·작업 폴더. 켜는 순간을 run_since 로 남긴다 — 그 전에 온 메일은 실행하지 않는다."""
@@ -456,6 +477,7 @@ class Runner:
             own["run_workdir"] = os.path.abspath(wd) if wd else ""
         if "dirs" in data:
             own["run_dirs"] = parse_dirs(data.get("dirs"))
+        self.configure_extras(own, data)
         want = bool(data.get("enabled"))
         if want and not own.get("run_here"):
             why = self.blocked(cfg, src) or ("" if self.claude_cmd() else NO_CLAUDE)
@@ -477,6 +499,84 @@ class Runner:
         self.wake.set()
         self.kick.set()
         return self.info()
+
+    def configure_extras(self, own, data):
+        """브라우저·Jira 스위치와 Jira 값. 켤 때 필요한 것이 없으면 이유와 함께 막는다."""
+        if "jira_url" in data:
+            url = str(data.get("jira_url") or "").strip().rstrip("/")
+            if url and not re.match(r"^https?://[^\s/]+", url):
+                raise ValueError("Jira 주소는 https:// 로 시작하게 넣어 주세요: %s" % url)
+            own["run_jira_url"] = url
+        if str(data.get("jira_token") or "").strip():                   # 비어 있으면 그대로 둔다(바꿀 때만 넣는다)
+            own["run_jira_token_enc"] = self.C.protect_secret(str(data["jira_token"]).strip(), "jira")
+        if data.get("jira_token_clear"):
+            own.pop("run_jira_token_enc", None)
+        if "jira_dir" in data:
+            jd = str(data.get("jira_dir") or "").strip()
+            if jd and not os.path.isdir(jd):
+                raise ValueError("Jira 작업 폴더가 없습니다: %s" % jd)
+            own["run_jira_dir"] = os.path.abspath(jd) if jd else ""
+        if "browser" in data:
+            want = bool(data.get("browser"))
+            if want and not own.get("run_browser"):
+                if not find_tool("npx"):
+                    raise ValueError("npx(Node.js)를 찾지 못했습니다 — Node.js 를 설치한 뒤 메신저를 다시 여세요. 전용 브라우저(Playwright)를 npx 로 띄웁니다.")
+                if not find_browser()[0]:
+                    raise ValueError("Chrome 을 찾지 못했습니다 — Chrome 을 설치하세요(윈도우는 Edge 도 됩니다).")
+            own["run_browser"] = want
+        if "jira" in data:
+            want = bool(data.get("jira"))
+            if want and own.get("run_jira_token_enc"):
+                if not own.get("run_jira_url"):
+                    raise ValueError("Jira 주소를 넣어 주세요 — 토큰을 넣으면 그 주소로 Jira 도구(mcp-atlassian)를 띄웁니다.")
+                if not find_tool("uvx"):
+                    raise ValueError("uvx(uv)를 찾지 못했습니다 — uv 를 설치하거나, 토큰을 비우고 이 PC 의 Claude Code 에 이미 있는 jira MCP 를 쓰세요.")
+            own["run_jira"] = want
+
+    def browser_login(self):
+        """전용 브라우저 프로필로 창을 연다 — 사람이 한 번 로그인해 두면 지시가 그 로그인 그대로 쓴다(게이트웨이 browser-login.bat)."""
+        if cdp_live():
+            return {"ok": True, "already": True}
+        path, _ch = find_browser()
+        if not path:
+            raise ValueError("Chrome 을 찾지 못했습니다 — Chrome 을 설치하세요(윈도우는 Edge 도 됩니다).")
+        profile = os.path.join(self.root, "browser", "profile")
+        os.makedirs(profile, exist_ok=True)
+        port = BROWSER_CDP.rsplit(":", 1)[1]
+        kw = {"creationflags": 0x00000008 | 0x00000200} if IS_WIN else {"start_new_session": True}   # 메신저와 따로 산다
+        subprocess.Popen([path, "--user-data-dir=" + profile, "--remote-debugging-port=" + port,
+                          "--remote-debugging-address=127.0.0.1", "--no-first-run", "--no-default-browser-check"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kw)
+        self.C.log("[실행] 전용 브라우저 로그인 창을 열었습니다")
+        return {"ok": True, "already": False}
+
+    def mcp_config(self, job, cfg, base):
+        """이 작업에 붙일 MCP 서버(--mcp-config 파일, 없으면 ""). 허용 도구에 그 서버가 있고 설정이 켜져 있을 때만.
+        base — 임시 파일 앞부분(작업이 끝나면 지운다. Jira 토큰이 들어간다)."""
+        tools, servers = job.get("allowed_tools") or [], {}
+        npx = ["cmd", "/c", "npx"] if IS_WIN else ["npx"]                # 윈도우 claude 는 npx 를 cmd 로 감싸야 띄운다
+        if cfg.get("run_browser") and any(t.startswith(BROWSER_TOOL) for t in tools):
+            out = os.path.join(self.root, "browser", "output")
+            os.makedirs(out, exist_ok=True)
+            if cdp_live():                                               # 로그인 창이 떠 있다 — 같은 프로필이라 새로 못 띄운다
+                where = ["--cdp-endpoint", BROWSER_CDP]
+            else:
+                profile = os.path.join(self.root, "browser", "profile")
+                os.makedirs(profile, exist_ok=True)
+                pw = {"browser": {"browserName": "chromium", "userDataDir": profile,
+                                  "launchOptions": {"channel": find_browser()[1] or "chrome"}}}
+                self.C.write_json(base + ".pw.json", pw)
+                where = ["--config", base + ".pw.json"]
+            servers["browser"] = {"type": "stdio", "command": npx[0],
+                                  "args": npx[1:] + ["-y", PLAYWRIGHT_MCP] + where + ["--output-dir", out]}
+        if cfg.get("run_jira") and cfg.get("run_jira_token_enc") and any(t.startswith("mcp__jira__") for t in tools):
+            servers["jira"] = {"type": "stdio", "command": "uvx", "args": list(JIRA_MCP_ARGS),
+                               "env": {"JIRA_URL": cfg.get("run_jira_url") or "",
+                                       "JIRA_PERSONAL_TOKEN": self.C.unprotect_secret(cfg["run_jira_token_enc"])}}
+        if not servers:
+            return ""
+        self.C.write_json(base + ".mcp.json", {"mcpServers": servers})
+        return base + ".mcp.json"
 
     def conflict(self, reason):
         """메일함에 다른 실행기의 회신이 보인다 — 스스로 끄고 이유를 남긴다."""
@@ -857,6 +957,16 @@ class Runner:
             if said.strip().lower() in STOP_WORDS:
                 said = "멈춤"
             prompt = (parse_answer(said, prev.get("ask")) or said or prompt)[:MAX_PROMPT]
+        elif mode == "write":                         # 새 쓰기 지시 — 설정에서 켠 것만 더한다(이어서 하기는 처음 도구 그대로)
+            mj = JIRA_PROMPT_RE.match(prompt)
+            if mj and cfg.get("run_jira"):
+                tools, denied = JIRA_TOOLS, JIRA_DENY
+                if cfg.get("run_jira_dir"):
+                    workdir, label = cfg["run_jira_dir"], "jira"
+                if not has_skill(workdir, "jira"):
+                    prompt = JIRA_NO_SKILL % mj.group(1)
+            elif cfg.get("run_browser"):
+                tools = WRITE_TOOLS + [BROWSER_TOOL]
         with self.lock:
             stopped = bool(msgid and msgid in st["early_stops"])
             st["early_stops"].pop(msgid, None)
@@ -1133,6 +1243,10 @@ class Runner:
         try:
             with open(pf, "wb") as f:                     # 줄바꿈을 바꾸지 않고 그대로(stdin 으로 넘긴다)
                 f.write(str(job.get("prompt") or "").encode("utf-8"))
+            mcp = self.mcp_config(job, cfg, os.path.join(logs, jid))
+            if mcp:
+                at = args.index("-p")
+                args[at:at] = ["--mcp-config", mcp]          # -p 앞에(--allowedTools 처럼 여러 값을 받는 옵션 뒤에 두지 않는다)
             env = dict(os.environ)
             if not IS_WIN:                                   # Finder 로 띄운 앱은 PATH 가 짧다 — claude(node) 가 돌 수 있게
                 extra = [os.path.dirname(args[0]), "/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")]
@@ -1193,7 +1307,7 @@ class Runner:
             self.current = ""
             if tree:
                 tree.close()
-            for f in (pf, of, ef):
+            for f in (pf, of, ef, os.path.join(logs, jid + ".mcp.json"), os.path.join(logs, jid + ".pw.json")):
                 try:
                     os.remove(f)
                 except OSError:
@@ -1320,3 +1434,46 @@ def parse_dirs(text):
             raise ValueError("작업 폴더가 없습니다: %s" % v)
         out[k] = os.path.abspath(v)
     return out
+
+
+MAC_BIN_DIRS = ["/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")]
+
+
+def find_tool(name):
+    """PATH 에서 실행 파일을 찾는다(윈도우는 npx.cmd 도). 맥에서 Finder 로 띄운 앱은 PATH 가 짧아 흔한 설치 자리도 본다."""
+    path = shutil.which(name)
+    if not path and not IS_WIN:
+        path = shutil.which(name, path=os.pathsep.join(MAC_BIN_DIRS))
+    return path or ""
+
+
+def find_browser():
+    """전용 브라우저로 쓸 것 → (실행 파일, Playwright channel). Chrome, 없으면(윈도우) Edge. 둘 다 없으면 ("", "")."""
+    if IS_WIN:
+        roots = [os.environ.get(k) for k in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")]
+        cands = [(os.path.join(r, "Google", "Chrome", "Application", "chrome.exe"), "chrome") for r in roots if r] + \
+                [(os.path.join(r, "Microsoft", "Edge", "Application", "msedge.exe"), "msedge") for r in roots if r]
+    elif IS_MAC:
+        app = os.path.join("Google Chrome.app", "Contents", "MacOS", "Google Chrome")
+        cands = [(os.path.join("/Applications", app), "chrome"), (os.path.join(os.path.expanduser("~/Applications"), app), "chrome")]
+    else:
+        cands = [(shutil.which("google-chrome") or "", "chrome")]
+    return next(((p, ch) for p, ch in cands if p and os.path.isfile(p)), ("", ""))
+
+
+def cdp_live():
+    """로그인 창(원격 디버깅 포트)이 떠 있는지."""
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))      # 회사 프록시를 타지 않게
+        with opener.open(BROWSER_CDP + "/json/version", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def has_skill(workdir, name):
+    """작업 폴더(.claude) 나 사용자 폴더(~/.claude)에 그 이름의 스킬·명령이 있는지 — '/jira 키' 를 그대로 넘길 수 있는지."""
+    for base in (os.path.join(workdir or "", ".claude"), os.path.join(os.path.expanduser("~"), ".claude")):
+        if os.path.isfile(os.path.join(base, "skills", name, "SKILL.md")) or os.path.isfile(os.path.join(base, "commands", name + ".md")):
+            return True
+    return False

@@ -163,6 +163,9 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 #runWhy.ok{display:block;background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
 #runDirs{min-height:56px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
 #runErr{color:var(--bad);font-size:12.5px;min-height:16px}
+.run h4{margin:14px 0 0;padding-top:12px;border-top:1px dashed var(--line);font-size:13.5px;display:flex;align-items:center;gap:8px}
+.two.half{grid-template-columns:1fr 1fr}
+@media (max-width:480px){.two.half{grid-template-columns:1fr}}
 #toast{position:fixed;right:18px;bottom:18px;background:var(--text);color:var(--bg);padding:9px 15px;border-radius:14px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;max-width:520px;z-index:9}
 #toast.show{opacity:.96;transform:none}
 @media (max-width:760px){body{grid-template-columns:1fr}aside{display:none}body.list aside{display:flex}body.list main{display:none}}
@@ -266,8 +269,17 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div id="runWhy"></div>
     <div class="field"><label>기본 작업 폴더</label><input id="runDir" type="text" placeholder="지시를 실행할 폴더"></div>
     <div class="field"><label>다른 작업 폴더 (한 줄에 <code>키=폴더</code> — 지시에 @키 로 고름)</label><textarea id="runDirs" rows="2" placeholder="web=C:\work\web"></textarea></div>
+    <h4>전용 브라우저 (Playwright) <label class="switch" title="켜면 수정 허용(#cw) 지시가 웹 사이트 일을 이 PC 의 전용 브라우저로 합니다"><input type="checkbox" id="runBrowser"><span></span></label></h4>
+    <p>켜면 수정 허용(#cw) 지시가 웹 사이트 일을 이 PC 의 전용 Chrome 창으로 합니다(Node.js·Chrome 필요, 윈도우는 Edge 도 됨).
+      쓸 사이트는 <b>로그인 창 열기</b>로 한 번 로그인해 두세요. 로그인·OTP 가 나오거나 결제·삭제·발송 같은 단추 앞에서는 멈추고 묻습니다.</p>
+    <h4>Jira 처리 <label class="switch" title="켜면 'Jira 처리 시작'(#cw /jira 키)을 Jira 도구로 돌리고 밖으로 내보내는 명령은 막습니다"><input type="checkbox" id="runJira"><span></span></label></h4>
+    <p>켜면 'Jira 처리 시작'(#cw /jira 키)을 Jira 읽기 도구로 돌리고, curl·ssh 처럼 밖으로 내보내는 명령은 막습니다. 작업 폴더에 jira 스킬이 있으면 그 스킬을 씁니다.
+      토큰을 비워 두면 이 PC 의 Claude Code 에 이미 있는 jira MCP 를 씁니다.</p>
+    <div class="two half"><div class="field"><label>Jira 주소</label><input id="runJiraUrl" type="text" placeholder="https://jira.example.com"></div>
+      <div class="field"><label>Jira 개인 토큰</label><input id="runJiraTok" type="password" autocomplete="off"></div></div>
+    <div class="field"><label>Jira 작업 폴더 (비우면 기본 작업 폴더)</label><input id="runJiraDir" type="text"></div>
     <div id="runErr"></div>
-    <div class="acts" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" id="runSave">폴더 저장</button></div>
+    <div class="acts" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="ghost" id="runLogin">로그인 창 열기</button><button type="button" class="ghost" id="runSave">저장</button></div>
   </div>
 </dialog>
 <div id="toast"></div>
@@ -542,6 +554,13 @@ function drawRunner(r) {
   on.checked = !!r.enabled;
   on.disabled = !r.enabled && !!(r.blocked || !r.claude);
   $('#runDir').value = r.workdir || r.home || ''; $('#runDirs').value = r.dirs || '';
+  $('#runBrowser').checked = !!r.browser; $('#runJira').checked = !!r.jira;
+  $('#runBrowser').disabled = !r.browser && !(r.npx && r.browser_path);
+  $('#runBrowser').parentElement.title = r.browser || (r.npx && r.browser_path) ? '켜면 수정 허용(#cw) 지시가 웹 사이트 일을 이 PC 의 전용 브라우저로 합니다'
+    : (!r.npx ? 'Node.js(npx)를 찾지 못했습니다 — 설치한 뒤 메신저를 다시 여세요' : 'Chrome 을 찾지 못했습니다');
+  $('#runLogin').disabled = !r.browser_path;
+  $('#runJiraUrl').value = r.jira_url || ''; $('#runJiraDir').value = r.jira_dir || ''; $('#runJiraTok').value = '';
+  $('#runJiraTok').placeholder = r.has_jira_token ? '저장됨 — 바꿀 때만 입력' : '비우면 이 PC 의 jira MCP';
   let msg = '', cls = '';
   if (r.blocked) { msg = r.blocked; cls = 'warn'; }
   else if (!r.claude) { msg = 'Claude Code(claude)를 찾지 못했습니다 — 이 PC 에 Claude Code 를 설치하고 터미널에서 한 번 claude 로 로그인한 뒤 메신저를 다시 여세요. 그 전에는 켤 수 없습니다.'; cls = 'warn'; }
@@ -553,18 +572,27 @@ async function loadRunner() {
   $('#runErr').textContent = '';
   try { drawRunner(await api('/api/runner')); } catch (e) { $('#runErr').textContent = e.message; }
 }
-async function saveRunner(enabled) {
+async function saveRunner(enabled, done) {
   $('#runErr').textContent = '';
   try {
-    const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value });
-    drawRunner(r); toast(enabled ? '이 PC 에서 직접 실행 — 켰습니다. 지금 이후에 온 지시만 받습니다' : '저장했습니다'); poll(true);
+    const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value,
+      browser: $('#runBrowser').checked, jira: $('#runJira').checked, jira_url: $('#runJiraUrl').value,
+      jira_token: $('#runJiraTok').value, jira_dir: $('#runJiraDir').value });
+    drawRunner(r); toast(done || '저장했습니다'); poll(true);
   } catch (e) { $('#runErr').textContent = e.message; loadRunner(); }
 }
+$('#runBrowser').onchange = e => saveRunner($('#runOn').checked, e.target.checked ? '전용 브라우저 — 켰습니다. 쓸 사이트는 로그인 창에서 한 번 로그인해 두세요' : '전용 브라우저 — 껐습니다');
+$('#runJira').onchange = e => saveRunner($('#runOn').checked, e.target.checked ? 'Jira 처리 — 켰습니다' : 'Jira 처리 — 껐습니다');
+$('#runLogin').onclick = async () => {
+  $('#runErr').textContent = '';
+  try { const r = await api('/api/browser-login', {}); toast(r.already ? '로그인 창이 이미 열려 있습니다' : '로그인 창을 열었습니다 — 쓸 사이트에 로그인해 두세요(닫아도, 열어 둬도 됩니다)'); }
+  catch (e) { $('#runErr').textContent = e.message; }
+};
 $('#runOn').onchange = e => {
   const on = e.target.checked;
   if (on && !confirm('이 PC 의 Claude Code 가 내 메일함에 온 지시를 실행하게 할까요?\n\n· 내 주소에서 온 지시만, 지금 이후에 온 것만 받습니다.\n· 다른 PC(메일 게이트웨이)가 같은 메일함을 읽고 있으면 켜지 마세요 — 같은 일이 두 번 돕니다.')) { e.target.checked = false; return; }
   if (!on && !confirm('끌까요? 하던 일·기다리던 일도 멈춥니다.')) { e.target.checked = true; return; }
-  saveRunner(on);
+  saveRunner(on, on ? '이 PC 에서 직접 실행 — 켰습니다. 지금 이후에 온 지시만 받습니다' : '');
 };
 $('#runSave').onclick = () => saveRunner($('#runOn').checked);
 /* 메일 주소만 넣으면 잘 알려진 메일의 서버를 채운다(직접 고쳐도 된다). 회사 밖 메일은 앱 비밀번호·IMAP 켜기가 필요할 수 있다 */

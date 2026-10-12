@@ -18,6 +18,7 @@ import threading
 import time
 import unittest
 from email.message import EmailMessage
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import chat  # noqa: E402
@@ -29,8 +30,12 @@ SESSION = "11111111-2222-3333-4444-555555555555"
 FAKE_CLAUDE = textwrap.dedent(r'''
     import json, os, subprocess, sys, time
     prompt = sys.stdin.buffer.read().decode("utf-8")
+    mcp = None
+    if "--mcp-config" in sys.argv:                 # 작업이 끝나면 지워지는 파일이라 실행 중에 읽어 둔다
+        with open(sys.argv[sys.argv.index("--mcp-config") + 1], encoding="utf-8") as f:
+            mcp = json.load(f)
     with open(os.environ["FAKE_CLAUDE_LOG"], "a", encoding="utf-8") as f:
-        f.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "prompt": prompt}, ensure_ascii=False) + "\n")
+        f.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "prompt": prompt, "mcp": mcp}, ensure_ascii=False) + "\n")
     if "SLEEP" in prompt:                          # 오래 걸리는 일 — 자식(손자) 프로세스도 하나 띄워 둔다
         c = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
         with open(os.environ["FAKE_CLAUDE_CHILD"], "w") as f:
@@ -264,6 +269,102 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("Edit", calls[0]["args"])
         self.assertEqual(self.replies("reply")[0]["X-Dispatch-Thread"], "1")
+
+    # ---------- 전용 브라우저 · Jira (설정에서 켤 때만)
+
+    def run_write(self, subject):
+        """쓰기 지시 하나를 확인 답까지 해서 돌리고 그 claude 호출을 돌려준다."""
+        n = len(self.replies("confirm"))
+        add(self.box, mail(subject)[0])
+        self.step()
+        conf = self.replies("confirm")[n]
+        add(self.box, mail("Re: " + subject, "1", reply_to=conf["Message-ID"])[0])
+        self.step()
+        return self.calls_made()[-1]
+
+    def fake_tools(self, npx=True, browser=True, uvx=True):
+        have = {"npx": npx, "uvx": uvx}
+        for name, val in (("find_tool", lambda n: "/bin/" + n if have.get(n) else ""),
+                          ("find_browser", lambda: ("/bin/chrome", "chrome") if browser else ("", "")),
+                          ("cdp_live", lambda: False)):
+            self.addCleanup(setattr, runner, name, getattr(runner, name))
+            setattr(runner, name, val)
+
+    def test_browser_off_by_default(self):
+        self.turn_on()
+        args = self.run_write("#cw 사이트 열어 줘")["args"]
+        self.assertNotIn("mcp__browser", args)
+        self.assertNotIn("--mcp-config", args)
+        self.assertFalse(self.r.info()["browser"])
+
+    def test_browser_on_adds_playwright_to_write_only(self):
+        self.fake_tools()
+        self.turn_on()
+        self.r.configure({"enabled": True, "browser": True})
+        call = self.run_write("#cw 사이트 열어 줘")
+        args = call["args"]
+        self.assertIn("mcp__browser", args[args.index("--allowedTools") + 1:])
+        self.assertLess(args.index("--mcp-config"), args.index("-p"))        # 여러 값을 받는 --allowedTools 뒤에 섞이지 않게
+        srv = call["mcp"]["mcpServers"]["browser"]
+        self.assertIn(runner.PLAYWRIGHT_MCP, srv["args"])
+        self.assertEqual(list(call["mcp"]["mcpServers"]), ["browser"])
+        pw = srv["args"][srv["args"].index("--config") + 1]
+        self.assertFalse(os.path.exists(pw))                                 # 끝나면 임시 파일을 지운다
+        self.assertEqual(os.listdir(os.path.join(self.r.root, "logs")), [])
+        add(self.box, mail("#c 읽기만")[0])                                   # 읽기 지시엔 붙지 않는다
+        self.step()
+        self.assertNotIn("--mcp-config", self.calls_made()[-1]["args"])
+        runner.cdp_live = lambda: True                                       # 로그인 창이 떠 있으면 거기 붙는다
+        srv = self.run_write("#cw 또 열어 줘")["mcp"]["mcpServers"]["browser"]
+        self.assertEqual(srv["args"][srv["args"].index("--cdp-endpoint") + 1], runner.BROWSER_CDP)
+
+    def test_browser_needs_npx_and_chrome(self):
+        self.fake_tools(npx=False)
+        self.turn_on()
+        with self.assertRaises(ValueError):
+            self.r.configure({"enabled": True, "browser": True})
+        self.fake_tools(browser=False)
+        with self.assertRaises(ValueError):
+            self.r.configure({"enabled": True, "browser": True})
+        self.assertFalse(self.r.info()["browser"])
+
+    def test_jira_on_uses_jira_tools_deny_list_and_mcp(self):
+        self.fake_tools()
+        self.addCleanup(setattr, chat, "protect_secret", chat.protect_secret)
+        self.addCleanup(setattr, chat, "unprotect_secret", chat.unprotect_secret)
+        chat.protect_secret = lambda text, account="mail": "enc:" + text
+        chat.unprotect_secret = lambda enc: enc[4:]
+        home = os.path.join(self.tmp, "home")                                  # 이 PC 사용자 폴더의 진짜 jira 스킬을 보지 않게
+        env = mock.patch.dict(os.environ, {"HOME": home, "USERPROFILE": home})
+        env.start()
+        self.addCleanup(env.stop)
+        self.turn_on()
+        with self.assertRaises(ValueError):                                   # 토큰을 넣으면 주소가 있어야 한다
+            self.r.configure({"enabled": True, "jira": True, "jira_token": "tok"})
+        self.r.configure({"enabled": True, "jira": True, "jira_url": "https://jira.example.com/", "jira_token": "tok", "browser": True})
+        self.assertTrue(self.r.info()["has_jira_token"])
+        call = self.run_write("#cw /jira ABC-12")
+        args = call["args"]
+        allowed = args[args.index("--allowedTools") + 1:args.index("--disallowedTools")]
+        self.assertEqual(allowed, runner.JIRA_TOOLS)                          # 브라우저를 켜 둬도 Jira 지시엔 안 붙는다
+        self.assertIn("Bash(rtk curl:*)", args[args.index("--disallowedTools") + 1:])
+        self.assertEqual(call["mcp"]["mcpServers"]["jira"]["env"],
+                         {"JIRA_URL": "https://jira.example.com", "JIRA_PERSONAL_TOKEN": "tok"})
+        self.assertIn("ABC-12", call["prompt"])                               # 작업 폴더에 jira 스킬이 없다 → 풀어 쓴 지시
+        self.assertNotIn("/jira", call["prompt"])
+        os.makedirs(os.path.join(self.work, ".claude", "skills", "jira"))
+        open(os.path.join(self.work, ".claude", "skills", "jira", "SKILL.md"), "w").close()
+        self.assertEqual(self.run_write("#cw /jira ABC-13")["prompt"], "/jira ABC-13")
+        self.r.configure({"enabled": True, "jira_token_clear": True})        # 토큰이 없으면 이 PC 의 jira MCP 를 쓴다(붙이지 않음)
+        call = self.run_write("#cw /jira ABC-14")
+        self.assertNotIn("jira", (call["mcp"] or {}).get("mcpServers", {}))
+        self.assertIn("mcp__jira__jira_get_issue", call["args"])
+
+    def test_jira_off_is_plain_write(self):
+        self.turn_on()
+        args = self.run_write("#cw /jira ABC-12")["args"]
+        self.assertNotIn("--disallowedTools", args)
+        self.assertNotIn("mcp__jira__jira_get_issue", args)
 
     # ---------- 멈춤 · 접수 신호
 

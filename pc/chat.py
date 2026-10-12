@@ -193,21 +193,23 @@ KEYCHAIN_MARK = "keychain"
 KEYCHAIN_SERVICE = "DispatchChat"
 
 
-def protect_secret(text):
+def protect_secret(text, account="mail"):
+    """account — 키체인 항목 이름(메일 비밀번호 'mail', Jira 토큰 'jira'). 표식은 'keychain' / 'keychain:jira'."""
     if IS_WIN:
         return dpapi_protect(text)
     if IS_MAC:
-        r = subprocess.run(["security", "add-generic-password", "-U", "-s", KEYCHAIN_SERVICE, "-a", "mail", "-w", text],
+        r = subprocess.run(["security", "add-generic-password", "-U", "-s", KEYCHAIN_SERVICE, "-a", account, "-w", text],
                            capture_output=True, text=True)
         if r.returncode:
             raise OSError("키체인에 넣지 못했습니다 — %s" % (r.stderr or r.stdout).strip())
-        return KEYCHAIN_MARK
+        return KEYCHAIN_MARK if account == "mail" else "%s:%s" % (KEYCHAIN_MARK, account)
     raise OSError("비밀번호를 안전하게 둘 곳이 없습니다(윈도우·맥만 됩니다)")
 
 
 def unprotect_secret(enc):
-    if enc == KEYCHAIN_MARK:
-        r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", "mail", "-w"],
+    if enc == KEYCHAIN_MARK or enc.startswith(KEYCHAIN_MARK + ":"):
+        account = enc.partition(":")[2] or "mail"
+        r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
                            capture_output=True, text=True)
         if r.returncode:
             raise OSError("키체인에서 비밀번호를 찾지 못했습니다 — 계정을 다시 넣어 주세요.")
@@ -1010,6 +1012,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, save_setup(data))
             if u.path == "/api/runner":
                 return self._send(200, RUNNER.configure(data))
+            if u.path == "/api/browser-login":                                      # 직접 실행 — 전용 브라우저에 로그인해 두기
+                return self._send(200, RUNNER.browser_login())
         except ValueError as e:
             return self._send(400, {"error": str(e)})
         except Exception as e:
