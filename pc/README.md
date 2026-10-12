@@ -59,6 +59,7 @@
   켤 때 npx·Chrome 이 없으면 막힙니다. 읽기 지시·Jira 지시에는 붙지 않습니다.
 - **Jira 처리(설정 스위치, 기본 꺼짐)**: 켜면 `#cw /jira 키`(화면의 Jira 처리 시작)를 게이트웨이 jira-mail 과 같은 도구
   (`mcp__jira__jira_get_issue`·`_search`·`_get_transitions` + 읽기·고치기·Bash)와 거부 목록(curl·wget·ssh 등 밖으로 내보내는 명령, `rtk` 붙은 것까지)으로 돌립니다.
+  Jira 주소는 회사 값 `jira_url`(company.json)이 있으면 미리 채워집니다.
   토큰을 넣으면 `uvx mcp-atlassian@0.23.1 --read-only` 를 그 주소(`JIRA_URL`)·토큰(`JIRA_PERSONAL_TOKEN`)으로 붙이고(토큰은 메일 비밀번호처럼 DPAPI·키체인,
   MCP 설정 파일은 작업이 끝나면 지움), 비우면 이 PC 의 Claude Code 에 이미 있는 `jira` MCP 를 씁니다.
   작업 폴더(기본, 또는 Jira 작업 폴더)나 `~/.claude` 에 설정의 **Jira 스킬**(기본 `jira`) 스킬·명령이 있으면 `/<스킬> 키` 로, 없으면 이슈를 읽고 방향을 묻는 지시로 풀어서 넘깁니다

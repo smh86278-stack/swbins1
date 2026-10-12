@@ -381,6 +381,18 @@ class RunnerTest(unittest.TestCase):
         call = self.run_write("#cw /jira SABANGNET-33176")
         self.assertIn("Bash(curl:*)", call["args"][call["args"].index("--disallowedTools") + 1:])
 
+    def test_jira_url_from_company_and_mac_paths(self):
+        with mock.patch.dict(chat.DEFAULTS, {"run_jira_url": "https://jira.example.com"}):     # company.json 의 jira_url
+            self.assertEqual(self.r.info()["jira_url"], "https://jira.example.com")
+            self.r.configure({"enabled": False, "jira_url": "https://jira.other.com"})       # 각자 바꾸면 그것
+            self.assertEqual(self.r.info()["jira_url"], "https://jira.other.com")
+        home = os.path.join(self.tmp, "home")
+        for v in ("v9.11.2", "v20.10.0", "v18.19.1"):
+            os.makedirs(os.path.join(home, ".nvm", "versions", "node", v, "bin"))
+        with mock.patch.dict(os.environ, {"HOME": home, "USERPROFILE": home}):
+            nvm = [d for d in runner.mac_bin_dirs() if ".nvm" in d]
+        self.assertIn("v20.10.0", nvm[0])                                     # nvm 은 가장 새 판부터
+
     def test_jira_off_is_plain_write(self):
         self.turn_on()
         args = self.run_write("#cw /jira ABC-12")["args"]

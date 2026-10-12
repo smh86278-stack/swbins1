@@ -1260,7 +1260,8 @@ class Runner:
                 args[at:at] = ["--mcp-config", mcp]          # -p 앞에(--allowedTools 처럼 여러 값을 받는 옵션 뒤에 두지 않는다)
             env = dict(os.environ)
             if not IS_WIN:                                   # Finder 로 띄운 앱은 PATH 가 짧다 — claude(node) 가 돌 수 있게
-                extra = [os.path.dirname(args[0]), "/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")]
+                extra = [os.path.dirname(args[0])] + [os.path.dirname(find_tool(t)) for t in ("npx", "uvx")] + \
+                    ["/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")]   # MCP 서버(npx·uvx)와 그것이 부르는 node 도
                 env["PATH"] = os.pathsep.join([p for p in extra if p] + [env.get("PATH") or "/usr/bin:/bin"])
             with open(pf, "rb") as fin, open(of, "wb") as fout, open(ef, "wb") as ferr:
                 kw = {"creationflags": CREATE_NO_WINDOW} if IS_WIN else {"start_new_session": True}
@@ -1447,14 +1448,27 @@ def parse_dirs(text):
     return out
 
 
-MAC_BIN_DIRS = ["/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")]
+def mac_bin_dirs():
+    """맥에서 Finder 로 띄운 앱은 PATH 가 짧다 — Node(npx)·uv(uvx)가 흔히 깔리는 자리(homebrew · nvm 최신 · volta · cargo · ~/.local/bin)."""
+    home = os.path.expanduser("~")
+    nvm = os.path.join(home, ".nvm", "versions", "node")
+    try:
+        nvm_bins = [os.path.join(nvm, v, "bin") for v in sorted(os.listdir(nvm), key=_version_key, reverse=True)]
+    except OSError:
+        nvm_bins = []
+    return ["/opt/homebrew/bin", "/usr/local/bin", os.path.join(home, ".local", "bin")] + nvm_bins + \
+        [os.path.join(home, ".volta", "bin"), os.path.join(home, ".cargo", "bin")]
+
+
+def _version_key(v):
+    return [int(x) if x.isdigit() else 0 for x in re.findall(r"\d+", v)]
 
 
 def find_tool(name):
-    """PATH 에서 실행 파일을 찾는다(윈도우는 npx.cmd 도). 맥에서 Finder 로 띄운 앱은 PATH 가 짧아 흔한 설치 자리도 본다."""
+    """PATH 에서 실행 파일을 찾는다(윈도우는 npx.cmd 도). 맥·리눅스는 흔한 설치 자리도 본다."""
     path = shutil.which(name)
     if not path and not IS_WIN:
-        path = shutil.which(name, path=os.pathsep.join(MAC_BIN_DIRS))
+        path = shutil.which(name, path=os.pathsep.join(mac_bin_dirs()))
     return path or ""
 
 
@@ -1465,8 +1479,9 @@ def find_browser():
         cands = [(os.path.join(r, "Google", "Chrome", "Application", "chrome.exe"), "chrome") for r in roots if r] + \
                 [(os.path.join(r, "Microsoft", "Edge", "Application", "msedge.exe"), "msedge") for r in roots if r]
     elif IS_MAC:
-        app = os.path.join("Google Chrome.app", "Contents", "MacOS", "Google Chrome")
-        cands = [(os.path.join("/Applications", app), "chrome"), (os.path.join(os.path.expanduser("~/Applications"), app), "chrome")]
+        apps = [(os.path.join("Google Chrome.app", "Contents", "MacOS", "Google Chrome"), "chrome"),
+                (os.path.join("Microsoft Edge.app", "Contents", "MacOS", "Microsoft Edge"), "msedge")]
+        cands = [(os.path.join(root, app), ch) for app, ch in apps for root in ("/Applications", os.path.expanduser("~/Applications"))]
     else:
         cands = [(shutil.which("google-chrome") or "", "chrome")]
     return next(((p, ch) for p, ch in cands if p and os.path.isfile(p)), ("", ""))

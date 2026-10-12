@@ -98,7 +98,18 @@ python3 build.py
 
 `pc/dist/DispatchChat.app` 이 생깁니다. 응용 프로그램 폴더로 옮겨 쓰면 됩니다(처음 한 번 우클릭 → 열기). 윈도우 exe 도 같은 방법(`python build.py`)으로 만듭니다.
 
-회사 값(메일 서버·Jira 접두어)을 처음부터 채워 두고 싶으면 `company.example.json` 을 `company.json` 으로 복사해 채운 뒤 만드세요 — 앱에 같이 들어갑니다.
+회사 값(메일 서버·Jira 접두어·Jira 주소)을 처음부터 채워 두고 싶으면 `company.example.json` 을 `company.json` 으로 복사해 채운 뒤 만드세요 — 앱에 같이 들어갑니다.
+회사에서 나눠 준 `company.json` 이 있으면 `pc/` 폴더에 넣기만 하면 됩니다 — `.command` 로 띄울 때도 그 값으로 시작합니다(git 에는 안 올라감).
+
+**맥에서 직접 실행·브라우저·Jira 를 쓸 때 필요한 것** (Homebrew 기준 — 이미 있으면 건너뜀)
+
+```
+curl -fsSL https://claude.ai/install.sh | bash && claude   # Claude Code 설치 + 한 번 로그인
+brew install node                                        # 전용 브라우저(npx) — nvm·volta 로 깐 것도 찾습니다
+brew install uv                                          # Jira 토큰을 메신저에 넣을 때(uvx)
+```
+
+Chrome(없으면 Edge)이 있어야 전용 브라우저를 켤 수 있습니다. Jira 토큰은 맥 키체인에 `DispatchChat` / `jira` 항목으로 들어갑니다.
 
 ---
 

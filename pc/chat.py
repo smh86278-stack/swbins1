@@ -141,11 +141,14 @@ DEFAULTS = {
     "tags": ["#c", "c"], "write_tags": ["#cw", "cw"],
     "workdir_keys": ["hub", "mobile"],
     "jira_prefix": "",
+    "run_jira_url": "",                                                     # 직접 실행 Jira 처리 — 회사 값 jira_url 이 있으면 그것(각자 토큰만 넣게)
     "lookback_days": 14,
     "poll_sec": 20,
 }
 DEFAULTS.update({k: COMPANY[k] for k in ("imap_host", "imap_port", "imap_mode", "smtp_host", "smtp_port", "smtp_mode", "jira_prefix")
                  if COMPANY.get(k) not in (None, "")})
+if COMPANY.get("jira_url"):
+    DEFAULTS["run_jira_url"] = str(COMPANY["jira_url"]).rstrip("/")
 
 for _s in (sys.stdout, sys.stderr):
     try:
