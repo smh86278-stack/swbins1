@@ -338,9 +338,12 @@ function drawThread(scroll) {
     box.append(row);
     if (m.bot && m.ask && i === t.msgs.length - 1) box.append(choiceCard(m.ask, m.kind === 'confirm'));
   });
-  if (t.status === 'running' && prog && progKey === t.key) box.append(progCard());
+  const card = t.status === 'running' && prog && progKey === t.key;
+  if (card) box.append(progCard());
   if (['sent', 'queued', 'running'].includes(t.status)) {
-    const ty = el('div', 'typing'); ty.append(el('span'), el('span'), el('span'), document.createTextNode(t.status === 'running' ? ' 작업 중' : ' 답을 기다리는 중'));
+    // 진행 메일(오래 걸리는 일의 중간 한 줄)은 말풍선이 아니라 이 회색 줄에 — 진행 카드가 있으면 카드가 더 자세하니 뺀다
+    const ty = el('div', 'typing'); ty.append(el('span'), el('span'), el('span'), document.createTextNode(
+      (t.status === 'running' ? ' 작업 중' : ' 답을 기다리는 중') + (t.progress && !card ? ' · ' + t.progress : '')));
     box.append(ty);
   }
   if (scroll || near) box.scrollTop = box.scrollHeight;
@@ -510,7 +513,7 @@ async function poll(force) {
     if (!t) {                                  // 보낸 첫 지시가 번호를 받아 T 대화로 바뀌었다 — 같은 대화로 따라간다
       const moved = s.threads.find(x => cur && x.no && cur.msgs.some(m => !m.bot && x.title === cur.title));
       if (moved) return openThread(moved.key);
-    } else if (force || t.ts !== curTs || t.status !== (cur && cur.status)) {
+    } else if (force || t.ts !== curTs || t.status !== (cur && cur.status) || (t.progress || '') !== ((cur && cur.progress) || '')) {
       try { cur = await api('/api/thread?key=' + encodeURIComponent(sel)); curTs = cur.ts; drawThread(false); } catch (e) {}
     }
   }

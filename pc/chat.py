@@ -473,8 +473,15 @@ def build_threads(msgs, jobs=None, by_mid=None):
     게이트웨이 PC 에선 접수된 작업도 본다 — jobs: 번호 → {id, status}, by_mid: 지시 메일 Message-ID → {id, status, thread}.
     게이트웨이는 번호를 회신할 때 붙이므로 첫 지시는 일하는 내내 번호가 없다 — 그래도 작업 id 로 '작업 중'·진행 카드가 붙는다."""
     # 접수 신호(X-Dispatch-Kind: ack — PC 가 지시를 받았다는 표시)는 말풍선이 아니다. 가리키는 내 말을 '대기' 로만 바꾼다
-    acked = {r for m in msgs if m.get("bot") and m.get("kind") == "ack" for r in m.get("refs") or []}
-    msgs = [m for m in msgs if not (m.get("bot") and m.get("kind") == "ack")]
+    # 진행 메일(progress — 몇 분 넘게 걸리는 일의 중간 한 줄)도 답이 아니다(완료·번호·안 읽음에 안 셈). 가리키는 내 말을 '작업 중' 으로 두고
+    # 그 한 줄만 대화에 붙인다(t["progress"]) — 최종 답이 오면 마지막 말이 봇 답이 되어 사라진다
+    signal = ("ack", "progress")
+    acked = {r for m in msgs if m.get("bot") and m.get("kind") in signal for r in m.get("refs") or []}
+    progress = {}
+    for m in sorted((m for m in msgs if m.get("bot") and m.get("kind") == "progress"), key=lambda x: x["ts"]):
+        for r in m.get("refs") or []:
+            progress[r] = m
+    msgs = [m for m in msgs if not (m.get("bot") and m.get("kind") in signal)]
     by_id = {m["id"]: m for m in msgs if m["id"]}
     jobs, by_mid = jobs or {}, by_mid or {}
     for m in msgs:
@@ -503,6 +510,7 @@ def build_threads(msgs, jobs=None, by_mid=None):
         title = re.sub(r"^@\w+\s+", "", title)          # 제목에선 작업 폴더 표시(@hub)를 뺀다
         t["title"] = re.sub(r"^\[Jira 자동화\]\s*", "Jira · ", title)[:80] or "(제목 없음)"
         last = t["msgs"][-1]
+        pm = None if last["bot"] or not last["id"] else progress.get(last["id"])
         if last["bot"]:
             if last.get("kind") == "confirm":
                 st = "confirm"
@@ -513,7 +521,7 @@ def build_threads(msgs, jobs=None, by_mid=None):
             else:
                 st = "done"
         else:
-            st = "queued" if last["id"] and last["id"] in acked else "sent"
+            st = "running" if pm else "queued" if last["id"] and last["id"] in acked else "sent"
         job = jobs.get(t["no"]) if t["no"] else None
         if not job:                              # 번호가 아직 없는 첫 지시 — 그 메일로 접수된 작업
             job = next((by_mid[m["id"]] for m in t["msgs"] if not m["bot"] and m["id"] in by_mid), None)
@@ -523,6 +531,7 @@ def build_threads(msgs, jobs=None, by_mid=None):
             st = job["status"]
         t["job"] = (job or {}).get("id") or ""
         t["status"] = st
+        t["progress"] = (pm.get("text") or "").split("\n", 1)[0][:160] if pm and st in ("sent", "queued", "running") else ""
         t["ts"] = last["ts"]
         t["ask"] = last.get("ask") if last["bot"] else None
         t["last"] = (last["text"] or "").split("\n", 1)[0][:90]
@@ -960,7 +969,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "local": bool(jobs_dir()), "runner": run,
                 "folders": list((cfg.get("run_dirs") or {}).keys()) if run["active"] else (cfg.get("workdir_keys") or []),
                 "jira_prefix": cfg.get("jira_prefix") or "",
-                "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot")} for t in BOX.threads()],
+                "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":
             key = (parse_qs(u.query).get("key") or [""])[0]

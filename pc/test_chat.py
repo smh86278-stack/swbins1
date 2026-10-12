@@ -68,6 +68,22 @@ class Progress(unittest.TestCase):
         t = chat.build_threads([dict(m)], {25: {"id": "j1", "status": "done", "thread": 25}}, {"<m1@x>": {"id": "j1", "status": "done", "thread": 25}})[0]
         self.assertEqual((t["key"], t["no"], t["status"], t["job"]), ("T25", 25, "sent", "j1"))   # 번호를 받았고, 회신 전이라 '보냄'
 
+    def test_progress_mail_is_not_an_answer(self):
+        """진행 메일(X-Dispatch-Kind: progress)은 말풍선·답이 아니다 — 완료·번호·안 읽음에 안 세고, 회색 한 줄(progress)로만. 최종 답이 오면 사라진다."""
+        me = {"id": "<m1@x>", "thread": None, "ts": 1.0, "bot": False, "mode": "read", "tag": "#c", "text": "일 해 줘", "rest": "", "refs": []}
+        pr = {"id": "<p1@x>", "thread": None, "ts": 200.0, "bot": True, "kind": "progress", "status": "running", "mode": "read", "tag": "#c",
+              "text": "진행 중 · 3분째 — 테스트 돌리기", "foot": "", "rest": "", "refs": ["<m1@x>"], "ask": None}
+        t = chat.build_threads([dict(me), dict(pr)])[0]
+        self.assertEqual((t["key"], len(t["msgs"]), t["status"], t["last_bot"], t["ts"]), ("m:<m1@x>", 1, "running", False, 1.0))
+        self.assertEqual(t["progress"], "진행 중 · 3분째 — 테스트 돌리기")
+        rep = dict(pr, id="<r1@x>", ts=300.0, kind="reply", status="done", thread=4, text="끝")
+        t = chat.build_threads([dict(me), dict(pr), rep])[0]
+        self.assertEqual((t["key"], len(t["msgs"]), t["status"], t["progress"]), ("T4", 2, "done", ""))
+        pr2 = dict(pr, thread=4)                                  # 이어 말한 일의 진행 메일엔 번호가 붙어 온다 — 그래도 답이 아니다
+        t = chat.build_threads([dict(me), rep, dict(pr2, ts=400.0, refs=["<m2@x>"]),
+                                dict(me, id="<m2@x>", ts=350.0, thread=4, text="더 해 줘")])[0]
+        self.assertEqual((len(t["msgs"]), t["status"], t["progress"], t["last_bot"]), (3, "running", pr["text"], False))
+
     def test_find_transcript_by_prompt(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)

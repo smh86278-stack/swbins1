@@ -613,6 +613,7 @@ function gParse(g) {
   if (m.bot) {
     m.kind = H['x-dispatch-kind'] || 'reply'; m.status = H['x-dispatch-status'] || '';
     m.ack = m.kind === 'ack';                          // PC 가 받았다는 신호 — 말풍선으로는 안 보이고 내 말의 '1' 을 지운다
+    m.prog = m.kind === 'progress';                    // 오래 걸리는 일의 중간 한 줄 — 말풍선·답이 아니라 '일하는 중' 아래 회색 줄
     let b = body.includes(ASK_SPLIT) ? body.slice(body.indexOf(ASK_SPLIT) + ASK_SPLIT.length) : body;   // 맨 위 ☐ 선택지 줄은 따로 받는다
     const i = b.lastIndexOf('\n--\n');
     m.text = (i >= 0 ? b.slice(0, i) : b).trim();
@@ -637,15 +638,18 @@ function gList() {                                         // 화면에 보일 �
     const loc = { id: 'loc:' + x.at, ts: x.at, mode: x.mode, rest, text: x.text, bot: false, local: true, thread: null, refs: [] };
     for (const m of list) if (m.bot && m.ts >= x.at - 60000 && norm(m.rest) === rest) {
       if (!m.refs.includes(loc.id)) m.refs = m.refs.concat(loc.id);
-      if (m.ack && !loc.real) loc.real = m.refs.find(r => !r.startsWith('loc:'));    // PC 가 받은 원래 메일 — 멈춤이 가리킬 곳
+      if ((m.ack || m.prog) && !loc.real) loc.real = m.refs.find(r => !r.startsWith('loc:'));    // PC 가 받은 원래 메일 — 멈춤이 가리킬 곳
     }
     list.push(loc);
   }
   list.sort((a, b) => a.ts - b.ts);
   const byId = {}; for (const m of list) if (m.id) byId[m.id] = m;
   for (const m of list) if (m.thread) for (const r of m.refs) { const o = byId[r]; if (o && !o.thread) o.thread = m.thread; }
-  for (const m of list) if (m.ack) for (const r of m.refs) if (byId[r]) byId[r].got = true;
-  return list.filter(m => !m.ack);
+  for (const m of list) if (m.ack || m.prog) for (const r of m.refs) if (byId[r]) {
+    byId[r].got = true;
+    if (m.prog) byId[r].progLine = (m.text || '').split('\n')[0];   // 시간순이라 마지막 진행 줄이 남는다
+  }
+  return list.filter(m => !(m.bot && (m.ack || m.prog)));   // 진행 메일은 답이 아니다 — 완료·안 읽음·말풍선에 안 셈
 }
 function gWaiting(list) {                                  // 내가 보내고 아직 답이 없는 대화(30분 안) — 'PC 가 일하는 중'
   const last = {};
@@ -823,6 +827,7 @@ function gRooms(list) {
     r.st = r.out.length ? '보내는 중' : got.has(r.key) ? '일하는 중' : waiting.has(r.key) ? '전송됨' : !last || !last.bot ? ''
       : last.kind === 'confirm' ? '실행 확인' : last.status === 'error' ? '오류' : last.ask ? '질문' : '완료';
     r.ask = last && last.bot && last.ask ? last : null;
+    r.prog = r.st === '일하는 중' && last && !last.bot ? last.progLine || '' : '';   // 최종 답이 오면(마지막 말이 봇) 사라진다
     r.unread = !!(last && last.bot && last.ts > (gseen[r.key] || 0));
   }
   return Object.values(rooms).sort((a, b) => {
@@ -954,7 +959,7 @@ function drawRooms(box, rooms) {
     top.append(el('span', 'rtitle', r.title));
     if (gpin[r.key]) top.append(el('span', 'pin', '📌'));
     top.append(el('span', 'rtime', when(r.ts)));
-    const firstLine = (r.last || '').split('\n').map(x => x.replace(/^\s*(#+|[-*•]|\|)\s*/, '').replace(/\*\*|`/g, '').trim()).find(Boolean) || '';
+    const firstLine = r.prog || (r.last || '').split('\n').map(x => x.replace(/^\s*(#+|[-*•]|\|)\s*/, '').replace(/\*\*|`/g, '').trim()).find(Boolean) || '';
     bot.append(el('span', 'rlast', firstLine));          // 미리보기는 마크다운 기호를 뗀 첫 줄
     if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy', '전송됨': '' }[r.st] || ''), r.st));
     if (r.unread) bot.append(el('span', 'dot'));
@@ -1025,6 +1030,7 @@ function drawRoom(box, r) {
     const stopB = el('button', 'stopbtn', '■ 멈춤');
     stopB.onclick = () => roomStop(r);
     row.append(stopB); w.append(row); box.append(w);
+    if (r.prog) box.append(el('div', 'tail', r.prog));   // 진행 메일 — 말풍선이 아닌 작은 회색 상태 줄
   }
   if (r.st === '전송됨' && Date.now() - r.ts > 3 * 60000)   // 보통 1분 안에 받는다 — 오래 못 받으면 회사 메일 스팸 격리가 흔한 원인
     box.append(el('div', 'tail warn', r.msgs.length && r.msgs[r.msgs.length - 1].local

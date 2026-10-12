@@ -315,6 +315,44 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.calls_made(), [])
         self.assertIn("시작하기 전에", self.replies("reply")[0].get_body(("plain",)).get_content())
 
+    def test_progress_mail_once_for_long_phone_job(self):
+        """몇 분 넘게 도는 폰·메일 앱 지시에 진행 메일 1통(읽음 표시로) — 게이트웨이 send_progress 와 같은 형식. 답으로 안 센다."""
+        self.turn_on()
+        self.addCleanup(setattr, chat, "CLAUDE_PROJECTS", chat.CLAUDE_PROJECTS)
+        chat.CLAUDE_PROJECTS = os.path.join(self.tmp, "projects")                # 세션 기록 없음 → '진행 중 · N분째' 만
+        ago = lambda m: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - m * 60))
+        base = {"source": "mail", "status": "running", "workdir": self.work, "prompt": "오래 걸리는 일", "acked": True,
+                "mail_subject": "#c 오래 걸리는 일", "created_at": ago(5), "started_at": ago(5)}
+        self.r.write_job(dict(base, id="j-phone", mail_msgid="<p@x>"))
+        self.r.write_job(dict(base, id="j-chat", mail_msgid="<c@x>", client="chat"))          # 이 앱에서 보낸 지시 — 진행 카드가 있다
+        self.r.write_job(dict(base, id="j-young", mail_msgid="<y@x>", started_at=ago(1)))     # 아직 3분 전
+        self.r.write_job(dict(base, id="j-done", mail_msgid="<d@x>", status="done"))          # 회신 전에 끝남
+        cfg, _ = chat.load_cfg()
+        self.r.send_out(cfg)
+        prog = self.replies("progress")
+        self.assertEqual(len(prog), 1)
+        self.assertEqual(prog[0]["In-Reply-To"], "<p@x>")
+        self.assertEqual(prog[0]["Subject"], "Re: #c 오래 걸리는 일")
+        self.assertEqual(prog[0]["X-Dispatch-Runner"], cfg["run_id"])
+        self.assertEqual(prog[0].get_content().strip(), "진행 중 · 5분째")
+        flags = [f for f, raw in self.box["appended"] if b"X-Dispatch-Kind: progress" in raw]
+        self.assertEqual(len(flags), 1)
+        self.assertIn("Seen", flags[0])                                       # 안 읽음으로 쌓이지 않게
+        self.r.send_out(cfg)
+        self.r.cleaned = True                                                 # (손으로 만든 running 작업을 고아로 치우지 않게)
+        self.r.cycle()                                                        # 자기 진행 메일을 '다른 실행기' 로 보지 않는다
+        self.assertEqual(len(self.replies("progress")), 1)                    # 잡당 딱 1통
+        self.assertTrue(self.r.info()["enabled"])
+        cfg["progress_after_min"] = 0                                         # 0 이면 끈다
+        self.r.write_job(dict(base, id="j-off", mail_msgid="<o@x>"))
+        self.r.send_out(cfg)
+        self.assertEqual(len(self.replies("progress")), 1)
+        # 화면: 진행 메일은 답이 아니다 — 내 말 하나 + '작업 중' + 회색 한 줄
+        raw, _ = mail("#c 오래 걸리는 일", msgid="<p@x>")
+        msgs = [chat.parse_message(raw, cfg), chat.parse_message(prog[0].as_bytes(), cfg)]
+        t = chat.build_threads(msgs)[0]
+        self.assertEqual((len(t["msgs"]), t["status"], t["progress"]), (1, "running", "진행 중 · 5분째"))
+
     # ---------- 막힘 · 겹침
 
     def test_blocked_on_gateway_pc(self):

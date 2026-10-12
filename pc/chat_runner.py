@@ -58,6 +58,7 @@ CONFIRM_TTL_MIN = 60
 KEEP_JOBS = 200
 SEEN_KEEP = 800
 ACK_MAX_AGE = 1800
+PROGRESS_AFTER_MIN = 3            # 폰·메일 앱 지시가 이 분(分)보다 오래 돌면 진행 메일 1통(설정 progress_after_min, 0 이면 끔)
 REPLY_TRIES = 3
 IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
 MAX_IMAGES, MAX_IMAGE_BYTES = 5, 10 * 1024 * 1024
@@ -587,7 +588,7 @@ class Runner:
     def own_ids(self):
         ids = set()
         for j in self.iter_jobs():
-            ids.update(j[k] for k in ("reply_msgid", "confirm_msgid", "ack_msgid") if j.get(k))
+            ids.update(j[k] for k in ("reply_msgid", "confirm_msgid", "ack_msgid", "progress_msgid") if j.get(k))
         return ids
 
     def next_seq(self):
@@ -931,6 +932,25 @@ class Runner:
         msg.set_content("PC 가 지시를 받았습니다. 끝나면 답을 보냅니다.")
         return msg, mid
 
+    def progress_message(self, cfg, job, text):
+        """오래 걸리는 일의 중간 한 줄(잡당 1통). 화면들은 말풍선이 아니라 작은 상태 줄로 보이고 답으로 세지 않는다."""
+        msg, mid = self._new_msg(cfg, job, "progress")
+        msg.set_content(text)
+        return msg, mid
+
+    def progress_text(self, job, now=None):
+        """돌고 있는 작업의 진행 한 줄 — 세션 기록(메신저 진행 카드와 같은 것)에서. 못 찾으면 '진행 중 · N분째'."""
+        C, now = self.C, time.time() if now is None else now
+        start = now - self._run_age(job, now)
+        lines = []
+        try:
+            path = C.find_transcript(job, start - 5)
+            if path:
+                lines = C._read_lines(path)
+        except Exception:
+            lines = []
+        return progress_line(lines, start - 5, max(0, int(self._run_age(job, now) // 60)))
+
     def reply_message(self, cfg, job):
         ask, text = reply_body(job)
         footer = reply_footer(job)
@@ -940,8 +960,12 @@ class Runner:
         return msg, mid
 
     def send_out(self, cfg, pw=None):
-        """확인 메일 · 접수 신호(폰·메일 앱에서 온 지시에만) · 회신을 받은편지함에 써 넣는다. 써 넣은 건 수."""
+        """확인 메일 · 접수 신호와 진행 메일(폰·메일 앱에서 온 지시에만, 읽음 표시로) · 회신을 받은편지함에 써 넣는다. 써 넣은 건 수."""
         C = self.C
+        try:
+            after = float(cfg.get("progress_after_min", PROGRESS_AFTER_MIN) or 0)
+        except (TypeError, ValueError):
+            after = PROGRESS_AFTER_MIN
         with self.send_lock:
             conn, n = [], 0
 
@@ -972,6 +996,22 @@ class Runner:
                             n += 1
                         except Exception as e:
                             C.log("[실행] 접수 신호 실패 %s — %s" % (j["id"], e))
+                            conn.clear()
+                        continue
+                    if st == "running" and after > 0 and not j.get("progressed") and not j.get("replied") \
+                            and j.get("client") != "chat" and self._run_age(j) >= after * 60:
+                        # 몇 분 넘게 도는 폰·메일 앱 지시에 중간 한 줄 — 잡당 1통, 실패해도 다시 안 보낸다(게이트웨이 send_progress 와 같은 규칙)
+                        with self.lock:
+                            fresh = self.read_job(j["id"]) or {}
+                            if fresh.get("status") != "running" or fresh.get("replied") or fresh.get("progressed"):
+                                continue
+                            msg, mid = self.progress_message(cfg, fresh, self.progress_text(fresh))
+                            self.update_job(j["id"], progressed=True, progress_msgid=mid)
+                        try:
+                            put(msg, "(\\Seen)")
+                            n += 1
+                        except Exception as e:
+                            C.log("[실행] 진행 메일 실패 %s — %s" % (j["id"], e))
                             conn.clear()
                         continue
                     try:
@@ -1024,6 +1064,15 @@ class Runner:
             return time.time() - datetime.strptime(job.get("created_at") or "", "%Y-%m-%d %H:%M:%S").timestamp()
         except ValueError:
             return 1e9
+
+    @staticmethod
+    def _run_age(job, now=None):
+        """실행을 시작한 지 몇 초(시작 시각이 없으면 0)."""
+        try:
+            start = datetime.strptime(job.get("started_at") or "", "%Y-%m-%d %H:%M:%S").timestamp()
+        except ValueError:
+            return 0.0
+        return max(0.0, (time.time() if now is None else now) - start)
 
     # ---------- 실행
 
@@ -1179,6 +1228,60 @@ class Runner:
                     self.kick.set()
             except Exception:
                 self.C.log("[실행] 작업 실패 — %s" % traceback.format_exc(limit=3))
+
+
+def _iso_epoch(s):
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _progress_tool(name, inp):
+    for k in ("description", "command", "file_path", "notebook_path", "pattern", "url", "query", "skill", "prompt", "path"):
+        v = inp.get(k)
+        if isinstance(v, str) and v.strip():
+            return v if k == "description" else "%s %s" % (name, v)
+    return str(name or "")
+
+
+def progress_line(lines, since, minutes):
+    """세션 기록 줄들 → '진행 중 · N분째 — <지금 하는 일> · 할 일 a/b' (진행 메일 본문).
+    게이트웨이(mail-gateway.py progress_line)와 같은 규칙 — 한쪽을 고치면 같이 고친다."""
+    now, todos = "", None
+    for ln in lines or []:
+        try:
+            ev = json.loads(ln)
+        except ValueError:
+            continue
+        if not isinstance(ev, dict) or ev.get("type") != "assistant" or ev.get("isSidechain") or ev.get("parent_tool_use_id"):
+            continue
+        if since and _iso_epoch(ev.get("timestamp")) < since:
+            continue
+        content = (ev.get("message") or {}).get("content")
+        for c in content if isinstance(content, list) else []:
+            if not isinstance(c, dict):
+                continue
+            if c.get("type") == "text" and (c.get("text") or "").strip():
+                now = next(l for l in c["text"].splitlines() if l.strip())
+            elif c.get("type") == "tool_use":
+                inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                if c.get("name") == "TodoWrite":
+                    todos = [t for t in inp.get("todos") or [] if isinstance(t, dict)]
+                    cur = next((t for t in todos if t.get("status") == "in_progress"), None)
+                    if cur:
+                        now = str(cur.get("activeForm") or cur.get("content") or "")
+                else:
+                    now = _progress_tool(c.get("name"), inp)
+    now = re.sub(r"\s+", " ", re.sub(r"\*\*|`", "", now)).strip().lstrip("#-*• ").strip()
+    if len(now) > 80:
+        now = now[:79] + "…"
+    line = "진행 중 · %d분째" % minutes
+    if now:
+        line += " — " + now
+    if todos:
+        line += " · 할 일 %d/%d" % (sum(1 for t in todos if t.get("status") == "completed"), len(todos))
+    return line
 
 
 def read_result(path):
