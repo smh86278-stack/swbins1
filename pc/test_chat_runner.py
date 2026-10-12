@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""'이 PC 에서 직접 실행'(runner.py) 시험 — 진짜 메일 서버·claude 없이 돈다.  python -m unittest test_runner   (이 폴더에서)
+"""'이 PC 에서 직접 실행'(chat_runner.py) 시험 — 진짜 메일 서버·claude 없이 돈다.  python -m unittest test_chat_runner   (이 폴더에서)
 
 가짜 IMAP(메모리 메일함)과 가짜 claude(파이썬 스크립트 — 받은 인자·폴더·지시문을 적고 JSON 결과를 낸다)로
 받기 → 실행 → 회신, 이어서 하기(--resume), 선택지 답, 쓰기 확인, 멈춤(자식 프로세스까지), 접수 신호, 막힘을 본다.
@@ -21,7 +21,7 @@ from email.message import EmailMessage
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import chat  # noqa: E402
-import runner  # noqa: E402
+import chat_runner as runner  # noqa: E402
 
 ME = "me@example.com"
 SESSION = "11111111-2222-3333-4444-555555555555"

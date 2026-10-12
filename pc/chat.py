@@ -23,7 +23,7 @@ PC 끼리 직접 연결할 필요가 없다 — 메일 서버만 닿으면 어�
   비밀번호는 윈도우 DPAPI · 맥 키체인에 둔다.
 - 진행 상황: 워커가 돌리는 작업(inbox/jobs)의 Claude 세션 기록(~/.claude/projects)을 2초마다 읽어 단계로 보여 준다.
 - 봇 메일은 게이트웨이가 붙이는 X-Dispatch-* 헤더로 알아본다(선택지는 X-Dispatch-Ask). 표식 이전의 옛 회신은 꼬리말로 짐작한다.
-- 이 PC 에서 직접 실행(runner.py, 설정 화면 스위치 — 기본 꺼짐): 켜면 게이트웨이 없이 이 앱이 내 메일함의 지시를 받아
+- 이 PC 에서 직접 실행(chat_runner.py, 설정 화면 스위치 — 기본 꺼짐): 켜면 게이트웨이 없이 이 앱이 내 메일함의 지시를 받아
   이 PC 의 Claude Code(claude -p)로 돌리고 같은 형식으로 회신한다. 게이트웨이 PC 에서는 켜지지 않는다.
 """
 import base64
@@ -52,7 +52,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from urllib.parse import parse_qs, urlparse
 
-import runner
+import chat_runner
 
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
@@ -825,7 +825,7 @@ def hide_thread(key):
 
 
 BOX = Box()
-RUNNER = runner.Runner(sys.modules[__name__])          # 이 PC 에서 직접 실행(기본 꺼짐) — main() 에서 돌리기 시작한다
+RUNNER = chat_runner.Runner(sys.modules[__name__])          # 이 PC 에서 직접 실행(기본 꺼짐) — main() 에서 돌리기 시작한다
 
 
 def compose(cfg, data, threads):

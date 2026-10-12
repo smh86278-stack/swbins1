@@ -36,7 +36,7 @@
 게이트웨이 PC 가 없어도 **메신저를 설치한 PC 가 직접 일하게** 할 수 있습니다. ⚙ 설정 아래 「이 PC 에서 직접 실행」 스위치를 켜면
 메신저가 내 메일함에 온 지시(`#c` 읽기 · `#cw` 수정 허용 — 게이트웨이와 같은 형식)를 이 PC 의 Claude Code(`claude -p`)로 실행하고,
 답을 **같은 메일함에** 넣습니다(IMAP 으로 받은편지함에 써 넣기). 답은 게이트웨이 회신과 같은 제목·머리글(`X-Dispatch-*`)·대화 번호 `[T12]`·선택지
-형식이라 이 화면·폰 페이지가 그대로 보여 줍니다. 코드는 `runner.py`(파이썬만 — 윈도우·맥).
+형식이라 이 화면·폰 페이지가 그대로 보여 줍니다. 코드는 `chat_runner.py`(파이썬만 — 윈도우·맥).
 
 - **필요한 것**: 이 PC 에 Claude Code 설치 + 한 번 로그인(터미널에서 `claude`). `claude` 를 못 찾으면 스위치 옆에 안내만 나오고 켜지지 않습니다.
 - **안전**
@@ -84,6 +84,6 @@
 
 ```
 python build.py                 → 윈도우 dist\DispatchChat.exe · 맥 dist/DispatchChat.app   (pip install pyinstaller, dist·build 는 git 제외)
-python -m unittest test_chat test_runner
+python -m unittest test_chat test_chat_runner
                                 → 진행 상황 풀기·세션 기록 찾기 · 이 PC 에서 직접 실행(가짜 메일함·가짜 claude — 진짜 메일 서버 없이)
 ```
