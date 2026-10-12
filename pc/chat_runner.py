@@ -55,10 +55,13 @@ BROWSER_TOOL = "mcp__browser"
 PLAYWRIGHT_MCP = "@playwright/mcp@0.0.83"
 BROWSER_CDP = "http://127.0.0.1:9333"   # 로그인 창(이 포트로 연다)이 떠 있으면 새로 띄우지 않고 거기 붙는다
 
-# Jira 처리(설정 run_jira, 기본 꺼짐) — '#cw /jira 키' 를 게이트웨이 jira-mail 과 같은 도구·거부 목록으로.
-# 거부 목록은 밖으로 내보내는 명령(앞부분 일치라 python -c 같은 우회까지 막지는 못한다). rtk 훅이 'rtk <명령>' 으로 바꿔 쓰므로 둘 다
+# Jira 처리(설정 run_jira, 기본 꺼짐) — '#cw /jira 키' 를 게이트웨이 jira-mail 과 같은 도구·거부 목록으로, 설정의 스킬(run_jira_skill)에 넘긴다.
+# 거부 목록은 밖으로 내보내는 명령(앞부분 일치라 python -c 같은 우회까지 막지는 못한다). rtk 훅이 'rtk <명령>' 으로 바꿔 쓰므로 둘 다.
+# 스킬이 curl 로 Jira REST 를 부르면(bo-workspace task-input) 설정 run_jira_allow_net 으로 거부 목록을 뺀다.
+# Skill·Agent — 스킬이 다음 스킬로 이어 가거나(task-input → task-grilling …) 하위 에이전트에 조사를 맡길 수 있게
 JIRA_PROMPT_RE = re.compile(r"^/jira\s+([A-Z][A-Z0-9]+-\d+)\s*$")
-JIRA_TOOLS = ["Read", "Write", "Bash", "Glob", "Grep", "Edit",
+SKILL_RE = re.compile(r"^[A-Za-z0-9][\w.-]{0,63}$")
+JIRA_TOOLS = ["Read", "Write", "Bash", "Glob", "Grep", "Edit", "Skill", "Agent",
               "mcp__jira__jira_get_issue", "mcp__jira__jira_search", "mcp__jira__jira_get_transitions"]
 JIRA_DENY = ["Bash(%s%s:*)" % (p, c) for c in ("curl", "wget", "Invoke-WebRequest", "Invoke-RestMethod", "iwr", "irm",
                                                "nc", "ncat", "ssh", "scp", "sftp", "ftp", "telnet") for p in ("", "rtk ")] \
@@ -463,7 +466,8 @@ class Runner:
                 "has_key": bool(str(cfg.get("key_word") or "").strip()),
                 "browser": bool(cfg.get("run_browser")), "browser_path": find_browser()[0], "npx": bool(find_tool("npx")),
                 "jira": bool(cfg.get("run_jira")), "jira_url": cfg.get("run_jira_url") or "",
-                "jira_dir": cfg.get("run_jira_dir") or "", "has_jira_token": bool(cfg.get("run_jira_token_enc"))}
+                "jira_dir": cfg.get("run_jira_dir") or "", "has_jira_token": bool(cfg.get("run_jira_token_enc")),
+                "jira_skill": cfg.get("run_jira_skill") or "", "jira_allow_net": bool(cfg.get("run_jira_allow_net"))}
 
     def configure(self, data):
         """설정 화면의 스위치·작업 폴더. 켜는 순간을 run_since 로 남긴다 — 그 전에 온 메일은 실행하지 않는다."""
@@ -516,6 +520,13 @@ class Runner:
             if jd and not os.path.isdir(jd):
                 raise ValueError("Jira 작업 폴더가 없습니다: %s" % jd)
             own["run_jira_dir"] = os.path.abspath(jd) if jd else ""
+        if "jira_skill" in data:
+            sk = str(data.get("jira_skill") or "").strip().lstrip("/")
+            if sk and not SKILL_RE.match(sk):
+                raise ValueError("Jira 스킬 이름은 영문·숫자·-·_ 로 넣어 주세요(예: jira, task-input): %s" % sk)
+            own["run_jira_skill"] = sk
+        if "jira_allow_net" in data:
+            own["run_jira_allow_net"] = bool(data.get("jira_allow_net"))
         if "browser" in data:
             want = bool(data.get("browser"))
             if want and not own.get("run_browser"):
@@ -960,11 +971,11 @@ class Runner:
         elif mode == "write":                         # 새 쓰기 지시 — 설정에서 켠 것만 더한다(이어서 하기는 처음 도구 그대로)
             mj = JIRA_PROMPT_RE.match(prompt)
             if mj and cfg.get("run_jira"):
-                tools, denied = JIRA_TOOLS, JIRA_DENY
+                tools, denied = JIRA_TOOLS, ([] if cfg.get("run_jira_allow_net") else JIRA_DENY)
                 if cfg.get("run_jira_dir"):
                     workdir, label = cfg["run_jira_dir"], "jira"
-                if not has_skill(workdir, "jira"):
-                    prompt = JIRA_NO_SKILL % mj.group(1)
+                skill = cfg.get("run_jira_skill") or "jira"
+                prompt = "/%s %s" % (skill, mj.group(1)) if has_skill(workdir, skill) else JIRA_NO_SKILL % mj.group(1)
             elif cfg.get("run_browser"):
                 tools = WRITE_TOOLS + [BROWSER_TOOL]
         with self.lock:

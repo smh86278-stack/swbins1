@@ -360,6 +360,27 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn("jira", (call["mcp"] or {}).get("mcpServers", {}))
         self.assertIn("mcp__jira__jira_get_issue", call["args"])
 
+    def test_jira_other_skill_and_allow_net(self):
+        """bo-workspace 처럼 스킬 이름이 다르고(task-input) 그 스킬이 curl 로 Jira REST 를 부르는 팀."""
+        self.turn_on()
+        home = os.path.join(self.tmp, "home")
+        env = mock.patch.dict(os.environ, {"HOME": home, "USERPROFILE": home})
+        env.start()
+        self.addCleanup(env.stop)
+        os.makedirs(os.path.join(self.work, ".claude", "skills", "task-input"))
+        open(os.path.join(self.work, ".claude", "skills", "task-input", "SKILL.md"), "w").close()
+        with self.assertRaises(ValueError):
+            self.r.configure({"enabled": True, "jira_skill": "task input; rm"})
+        self.r.configure({"enabled": True, "jira": True, "jira_skill": "/task-input", "jira_allow_net": True})
+        self.assertEqual(self.r.info()["jira_skill"], "task-input")
+        call = self.run_write("#cw /jira SABANGNET-33175")
+        self.assertEqual(call["prompt"], "/task-input SABANGNET-33175")
+        self.assertNotIn("--disallowedTools", call["args"])                   # curl 허용
+        self.assertIn("Skill", call["args"])                                  # 다음 스킬로 이어 가기
+        self.r.configure({"enabled": True, "jira_allow_net": False})
+        call = self.run_write("#cw /jira SABANGNET-33176")
+        self.assertIn("Bash(curl:*)", call["args"][call["args"].index("--disallowedTools") + 1:])
+
     def test_jira_off_is_plain_write(self):
         self.turn_on()
         args = self.run_write("#cw /jira ABC-12")["args"]

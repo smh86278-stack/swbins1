@@ -61,7 +61,10 @@
   (`mcp__jira__jira_get_issue`·`_search`·`_get_transitions` + 읽기·고치기·Bash)와 거부 목록(curl·wget·ssh 등 밖으로 내보내는 명령, `rtk` 붙은 것까지)으로 돌립니다.
   토큰을 넣으면 `uvx mcp-atlassian@0.23.1 --read-only` 를 그 주소(`JIRA_URL`)·토큰(`JIRA_PERSONAL_TOKEN`)으로 붙이고(토큰은 메일 비밀번호처럼 DPAPI·키체인,
   MCP 설정 파일은 작업이 끝나면 지움), 비우면 이 PC 의 Claude Code 에 이미 있는 `jira` MCP 를 씁니다.
-  작업 폴더(기본, 또는 Jira 작업 폴더)에 `jira` 스킬·명령이 있으면 `/jira 키` 를 그대로, 없으면 이슈를 읽고 방향을 묻는 지시로 풀어서 넘깁니다.
+  작업 폴더(기본, 또는 Jira 작업 폴더)나 `~/.claude` 에 설정의 **Jira 스킬**(기본 `jira`) 스킬·명령이 있으면 `/<스킬> 키` 로, 없으면 이슈를 읽고 방향을 묻는 지시로 풀어서 넘깁니다
+  (플러그인 스킬은 찾지 못합니다). 스킬이 다음 스킬로 이어 가고 하위 에이전트를 쓸 수 있게 `Skill`·`Agent` 도 허용합니다.
+  **curl·ssh 허용**을 켜면 거부 목록을 빼고 돌립니다 — 스킬이 curl 로 Jira REST 를 부를 때. 예: bo-workspace 는 Jira 작업 폴더 = bo-workspace,
+  Jira 스킬 = `task-input`(티켓을 `.claude/claude.env` 의 `JIRA_PAT` 로 REST 조회), curl·ssh 허용 켬, 토큰 칸은 비움.
 - **빠진 것(게이트웨이·워커 대비)**: 다른 주소의 암호 단어 발신자(`keyed_senders`)·Gmail 따로 읽기·스팸함 보기·폰 주소로 회신 사본 · 작업 일시정지 깃발·알림 큐 · 회신을 SMTP 로 보내기(늘 메일함에 써 넣기).
 - 상태 파일: 윈도우 `%LOCALAPPDATA%\DispatchChat\runner\`, 맥 `~/Library/Application Support/DispatchChat/runner/`. 대화 규칙은 이 폴더의 `chat-protocol.md`(exe 에 같이 묶임).
 

@@ -165,6 +165,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 #runErr{color:var(--bad);font-size:12.5px;min-height:16px}
 .run h4{margin:14px 0 0;padding-top:12px;border-top:1px dashed var(--line);font-size:13.5px;display:flex;align-items:center;gap:8px}
 .two.half{grid-template-columns:1fr 1fr}
+.run .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:-2px 0 10px;cursor:pointer}
 @media (max-width:480px){.two.half{grid-template-columns:1fr}}
 #toast{position:fixed;right:18px;bottom:18px;background:var(--text);color:var(--bg);padding:9px 15px;border-radius:14px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;max-width:520px;z-index:9}
 #toast.show{opacity:.96;transform:none}
@@ -277,7 +278,9 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       토큰을 비워 두면 이 PC 의 Claude Code 에 이미 있는 jira MCP 를 씁니다.</p>
     <div class="two half"><div class="field"><label>Jira 주소</label><input id="runJiraUrl" type="text" placeholder="https://jira.example.com"></div>
       <div class="field"><label>Jira 개인 토큰</label><input id="runJiraTok" type="password" autocomplete="off"></div></div>
-    <div class="field"><label>Jira 작업 폴더 (비우면 기본 작업 폴더)</label><input id="runJiraDir" type="text"></div>
+    <div class="two half"><div class="field"><label>Jira 작업 폴더 (비우면 기본 작업 폴더)</label><input id="runJiraDir" type="text"></div>
+      <div class="field"><label>Jira 스킬 이름</label><input id="runJiraSkill" type="text" placeholder="jira (예: task-input)"></div></div>
+    <label class="chk"><input type="checkbox" id="runJiraNet"> curl·ssh 허용 — 스킬이 curl 로 Jira REST 를 부를 때(예: bo-workspace task-input)</label>
     <div id="runErr"></div>
     <div class="acts" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="ghost" id="runLogin">로그인 창 열기</button><button type="button" class="ghost" id="runSave">저장</button></div>
   </div>
@@ -560,6 +563,7 @@ function drawRunner(r) {
     : (!r.npx ? 'Node.js(npx)를 찾지 못했습니다 — 설치한 뒤 메신저를 다시 여세요' : 'Chrome 을 찾지 못했습니다');
   $('#runLogin').disabled = !r.browser_path;
   $('#runJiraUrl').value = r.jira_url || ''; $('#runJiraDir').value = r.jira_dir || ''; $('#runJiraTok').value = '';
+  $('#runJiraSkill').value = r.jira_skill || ''; $('#runJiraNet').checked = !!r.jira_allow_net;
   $('#runJiraTok').placeholder = r.has_jira_token ? '저장됨 — 바꿀 때만 입력' : '비우면 이 PC 의 jira MCP';
   let msg = '', cls = '';
   if (r.blocked) { msg = r.blocked; cls = 'warn'; }
@@ -577,11 +581,13 @@ async function saveRunner(enabled, done) {
   try {
     const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value,
       browser: $('#runBrowser').checked, jira: $('#runJira').checked, jira_url: $('#runJiraUrl').value,
-      jira_token: $('#runJiraTok').value, jira_dir: $('#runJiraDir').value });
+      jira_token: $('#runJiraTok').value, jira_dir: $('#runJiraDir').value,
+      jira_skill: $('#runJiraSkill').value, jira_allow_net: $('#runJiraNet').checked });
     drawRunner(r); toast(done || '저장했습니다'); poll(true);
   } catch (e) { $('#runErr').textContent = e.message; loadRunner(); }
 }
 $('#runBrowser').onchange = e => saveRunner($('#runOn').checked, e.target.checked ? '전용 브라우저 — 켰습니다. 쓸 사이트는 로그인 창에서 한 번 로그인해 두세요' : '전용 브라우저 — 껐습니다');
+$('#runJiraNet').onchange = e => saveRunner($('#runOn').checked, e.target.checked ? 'Jira 지시에 curl·ssh 를 허용했습니다' : 'Jira 지시의 curl·ssh 를 다시 막았습니다');
 $('#runJira').onchange = e => saveRunner($('#runOn').checked, e.target.checked ? 'Jira 처리 — 켰습니다' : 'Jira 처리 — 껐습니다');
 $('#runLogin').onclick = async () => {
   $('#runErr').textContent = '';

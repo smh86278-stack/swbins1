@@ -132,7 +132,10 @@ python3 build.py
 
 **Jira 처리 (따로 켬 — 기본 꺼짐)** — Jira 탭의 **처리 시작**(`#cw /jira 키`)을 Jira 도구로 돌리고, curl·ssh 처럼 밖으로 내보내는 명령은 막습니다.
 - **Jira 주소**와 **개인 토큰**을 넣으면 이 앱이 Jira 읽기 도구를 붙입니다(uv 필요). 토큰을 비우면 이 PC 의 Claude Code 에 이미 등록된 `jira` MCP 를 씁니다.
-- **Jira 작업 폴더**를 넣으면 Jira 지시는 그 폴더에서 돕니다. 그 폴더에 `jira` 스킬이 있으면 스킬대로, 없으면 이슈를 읽고 고칠 방향을 먼저 묻습니다.
+- **Jira 작업 폴더**를 넣으면 Jira 지시는 그 폴더에서 돕니다. 그 폴더에 **Jira 스킬 이름**(비우면 `jira`)의 스킬이 있으면 스킬대로, 없으면 이슈를 읽고 고칠 방향을 먼저 묻습니다.
+- 스킬이 curl 로 Jira 를 읽는다면 **curl·ssh 허용**을 켭니다(기본은 막음).
+- 예) BO 팀(bo-workspace): Jira 작업 폴더 = 내 PC 의 bo-workspace 폴더 · Jira 스킬 이름 = `task-input` · curl·ssh 허용 켬 · Jira 토큰은 비움
+  (`task-input` 이 `.claude/claude.env` 의 `JIRA_PAT` 로 티켓을 읽습니다). 이어지는 질문(task-grilling 등)은 메신저 선택지로 답합니다.
 
 ---
 
