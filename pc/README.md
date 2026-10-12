@@ -53,7 +53,7 @@
 - **폰에서**: 폰 페이지·폰 메일 앱이 **같은 계정에서 자기 자신에게** 보내야 받습니다(예: 메신저 계정이 Gmail 이면 폰 페이지도 그 Gmail 로 '나에게').
 - **빠진 것(게이트웨이·워커 대비)**: 전용 브라우저(Playwright MCP) · Jira 전용 도구/거부 목록(`/jira 키` 는 보통 지시로 그대로 넘김) ·
   다른 주소의 암호 단어 발신자(`keyed_senders`)·Gmail 따로 읽기·스팸함 보기·폰 주소로 회신 사본 · 작업 일시정지 깃발·알림 큐 · 회신을 SMTP 로 보내기(늘 메일함에 써 넣기).
-- 상태 파일: 윈도우 `%LOCALAPPDATA%\DispatchChatunner\`, 맥 `~/Library/Application Support/DispatchChat/runner/`. 대화 규칙은 이 폴더의 `chat-protocol.md`(exe 에 같이 묶임).
+- 상태 파일: 윈도우 `%LOCALAPPDATA%\DispatchChat\runner\`, 맥 `~/Library/Application Support/DispatchChat/runner/`. 대화 규칙은 이 폴더의 `chat-protocol.md`(exe 에 같이 묶임).
 
 ## 진행 상황(실시간)
 
