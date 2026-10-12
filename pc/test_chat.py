@@ -81,7 +81,8 @@ class Progress(unittest.TestCase):
         chat.CLAUDE_PROJECTS = tmp
         self.addCleanup(setattr, chat, "CLAUDE_PROJECTS", old)
         job = {"id": "j1", "workdir": "C:\\work-dir", "prompt": "로그인 오류 고쳐 줘\n"}
-        self.assertEqual(os.path.basename(chat.find_transcript(job, time.time() - 60)), "mine.jsonl")
+        # 기준 시각은 기록 안의 시각(SINCE)으로 — 지금 시각으로 두면 기록이 쓰인 날이 지나면 못 찾는다
+        self.assertEqual(os.path.basename(chat.find_transcript(job, SINCE)), "mine.jsonl")
 
 
 if __name__ == "__main__":

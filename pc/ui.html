@@ -139,13 +139,30 @@ textarea:focus,input:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .prefix input{border:0!important;box-shadow:none!important;padding-left:2px}
 .banner{margin:10px 18px 0;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);font-size:12.5px;display:none}
 
-dialog{border:0;border-radius:20px;padding:0;width:min(460px,calc(100vw - 40px));background:var(--solid);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+dialog{border:0;border-radius:20px;padding:0;width:min(460px,calc(100vw - 40px));max-height:calc(100vh - 40px);overflow:auto;background:var(--solid);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.3)}
 dialog::backdrop{background:rgba(20,15,40,.35)}
 .dlg{padding:18px 20px}.dlg h2{margin:0 0 4px;font-size:17px}.dlg p{margin:0 0 12px;color:var(--muted);font-size:12.5px}
 .field{margin-bottom:10px}.field label{display:block;font-size:12px;font-weight:800;margin-bottom:3px}
 .two{display:grid;grid-template-columns:1fr 110px;gap:8px}
 .dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
 #setErr{color:var(--bad);font-size:12.5px;min-height:18px}
+/* 이 PC 에서 직접 실행 */
+.run{border-top:1px dashed var(--line);margin-top:14px;padding:12px 20px 16px}
+.run h3{margin:0;font-size:14.5px;display:flex;align-items:center;gap:8px}
+.run p{margin:4px 0 10px;color:var(--muted);font-size:12px}
+.switch{position:relative;display:inline-flex;align-items:center;margin-left:auto;cursor:pointer}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.switch span{width:40px;height:22px;border-radius:99px;background:var(--line);transition:.2s;position:relative}
+.switch span::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--solid);box-shadow:var(--shadow);transition:.2s}
+.switch input:checked+span{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.switch input:checked+span::after{left:21px}
+.switch input:disabled+span{opacity:.45;cursor:not-allowed}
+.switch input:focus-visible+span{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
+#runWhy{font-size:12px;border-radius:10px;padding:6px 9px;margin-bottom:10px;display:none}
+#runWhy.warn{display:block;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)}
+#runWhy.ok{display:block;background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
+#runDirs{min-height:56px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+#runErr{color:var(--bad);font-size:12.5px;min-height:16px}
 #toast{position:fixed;right:18px;bottom:18px;background:var(--text);color:var(--bg);padding:9px 15px;border-radius:14px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;max-width:520px;z-index:9}
 #toast.show{opacity:.96;transform:none}
 @media (max-width:760px){body{grid-template-columns:1fr}aside{display:none}body.list aside{display:flex}body.list main{display:none}}
@@ -189,7 +206,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <div class="welcome" id="newPane">
     <div class="newcard">
       <h2>새 일 맡기기</h2>
-      <p>보내면 메일로 PC 게이트웨이에 전달되고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&amp;C 메신저 폰 페이지와 같은 대화입니다.</p>
+      <p id="newNote">보내면 메일로 PC 게이트웨이에 전달되고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&amp;C 메신저 폰 페이지와 같은 대화입니다.</p>
       <div class="chips" id="newChips">
         <button class="chip on" data-mode="read">읽기</button>
         <button class="chip wr" data-mode="write">수정 허용</button>
@@ -241,6 +258,17 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div id="setErr"></div>
     <div class="acts"><button type="button" class="ghost" id="setCancel">닫기</button><button type="submit" class="send" id="setSave">연결 확인 후 저장</button></div>
   </form>
+  <!-- 이 PC 에서 직접 실행(runner.py) — 기본 꺼짐 -->
+  <div class="run" id="runBox">
+    <h3>이 PC 에서 직접 실행 <label class="switch" title="켜면 이 PC 의 Claude Code 가 내 메일함의 지시를 받아 실행합니다"><input type="checkbox" id="runOn"><span></span></label></h3>
+    <p>켜면 게이트웨이 PC 없이 이 메신저가 내 메일함에 온 지시(#c 읽기 · #cw 수정 허용)를 이 PC 의 Claude Code 로 실행하고 답을 같은 메일함에 넣습니다.
+      <b>내 주소에서 온 지시만</b>, 켠 뒤에 온 것만 받습니다. 위 암호 단어를 넣어 두면 그 단어가 붙은 지시만 받습니다(권장). 끄면 하던 일도 멈춥니다.</p>
+    <div id="runWhy"></div>
+    <div class="field"><label>기본 작업 폴더</label><input id="runDir" type="text" placeholder="지시를 실행할 폴더"></div>
+    <div class="field"><label>다른 작업 폴더 (한 줄에 <code>키=폴더</code> — 지시에 @키 로 고름)</label><textarea id="runDirs" rows="2" placeholder="web=C:\work\web"></textarea></div>
+    <div id="runErr"></div>
+    <div class="acts" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" id="runSave">폴더 저장</button></div>
+  </div>
 </dialog>
 <div id="toast"></div>
 
@@ -462,11 +490,17 @@ async function poll(force) {
   let s; try { s = await api('/api/state'); } catch (e) { $('#dot').className = 'bad'; return; }
   state = s;
   petWatch(s);
-  $('#who').textContent = (s.user || '계정 없음') + (s.source === 'gateway' ? ' · 이 PC 게이트웨이 계정' : '');
+  const run = s.runner || {};
+  $('#who').textContent = (s.user || '계정 없음') + (s.source === 'gateway' ? ' · 이 PC 게이트웨이 계정' : run.active ? ' · 이 PC 에서 실행' : '');
   $('#dot').className = s.error ? 'bad' : (s.polled ? 'ok' : '');
+  $('#newNote').textContent = run.active
+    ? '보내면 이 PC 의 Claude Code 가 받아 실행하고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&C 메신저 폰 페이지와 같은 대화입니다.'
+    : '보내면 메일로 PC 게이트웨이에 전달되고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&C 메신저 폰 페이지와 같은 대화입니다.';
   const ban = $('#banner');
   if (s.error === 'setup') { ban.style.display = 'none'; if (!$('#dlg').open) openSetup(true); }
   else if (s.error) { ban.textContent = '메일함을 읽지 못했습니다 — ' + s.error; ban.style.display = 'block'; }
+  else if (run.notice) { ban.textContent = run.notice; ban.style.display = 'block'; }
+  else if (run.on && run.error) { ban.textContent = '이 PC 에서 직접 실행 — ' + run.error; ban.style.display = 'block'; }
   else ban.style.display = 'none';
   $('#jiraPrefix').textContent = s.jira_prefix || '';
   if (!$('#folderChips').childElementCount || force) drawFolders();
@@ -497,7 +531,39 @@ async function openSetup(first) {
       'IMAP·SMTP 가 되는 메일이면 어디든 됩니다. 비밀번호는 이 PC 사용자만 풀 수 있게 둡니다(윈도우 DPAPI · 맥 키체인).';
   $('#sPw').placeholder = s.has_password ? '바꿀 때만 입력' : '비밀번호';
   $('#setErr').textContent = ''; $('#dlg').showModal();
+  loadRunner();
 }
+/* 이 PC 에서 직접 실행 — 스위치는 바로 적용(켜는 순간 이후의 지시만 받는다) */
+function drawRunner(r) {
+  const on = $('#runOn'), why = $('#runWhy');
+  on.checked = !!r.enabled;
+  on.disabled = !r.enabled && !!(r.blocked || !r.claude);
+  $('#runDir').value = r.workdir || r.home || ''; $('#runDirs').value = r.dirs || '';
+  let msg = '', cls = '';
+  if (r.blocked) { msg = r.blocked; cls = 'warn'; }
+  else if (!r.claude) { msg = 'Claude Code(claude)를 찾지 못했습니다 — 이 PC 에 Claude Code 를 설치하고 터미널에서 한 번 claude 로 로그인한 뒤 메신저를 다시 여세요. 그 전에는 켤 수 없습니다.'; cls = 'warn'; }
+  else if (r.notice) { msg = r.notice; cls = 'warn'; }
+  else if (r.enabled) { msg = (r.busy ? '실행 중 — ' : '켜져 있음 — ') + 'Claude Code: ' + r.claude + (r.error ? ' · ' + r.error : '') + (r.has_key ? '' : ' · 암호 단어를 넣어 두기를 권합니다'); cls = r.error ? 'warn' : 'ok'; }
+  why.textContent = msg; why.className = cls;
+}
+async function loadRunner() {
+  $('#runErr').textContent = '';
+  try { drawRunner(await api('/api/runner')); } catch (e) { $('#runErr').textContent = e.message; }
+}
+async function saveRunner(enabled) {
+  $('#runErr').textContent = '';
+  try {
+    const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value });
+    drawRunner(r); toast(enabled ? '이 PC 에서 직접 실행 — 켰습니다. 지금 이후에 온 지시만 받습니다' : '저장했습니다'); poll(true);
+  } catch (e) { $('#runErr').textContent = e.message; loadRunner(); }
+}
+$('#runOn').onchange = e => {
+  const on = e.target.checked;
+  if (on && !confirm('이 PC 의 Claude Code 가 내 메일함에 온 지시를 실행하게 할까요?\n\n· 내 주소에서 온 지시만, 지금 이후에 온 것만 받습니다.\n· 다른 PC(메일 게이트웨이)가 같은 메일함을 읽고 있으면 켜지 마세요 — 같은 일이 두 번 돕니다.')) { e.target.checked = false; return; }
+  if (!on && !confirm('끌까요? 하던 일·기다리던 일도 멈춥니다.')) { e.target.checked = true; return; }
+  saveRunner(on);
+};
+$('#runSave').onclick = () => saveRunner($('#runOn').checked);
 /* 메일 주소만 넣으면 잘 알려진 메일의 서버를 채운다(직접 고쳐도 된다). 회사 밖 메일은 앱 비밀번호·IMAP 켜기가 필요할 수 있다 */
 const MAIL_PRESETS = [
   [/^(gmail|googlemail)\.com$/, 'imap.gmail.com', 993, 'smtp.gmail.com', 587, 'Gmail — 구글 계정의 "앱 비밀번호"를 넣으세요(2단계 인증 필요).'],

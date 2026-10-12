@@ -23,6 +23,8 @@ PC 끼리 직접 연결할 필요가 없다 — 메일 서버만 닿으면 어�
   비밀번호는 윈도우 DPAPI · 맥 키체인에 둔다.
 - 진행 상황: 워커가 돌리는 작업(inbox/jobs)의 Claude 세션 기록(~/.claude/projects)을 2초마다 읽어 단계로 보여 준다.
 - 봇 메일은 게이트웨이가 붙이는 X-Dispatch-* 헤더로 알아본다(선택지는 X-Dispatch-Ask). 표식 이전의 옛 회신은 꼬리말로 짐작한다.
+- 이 PC 에서 직접 실행(runner.py, 설정 화면 스위치 — 기본 꺼짐): 켜면 게이트웨이 없이 이 앱이 내 메일함의 지시를 받아
+  이 PC 의 Claude Code(claude -p)로 돌리고 같은 형식으로 회신한다. 게이트웨이 PC 에서는 켜지지 않는다.
 """
 import base64
 import ctypes
@@ -49,6 +51,8 @@ import webbrowser
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from urllib.parse import parse_qs, urlparse
+
+import runner
 
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
@@ -468,6 +472,9 @@ def build_threads(msgs, jobs=None, by_mid=None):
     """메시지들을 대화방으로 묶는다. 번호가 아직 없는 첫 지시는 그 지시에 답한 봇 메일(In-Reply-To)로 번호를 찾는다.
     게이트웨이 PC 에선 접수된 작업도 본다 — jobs: 번호 → {id, status}, by_mid: 지시 메일 Message-ID → {id, status, thread}.
     게이트웨이는 번호를 회신할 때 붙이므로 첫 지시는 일하는 내내 번호가 없다 — 그래도 작업 id 로 '작업 중'·진행 카드가 붙는다."""
+    # 접수 신호(X-Dispatch-Kind: ack — PC 가 지시를 받았다는 표시)는 말풍선이 아니다. 가리키는 내 말을 '대기' 로만 바꾼다
+    acked = {r for m in msgs if m.get("bot") and m.get("kind") == "ack" for r in m.get("refs") or []}
+    msgs = [m for m in msgs if not (m.get("bot") and m.get("kind") == "ack")]
     by_id = {m["id"]: m for m in msgs if m["id"]}
     jobs, by_mid = jobs or {}, by_mid or {}
     for m in msgs:
@@ -506,7 +513,7 @@ def build_threads(msgs, jobs=None, by_mid=None):
             else:
                 st = "done"
         else:
-            st = "sent"
+            st = "queued" if last["id"] and last["id"] in acked else "sent"
         job = jobs.get(t["no"]) if t["no"] else None
         if not job:                              # 번호가 아직 없는 첫 지시 — 그 메일로 접수된 작업
             job = next((by_mid[m["id"]] for m in t["msgs"] if not m["bot"] and m["id"] in by_mid), None)
@@ -526,16 +533,24 @@ def build_threads(msgs, jobs=None, by_mid=None):
     return out
 
 
+def jobs_dir():
+    """진행 상황을 읽을 작업 폴더 — 게이트웨이 PC 면 그 inbox/jobs, '이 PC 에서 직접 실행' 이 켜져 있으면 그 작업 폴더, 아니면 ""."""
+    if JOBS_DIR:
+        return JOBS_DIR
+    return RUNNER.jobs_dir if RUNNER.on() else ""
+
+
 def local_jobs():
     """이 PC 에서 돌면 작업 인박스(최근 80개)를 읽어 (번호 → 작업, 지시 메일 Message-ID → 작업)을 돌려준다.
     작업은 {id, status, thread} 만. 다른 PC 에선 둘 다 빈 것."""
     by_no, by_mid = {}, {}
+    jd = jobs_dir()
     try:
-        names = sorted(os.listdir(JOBS_DIR), reverse=True)[:80] if JOBS_DIR else []
+        names = sorted(os.listdir(jd), reverse=True)[:80] if jd else []
     except OSError:
         return by_no, by_mid
     for fn in names:
-        j = read_json(os.path.join(JOBS_DIR, fn)) if fn.endswith(".json") else None
+        j = read_json(os.path.join(jd, fn)) if fn.endswith(".json") else None
         if not j or not j.get("id"):
             continue
         brief = {"id": j["id"], "status": j.get("status"), "thread": j.get("thread")}
@@ -685,10 +700,11 @@ def find_transcript(job, since):
 
 
 def job_progress(job_id):
-    """작업 하나의 진행 상황(이 PC 에 게이트웨이 인박스가 있을 때만). 작업 파일 이름이 곧 id 다."""
-    if not JOBS_DIR or not re.fullmatch(r"[\w\-]{1,80}", str(job_id or "")):
+    """작업 하나의 진행 상황(이 PC 에 게이트웨이 인박스가 있거나 이 PC 에서 직접 실행할 때만). 작업 파일 이름이 곧 id 다."""
+    jd = jobs_dir()
+    if not jd or not re.fullmatch(r"[\w\-]{1,80}", str(job_id or "")):
         return None
-    job = read_json(os.path.join(JOBS_DIR, "%s.json" % job_id))
+    job = read_json(os.path.join(jd, "%s.json" % job_id))
     if not job or not job.get("id"):
         return None
     try:
@@ -809,6 +825,7 @@ def hide_thread(key):
 
 
 BOX = Box()
+RUNNER = runner.Runner(sys.modules[__name__])          # 이 PC 에서 직접 실행(기본 꺼짐) — main() 에서 돌리기 시작한다
 
 
 def compose(cfg, data, threads):
@@ -879,6 +896,7 @@ def send(data):
     BOX.version += 1
     log("보냄 %s" % subject[:80])
     threading.Timer(3, BOX.wake.set).start()       # 게이트웨이가 받아 회신하면 곧 보이게
+    threading.Timer(4, RUNNER.wake.set).start()    # 이 PC 에서 직접 실행 중이면 곧 받아 간다
     return {"ok": True, "subject": subject}
 
 
@@ -936,9 +954,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"breed": {}})
         if u.path == "/api/state":
             cfg, src = load_cfg()
+            run = RUNNER.summary()
             return self._send(200, {
-                "user": cfg.get("user"), "source": src, "error": BOX.error, "polled": BOX.polled, "version": BOX.version, "local": bool(JOBS_DIR),
-                "folders": cfg.get("workdir_keys") or [], "jira_prefix": cfg.get("jira_prefix") or "",
+                "user": cfg.get("user"), "source": src, "error": BOX.error, "polled": BOX.polled, "version": BOX.version,
+                "local": bool(jobs_dir()), "runner": run,
+                "folders": list((cfg.get("run_dirs") or {}).keys()) if run["active"] else (cfg.get("workdir_keys") or []),
+                "jira_prefix": cfg.get("jira_prefix") or "",
                 "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":
@@ -949,7 +970,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, t)
         if u.path == "/api/progress":                                               # 일하는 중인 대화의 실시간 진행(게이트웨이 PC 만)
             job_id = (parse_qs(u.query).get("job") or [""])[0]
-            return self._send(200, {"progress": job_progress(job_id), "local": bool(JOBS_DIR)})
+            return self._send(200, {"progress": job_progress(job_id), "local": bool(jobs_dir())})
+        if u.path == "/api/runner":                                                 # 이 PC 에서 직접 실행 — 스위치 상태
+            return self._send(200, RUNNER.info())
         if u.path == "/api/setup":
             cfg, src = load_cfg()
             return self._send(200, {k: cfg.get(k) for k in ("user", "login_user", "imap_host", "imap_port", "smtp_host", "smtp_port",
@@ -976,6 +999,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if u.path == "/api/setup":
                 return self._send(200, save_setup(data))
+            if u.path == "/api/runner":
+                return self._send(200, RUNNER.configure(data))
         except ValueError as e:
             return self._send(400, {"error": str(e)})
         except Exception as e:
@@ -1050,6 +1075,7 @@ def main():
         return 0
     srv = Server(("127.0.0.1", PORT), Handler)
     threading.Thread(target=BOX.loop, daemon=True).start()
+    RUNNER.start()                                   # 꺼져 있으면 아무것도 하지 않는다(설정만 가끔 본다)
     log("D&C 메신저 시작 — http://127.0.0.1:%d/" % PORT)
     if not serve_only:
         threading.Timer(0.8, open_window).start()
