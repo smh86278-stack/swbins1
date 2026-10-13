@@ -184,6 +184,30 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
 .two.half{grid-template-columns:1fr 1fr}
 .run .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:-2px 0 10px;cursor:pointer}
 @media (max-width:480px){.two.half{grid-template-columns:1fr}}
+/* Jira 새 티켓 감시 — 대화 목록 위 자리비움 단추(켜져 있으면 눈에 띄게) · 설정 칸 */
+.away{margin:0 12px 8px;display:flex;flex-direction:column;gap:4px}
+.away[hidden]{display:none}
+.awaybtn{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:var(--solid);border-radius:14px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--muted);text-align:left}
+.awaybtn:hover{border-color:var(--accent);color:var(--accent)}
+.awaybtn .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.awaybtn .tr{flex:none;width:30px;height:17px;border-radius:99px;background:var(--line);position:relative;transition:.2s}
+.awaybtn .tr::after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--solid);box-shadow:var(--shadow);transition:.2s}
+.awaybtn.on{background:color-mix(in srgb,var(--warn) 16%,var(--solid));border-color:var(--warn);color:var(--warn)}
+.awaybtn.on .tr{background:var(--warn)}
+.awaybtn.on .tr::after{left:15px}
+.awaynote{font-size:11.5px;color:var(--muted);background:var(--soft);border-radius:10px;padding:4px 8px;display:flex;gap:6px;align-items:flex-start}
+.awaynote span{flex:1;min-width:0;word-break:break-all}
+.awaynote button{border:0;background:transparent;color:var(--muted);padding:0 2px;flex:none}
+.awaynote button:hover{color:var(--bad)}
+.awaynote.err{color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+#jwWhy{font-size:12px;border-radius:10px;padding:6px 9px;margin-bottom:10px;display:none}
+#jwWhy.warn{display:block;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)}
+#jwWhy.ok{display:block;background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
+.jwlast{font-size:12px;color:var(--muted);background:var(--soft);border-radius:10px;padding:6px 9px;margin-bottom:8px}
+.jwlast:empty{display:none}
+.jwlast ul{margin:4px 0 0;padding-left:16px}
+.jwlast .e{color:var(--bad)}
+#jwErr{color:var(--bad);font-size:12.5px;min-height:16px}
 #toast{position:fixed;right:18px;bottom:18px;background:var(--text);color:var(--bg);padding:9px 15px;border-radius:14px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;max-width:520px;z-index:9}
 #toast.show{opacity:.96;transform:none}
 @media (max-width:760px){body{grid-template-columns:1fr}aside{display:none}body.list aside{display:flex}body.list main{display:none}}
@@ -207,6 +231,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <span id="dot" title="메일함 연결"></span>
   </div>
   <button class="newbtn" id="newBtn">＋ 새 대화</button>
+  <div class="away" id="awayBar" hidden>
+    <button class="awaybtn" id="awayBtn"><span class="tx" id="awayTxt">🏃 자리비움 꺼짐</span><span class="tr"></span></button>
+    <div class="awaynote" id="awayNote" hidden><span id="awayNoteTx"></span><button id="awayNoteX" title="알림 지우기">✕</button></div>
+  </div>
   <div class="filters" id="filters">
     <button data-f="all" class="on">전체</button><button data-f="wait">답할 것</button><button data-f="busy">진행 중</button><button data-f="urgent" title="급건 표시한 대화만">🔥</button>
     <button class="iconbtn" id="refreshBtn" style="margin-left:auto" title="메일함 다시 읽기">↻</button>
@@ -303,6 +331,24 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <label class="chk"><input type="checkbox" id="runJiraNet"> curl·ssh 허용 — 스킬이 curl 로 Jira REST 를 부를 때(예: bo-workspace task-input)</label>
     <div id="runErr"></div>
     <div class="acts" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="ghost" id="runLogin">로그인 창 열기</button><button type="button" class="ghost" id="runSave">저장</button></div>
+  </div>
+  <!-- Jira 새 티켓 감시(jira_watch.py) — 기본 꺼짐 -->
+  <div class="run" id="jwBox">
+    <h3>Jira 새 티켓 감시 <label class="switch" title="켜면 1분마다 내게 배정된 새 Jira 티켓을 확인합니다"><input type="checkbox" id="jwOn"><span></span></label></h3>
+    <p>켜면 1분마다 내게 배정된 새 Jira 티켓을 확인합니다. 대화 목록 위 <b>🏃 자리비움</b>이 켜져 있으면 새 티켓마다 '/jira 키' 를 자동으로 처리하고,
+      꺼져 있으면 실행하지 않고 알림만 남깁니다(나중에 켜도 몰려 돌지 않습니다). 처음 켤 때 이미 있는 티켓은 본 것으로만 적습니다.
+      Jira 주소·토큰·작업 폴더·스킬은 위 'Jira 처리' 칸을 같이 씁니다 — 토큰이 비어 있으면 환경변수 JIRA_TOKEN.</p>
+    <div id="jwWhy"></div>
+    <div class="two half"><div class="field"><label>프로젝트 (비우면 Jira 키 앞부분)</label><input id="jwProj" type="text"></div>
+      <div class="field"><label>담당자 (비우면 나 — 토큰 주인)</label><input id="jwWho" type="text" placeholder="currentUser()"></div></div>
+    <div class="two half"><div class="field"><label>조회 기간 (일)</label><input id="jwDays" type="number" min="1" max="30"></div>
+      <div class="field"><label>한 번에 최대 (건)</label><input id="jwMax" type="number" min="1" max="10"></div></div>
+    <div class="two half"><div class="field"><label>제외 — 발생환경 계정 (정규식)</label><input id="jwAcc" type="text" placeholder="예: (?i)qc"></div>
+      <div class="field"><label>제외 — 연결 이슈 제목 (정규식)</label><input id="jwLink" type="text"></div></div>
+    <div class="field"><label>건너뛸 티켓 (번호, 쉼표로)</label><input id="jwIgnore" type="text" placeholder="34097, 34102"></div>
+    <div class="jwlast" id="jwLast"></div>
+    <div id="jwErr"></div>
+    <div class="acts" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="ghost" id="jwCheck">지금 확인</button><button type="button" class="ghost" id="jwSave">저장</button></div>
   </div>
 </dialog>
 <div id="toast"></div>
@@ -615,6 +661,7 @@ async function poll(force) {
   else if (run.on && run.error) { ban.textContent = '이 PC 에서 직접 실행 — ' + run.error; ban.style.display = 'block'; }
   else ban.style.display = 'none';
   $('#jiraPrefix').textContent = s.jira_prefix || '';
+  drawAway(s.jira_watch || {});
   if (!$('#folderChips').childElementCount || force) drawFolders();
   drawList();
   if (sel) {
@@ -643,7 +690,7 @@ async function openSetup(first) {
       'IMAP·SMTP 가 되는 메일이면 어디든 됩니다. 비밀번호는 이 PC 사용자만 풀 수 있게 둡니다(윈도우 DPAPI · 맥 키체인).';
   $('#sPw').placeholder = s.has_password ? '바꿀 때만 입력' : '비밀번호';
   $('#setErr').textContent = ''; $('#dlg').showModal();
-  loadRunner();
+  loadRunner(); loadJw();
 }
 /* 이 PC 에서 직접 실행 — 스위치는 바로 적용(켜는 순간 이후의 지시만 받는다) */
 function drawRunner(r) {
@@ -695,6 +742,82 @@ $('#runOn').onchange = e => {
   saveRunner(on, on ? '이 PC 에서 직접 실행 — 켰습니다. 지금 이후에 온 지시만 받습니다' : '');
 };
 $('#runSave').onclick = () => saveRunner($('#runOn').checked);
+
+/* Jira 새 티켓 감시 — 자리비움 단추(대화 목록 위)와 설정 칸. 자리비움을 켜고 끈 것은 메신저 로그에 남는다 */
+let awayOn = false;
+function drawAway(w) {
+  const bar = $('#awayBar'), btn = $('#awayBtn');
+  bar.hidden = !w.on;
+  if (!w.on) return;
+  awayOn = !!w.away;
+  btn.classList.toggle('on', awayOn);
+  $('#awayTxt').textContent = awayOn ? '🏃 자리비움 중 — 새 Jira 티켓 자동 처리' : '🏃 자리비움 꺼짐 — 새 티켓은 알림만';
+  btn.title = (awayOn ? '누르면 끕니다 — 새 티켓은 실행하지 않고 알림만 남깁니다' : '누르면 켭니다 — 자리를 비운 동안 새 Jira 티켓을 /jira 로 자동 처리합니다')
+    + (w.last_ok ? '\n마지막 확인 ' + w.last_ok : '');
+  const note = $('#awayNote'), notes = w.note || [];
+  if (w.error) { note.className = 'awaynote err'; $('#awayNoteTx').textContent = 'Jira 감시 — 확인 실패: ' + w.error; $('#awayNoteX').hidden = true; note.hidden = false; }
+  else if (notes.length) {
+    note.className = 'awaynote'; $('#awayNoteX').hidden = false; note.hidden = false;
+    $('#awayNoteTx').textContent = '새 티켓 ' + notes.length + '건 — 자리비움 꺼짐이라 직접 처리: ' + notes.map(n => n.key).join(', ');
+    note.title = notes.map(n => n.key + ' ' + (n.summary || '') + ' (' + (n.ts || '').slice(5, 16) + ')').join('\n');
+  } else note.hidden = true;
+}
+$('#awayBtn').onclick = async () => {
+  const want = !awayOn;
+  try { const r = await api('/api/jira-watch', { away: want }); drawAway({ on: r.enabled, away: r.away, note: r.note, error: r.error, last_ok: r.last_ok });
+    toast(want ? '자리비움 — 켰습니다. 새 Jira 티켓을 자동으로 처리합니다' : '자리비움 — 껐습니다. 새 티켓은 알림만 남깁니다'); }
+  catch (e) { toast(e.message); }
+};
+$('#awayNoteX').onclick = async () => { try { await api('/api/jira-watch', { dismiss: true }); $('#awayNote').hidden = true; } catch (e) { toast(e.message); } };
+function drawJw(r) {
+  $('#jwOn').checked = !!r.enabled;
+  $('#jwProj').value = r.project || ''; $('#jwProj').placeholder = r.project_default || '예: PROJ';
+  $('#jwWho').value = r.assignee || ''; $('#jwDays').value = r.days || 3; $('#jwMax').value = r.max || 3;
+  $('#jwAcc').value = r.exclude_account || ''; $('#jwLink').value = r.exclude_linked || ''; $('#jwIgnore').value = r.ignore || '';
+  const why = $('#jwWhy');
+  const tok = r.token === 'env' ? ' · 토큰: 환경변수 JIRA_TOKEN' : r.token === 'saved' ? ' · 토큰: 저장됨' : ' · 토큰 없음';
+  if (!r.url) { why.textContent = 'Jira 주소가 없습니다 — 위 Jira 처리 칸에 넣어 주세요.'; why.className = 'warn'; }
+  else if (!r.token) { why.textContent = 'Jira 토큰이 없습니다 — 위 Jira 처리 칸에 개인 토큰을 넣거나 환경변수 JIRA_TOKEN 을 두세요.'; why.className = 'warn'; }
+  else if (!r.where) { why.textContent = '자리비움 중 새 티켓을 넣을 곳이 없습니다 — 위 \'이 PC 에서 직접 실행\'을 켜세요(게이트웨이 PC 면 그쪽으로 넘깁니다).' + tok; why.className = 'warn'; }
+  else { why.textContent = (r.where === 'gateway' ? '자리비움 중 새 티켓은 이 PC 메일 게이트웨이로 넘깁니다' : '자리비움 중 새 티켓은 이 PC 에서 직접 실행합니다') + tok; why.className = 'ok'; }
+  why.title = r.jql || '';
+  const box = $('#jwLast'); box.replaceChildren();
+  const L = r.last || {};
+  if (r.enabled || L.ts) {
+    const tally = Object.entries(L.skipped || {}).map(([k, v]) => k + ' ' + v).join(' · ');
+    box.append(el('div', '', r.last_ok ? '마지막 확인 ' + r.last_ok.slice(5, 16) + ' · 조회 ' + (L.scanned ?? '-') + '건 / 제외 ' + (L.qc_skipped ?? '-') + '건' + (tally ? ' [' + tally + ']' : '')
+      + ' / 자동 처리 ' + (L.queued || []).length + ' · 알림만 ' + (L.away_skipped || []).length + ((L.seeded || []).length ? ' · 처음이라 본 것으로 ' + L.seeded.length : '')
+      : (r.busy ? '확인 중…' : '아직 확인 전입니다')));
+    if (r.error) box.append(el('div', 'e', '확인 실패 — ' + r.error));
+    if (r.imported && r.imported.count) box.append(el('div', '', '옛 jira-mail 폴러 기록 ' + r.imported.count + '건을 가져왔습니다'));
+    if ((r.recent || []).length) {
+      const ul = el('ul');
+      for (const x of r.recent.slice(0, 8)) ul.append(el('li', '', (x.ts || '').slice(5, 16) + ' ' + x.key + ' ' + (x.summary || '') + ' — '
+        + (x.act === 'queued' ? '자동 처리(' + (x.where === 'gateway' ? '게이트웨이' : '이 PC') + ')' : '알림만(자리비움 꺼짐)')));
+      box.append(ul);
+    }
+  }
+}
+async function loadJw() {
+  $('#jwErr').textContent = '';
+  try { drawJw(await api('/api/jira-watch')); } catch (e) { $('#jwErr').textContent = e.message; }
+}
+async function saveJw(extra, done) {
+  $('#jwErr').textContent = '';
+  try {
+    const r = await api('/api/jira-watch', Object.assign({ project: $('#jwProj').value, assignee: $('#jwWho').value, days: $('#jwDays').value,
+      max: $('#jwMax').value, exclude_account: $('#jwAcc').value, exclude_linked: $('#jwLink').value, ignore: $('#jwIgnore').value }, extra || {}));
+    drawJw(r); toast(done || '저장했습니다'); poll(true);
+    if (extra && (extra.check_now || extra.enabled)) setTimeout(loadJw, 4000);
+  } catch (e) { $('#jwErr').textContent = e.message; loadJw(); }
+}
+$('#jwOn').onchange = e => {
+  const on = e.target.checked;
+  if (on && !confirm('Jira 새 티켓 감시를 켤까요?\n\n· 지금 있는 티켓은 본 것으로만 적고, 앞으로 배정되는 티켓만 봅니다.\n· 자리비움이 켜져 있을 때만 /jira 로 자동 처리합니다.\n· 옛 jira-mail 폴러(허브 svc_jira_mail)가 돌고 있으면 먼저 끄세요 — 같은 티켓이 두 번 처리됩니다.')) { e.target.checked = false; return; }
+  saveJw({ enabled: on }, on ? 'Jira 새 티켓 감시 — 켰습니다' : 'Jira 새 티켓 감시 — 껐습니다');
+};
+$('#jwSave').onclick = () => saveJw();
+$('#jwCheck').onclick = () => saveJw({ check_now: true }, '지금 확인합니다 — 잠시 뒤 결과가 보입니다');
 /* 메일 주소만 넣으면 잘 알려진 메일의 서버를 채운다(직접 고쳐도 된다). 회사 밖 메일은 앱 비밀번호·IMAP 켜기가 필요할 수 있다 */
 const MAIL_PRESETS = [
   [/^(gmail|googlemail)\.com$/, 'imap.gmail.com', 993, 'smtp.gmail.com', 587, 'Gmail — 구글 계정의 "앱 비밀번호"를 넣으세요(2단계 인증 필요).'],

@@ -25,6 +25,8 @@ PC 끼리 직접 연결할 필요가 없다 — 메일 서버만 닿으면 어�
 - 봇 메일은 게이트웨이가 붙이는 X-Dispatch-* 헤더로 알아본다(선택지는 X-Dispatch-Ask). 표식 이전의 옛 회신은 꼬리말로 짐작한다.
 - 이 PC 에서 직접 실행(chat_runner.py, 설정 화면 스위치 — 기본 꺼짐): 켜면 게이트웨이 없이 이 앱이 내 메일함의 지시를 받아
   이 PC 의 Claude Code(claude -p)로 돌리고 같은 형식으로 회신한다. 게이트웨이 PC 에서는 켜지지 않는다.
+- Jira 새 티켓 감시(jira_watch.py, 설정 화면 스위치 — 기본 꺼짐): 내게 배정된 새 티켓을 1분마다 보고, 자리비움이 켜져 있으면
+  '/jira 키' 작업을 넣는다(게이트웨이 PC 는 그 inbox/jobs, 직접 실행 PC 는 이 앱의 큐). 꺼져 있으면 처리됨으로만 적는다.
 """
 import base64
 import ctypes
@@ -144,10 +146,13 @@ DEFAULTS = {
     "workdir_keys": ["hub", "mobile"],
     "jira_prefix": "",
     "run_jira_url": "",                                                     # 직접 실행 Jira 처리 — 회사 값 jira_url 이 있으면 그것(각자 토큰만 넣게)
+    # Jira 새 티켓 감시(jira_watch.py) 제외 규칙 — 회사마다 다르니 코드 기본값은 비우고 company.json 에 둔다
+    "jira_watch_exclude_account": "", "jira_watch_exclude_linked": "",
     "lookback_days": 14,
     "poll_sec": 20,
 }
-DEFAULTS.update({k: COMPANY[k] for k in ("imap_host", "imap_port", "imap_mode", "smtp_host", "smtp_port", "smtp_mode", "jira_prefix")
+DEFAULTS.update({k: COMPANY[k] for k in ("imap_host", "imap_port", "imap_mode", "smtp_host", "smtp_port", "smtp_mode", "jira_prefix",
+                                         "jira_watch_exclude_account", "jira_watch_exclude_linked")
                  if COMPANY.get(k) not in (None, "")})
 if COMPANY.get("jira_url"):
     DEFAULTS["run_jira_url"] = str(COMPANY["jira_url"]).rstrip("/")
@@ -1041,7 +1046,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             run = RUNNER.summary()
             return self._send(200, {
                 "user": cfg.get("user"), "source": src, "error": BOX.error, "polled": BOX.polled, "version": BOX.version,
-                "local": bool(jobs_dir()), "runner": run,
+                "local": bool(jobs_dir()), "runner": run, "jira_watch": RUNNER.jira.summary(),
                 "folders": list((cfg.get("run_dirs") or {}).keys()) if run["active"] else (cfg.get("workdir_keys") or []),
                 "jira_prefix": cfg.get("jira_prefix") or "",
                 "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
@@ -1058,6 +1063,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"progress": job_progress(job_id), "local": bool(jobs_dir())})
         if u.path == "/api/runner":                                                 # 이 PC 에서 직접 실행 — 스위치 상태
             return self._send(200, RUNNER.info())
+        if u.path == "/api/jira-watch":                                             # Jira 새 티켓 감시 — 설정·마지막 결과
+            return self._send(200, RUNNER.jira.info())
         if u.path == "/api/snippets":
             return self._send(200, {"snippets": load_snippets()})
         if u.path == "/api/setup":
@@ -1092,6 +1099,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, save_setup(data))
             if u.path == "/api/runner":
                 return self._send(200, RUNNER.configure(data))
+            if u.path == "/api/jira-watch":                                         # {enabled, away, 규칙…, check_now, dismiss}
+                return self._send(200, RUNNER.jira.configure(data))
             if u.path == "/api/browser-login":                                      # 직접 실행 — 전용 브라우저에 로그인해 두기
                 return self._send(200, RUNNER.browser_login())
         except ValueError as e:

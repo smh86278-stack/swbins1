@@ -43,6 +43,8 @@ from email.message import EmailMessage
 from html import escape as html_escape
 from urllib.parse import quote
 
+import jira_watch
+
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 
@@ -393,6 +395,7 @@ class Runner:
         self.cleaned = False
         self._claude = (0.0, None)
         self.started = False
+        self.jira = jira_watch.JiraWatch(self)   # Jira 새 티켓 감시(설정 jira_watch, 기본 꺼짐) — 직접 실행이 꺼져 있어도 돈다(게이트웨이 PC)
 
     @property
     def jobs_dir(self):
@@ -548,6 +551,15 @@ class Runner:
                 if not find_tool("uvx"):
                     raise ValueError("uvx(uv)를 찾지 못했습니다 — uv 를 설치하거나, 토큰을 비우고 이 PC 의 Claude Code 에 이미 있는 jira MCP 를 쓰세요.")
             own["run_jira"] = want
+
+    def jira_parts(self, cfg, key, workdir, label):
+        """'/jira 키' 작업의 (지시문, 폴더, 폴더 이름, 도구, 거부 목록) — 메일 지시(#cw /jira 키)와 Jira 새 티켓 감시가 같이 쓴다."""
+        tools, denied = JIRA_TOOLS, ([] if cfg.get("run_jira_allow_net") else JIRA_DENY)
+        if cfg.get("run_jira_dir"):
+            workdir, label = cfg["run_jira_dir"], "jira"
+        skill = cfg.get("run_jira_skill") or "jira"
+        prompt = "/%s %s" % (skill, key) if has_skill(workdir, skill) else JIRA_NO_SKILL % key
+        return prompt, workdir, label, tools, denied
 
     def browser_login(self):
         """전용 브라우저 프로필로 창을 연다 — 사람이 한 번 로그인해 두면 지시가 그 로그인 그대로 쓴다(게이트웨이 browser-login.bat)."""
@@ -1010,11 +1022,7 @@ class Runner:
         elif mode == "write":                         # 새 쓰기 지시 — 설정에서 켠 것만 더한다(이어서 하기는 처음 도구 그대로)
             mj = JIRA_PROMPT_RE.match(prompt)
             if mj and cfg.get("run_jira"):
-                tools, denied = JIRA_TOOLS, ([] if cfg.get("run_jira_allow_net") else JIRA_DENY)
-                if cfg.get("run_jira_dir"):
-                    workdir, label = cfg["run_jira_dir"], "jira"
-                skill = cfg.get("run_jira_skill") or "jira"
-                prompt = "/%s %s" % (skill, mj.group(1)) if has_skill(workdir, skill) else JIRA_NO_SKILL % mj.group(1)
+                prompt, workdir, label, tools, denied = self.jira_parts(cfg, mj.group(1), workdir, label)
             elif cfg.get("run_browser"):
                 tools = WRITE_TOOLS + [BROWSER_TOOL]
         with self.lock:
@@ -1377,6 +1385,7 @@ class Runner:
         self.started = True
         threading.Thread(target=self._poll_loop, daemon=True, name="runner-poll").start()
         threading.Thread(target=self._work_loop, daemon=True, name="runner-work").start()
+        self.jira.start()                        # 꺼져 있으면 설정만 가끔 본다
 
     def _poll_loop(self):
         while True:
