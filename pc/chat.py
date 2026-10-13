@@ -115,6 +115,7 @@ else:                                                      # 맥(리눅스도) �
 OWN_CFG = os.path.join(APPDATA, "config.json")
 LOG_PATH = os.path.join(LOCALDATA, "chat.log")
 HIDDEN_PATH = os.path.join(LOCALDATA, "hidden.json")      # 화면에서 지운 대화(키 목록) — 메일은 그대로, 이 PC 목록에서만 숨긴다
+CLEARED_PATH = os.path.join(LOCALDATA, "cleared.json")    # 전체 지우기 시각 — 그 전에 끝난 대화를 숨긴다(새 글이 오면 다시 보임)
 URGENT_PATH = os.path.join(LOCALDATA, "urgent.json")      # 🔥 급건 표시한 대화(키 목록) — 목록 맨 위
 SNIPPETS_PATH = os.path.join(LOCALDATA, "snippets.json")  # 📝 저장해 두는 답(글 목록) — 없으면 기본 몇 개
 KEY_RE = re.compile(r"\s*\[k:[^\]\s]{1,64}\]\s*$")       # 폰이 제목 끝에 붙이는 암호 단어 — 화면에는 안 보인다
@@ -820,10 +821,12 @@ class Box:
     def threads(self):
         with self.lock:
             msgs = [dict(m) for m in self.msgs.values()] + [dict(e) for e in self.echo]
-        hidden, urgent = load_hidden(), load_urgent()
+        hidden, urgent, cleared = load_hidden(), load_urgent(), load_cleared()
         out = []
         for t in build_threads(msgs, *local_jobs()):
             if t["key"] in hidden:
+                continue
+            if cleared and (t.get("ts") or 0) <= cleared and t.get("status") not in ACTIVE_STATUSES:
                 continue
             t["urgent"] = t["key"] in urgent
             out.append(t)
@@ -849,6 +852,38 @@ def hide_thread(key):
     with open(HIDDEN_PATH, "w", encoding="utf-8") as f:
         json.dump(sorted(keys), f, ensure_ascii=False, indent=1)
     return {"ok": True, "hidden": len(keys)}
+
+
+ACTIVE_STATUSES = ("sent", "queued", "running", "confirm")   # 전체 지우기에서 남기는 대화 — 일하는 중이거나 내 확인을 기다린다
+
+
+def load_cleared():
+    try:
+        with open(CLEARED_PATH, encoding="utf-8") as f:
+            return float((json.load(f) or {}).get("before") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 0.0
+
+
+def clear_threads(undo=False):
+    """대화 전체 지우기 — 지금 시각 이전에 마지막 글이 있는 대화를 이 PC 목록에서 뺀다(메일은 그대로).
+    일하는 중·확인 기다리는 대화는 남기고, 지운 대화에 새 글이 오면 다시 보인다. undo 면 지우기 전으로 되돌린다."""
+    os.makedirs(LOCALDATA, exist_ok=True)
+    if undo:
+        prev = None
+        try:
+            with open(CLEARED_PATH, encoding="utf-8") as f:
+                prev = (json.load(f) or {}).get("prev")
+        except (OSError, ValueError, AttributeError):
+            pass
+        state = {"before": float(prev or 0)}
+    else:
+        n = len(BOX.threads())
+        state = {"before": time.time(), "prev": load_cleared() or None}
+    with open(CLEARED_PATH, "w", encoding="utf-8") as f:
+        json.dump(state, f)
+    log("대화 전체 지우기%s" % (" — 되돌림" if undo else " (%d개, 메일은 그대로)" % n))
+    return {"ok": True, "left": len(BOX.threads())}
 
 
 # 급건 표시와 저장해 두는 답 — 대화 지우기처럼 이 PC 에만 남긴다(메일·다른 PC 와 나누지 않는다)
@@ -1088,6 +1123,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, send(data))
             if u.path == "/api/hide":
                 return self._send(200, hide_thread(data.get("key")))
+            if u.path == "/api/clear":                                              # 대화 전체 지우기 {undo}
+                return self._send(200, clear_threads(bool(data.get("undo"))))
             if u.path == "/api/urgent":                                             # 🔥 급건 표시 {key, on}
                 return self._send(200, set_urgent(data.get("key"), bool(data.get("on"))))
             if u.path == "/api/snippets":                                           # 📝 저장해 두는 답 {add} · {remove}

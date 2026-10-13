@@ -238,6 +238,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <div class="filters" id="filters">
     <button data-f="all" class="on">전체</button><button data-f="wait">답할 것</button><button data-f="busy">진행 중</button><button data-f="urgent" title="급건 표시한 대화만">🔥</button>
     <button class="iconbtn" id="refreshBtn" style="margin-left:auto" title="메일함 다시 읽기">↻</button>
+    <button class="iconbtn" id="clearBtn" title="대화 전체 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다(일하는 중인 대화는 남김)">🧹</button>
     <button class="iconbtn" id="setBtn" title="메일 계정">⚙</button>
   </div>
   <div id="list"></div>
@@ -587,6 +588,19 @@ $('#delBtn').onclick = async () => {                       // 대화 지우기 �
   if (!confirm('「' + (cur.title || '이 대화') + '」 대화를 목록에서 지울까요? (메일함의 메일은 그대로 남습니다)')) return;
   try { await api('/api/hide', {key: sel}); sel = null; cur = null; toast('지웠습니다'); showNew(); poll(true); }
   catch (e) { toast(e.message); }
+};
+let clearUndoUntil = 0;                                    // 전체 지우기 직후 10초 안에 🧹 를 다시 누르면 되돌린다
+$('#clearBtn').onclick = async () => {
+  try {
+    if (Date.now() < clearUndoUntil) {
+      clearUndoUntil = 0; await api('/api/clear', {undo: true}); toast('되돌렸습니다'); poll(true); return;
+    }
+    if (!confirm('대화를 모두 목록에서 지울까요?\n\n· 메일함의 메일은 그대로 남습니다.\n· 일하는 중이거나 확인을 기다리는 대화는 남깁니다.\n· 지운 대화에 새 글이 오면 다시 보입니다.')) return;
+    const r = await api('/api/clear', {});
+    sel = null; cur = null; showNew(); poll(true);
+    clearUndoUntil = Date.now() + 10000;
+    toast('지웠습니다' + (r.left ? ' — 남은 대화 ' + r.left + '개' : '') + ' · 10초 안에 🧹 를 다시 누르면 되돌립니다');
+  } catch (e) { toast(e.message); }
 };
 
 /* ---------- 진행 상황(게이트웨이 PC 에서만 — 워커가 쌓는 claude 진행 줄을 2초마다 읽는다) ---------- */

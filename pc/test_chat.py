@@ -138,3 +138,32 @@ class LocalMarks(unittest.TestCase):
         self.assertEqual(chat.load_snippets(), got)
         with self.assertRaises(ValueError):
             chat.edit_snippets({"add": "x" * 2001})
+
+    def test_clear_all(self):
+        """🧹 전체 지우기 — 끝난 대화만 목록에서 빠지고, 일하는 중인 대화는 남고, 새 글이 오면 다시 보이고, 되돌릴 수 있다."""
+        for name in ("CLEARED_PATH", "HIDDEN_PATH", "LOG_PATH", "local_jobs"):
+            self.addCleanup(setattr, chat, name, getattr(chat, name))
+        chat.CLEARED_PATH = os.path.join(self.tmp, "cleared.json")
+        chat.HIDDEN_PATH = os.path.join(self.tmp, "hidden.json")
+        chat.LOG_PATH = os.path.join(self.tmp, "chat.log")
+        chat.local_jobs = lambda: ({}, {})
+        old_msgs, old_echo = chat.BOX.msgs, chat.BOX.echo
+        self.addCleanup(setattr, chat.BOX, "msgs", old_msgs)
+        self.addCleanup(setattr, chat.BOX, "echo", old_echo)
+        now = time.time()
+        me = {"thread": None, "bot": False, "mode": "read", "tag": "#c", "rest": "", "refs": []}
+        done_q = dict(me, id="<a@x>", ts=now - 100, text="끝난 일")
+        done_a = {"id": "<b@x>", "thread": 1, "ts": now - 90, "bot": True, "kind": "reply", "status": "done", "mode": "read", "tag": "#c",
+                  "text": "끝", "foot": "", "rest": "", "refs": ["<a@x>"], "ask": None}
+        waiting = dict(me, id="<c@x>", ts=now - 80, text="아직 안 끝난 일")           # 답이 아직 없다 — 'sent' 라 남는다
+        chat.BOX.msgs = {m["id"]: m for m in (done_q, done_a, waiting)}
+        chat.BOX.echo = []
+        self.assertEqual(len(chat.BOX.threads()), 2)
+        self.assertEqual(chat.clear_threads()["left"], 1)
+        self.assertEqual([t["key"] for t in chat.BOX.threads()], ["m:<c@x>"])
+        more = dict(me, id="<d@x>", thread=1, ts=time.time() + 5, text="이어서 더 해 줘")   # 지운 대화에 새 글 — 다시 보인다
+        chat.BOX.msgs[more["id"]] = more
+        self.assertEqual(sorted(t["key"] for t in chat.BOX.threads()), ["T1", "m:<c@x>"])
+        del chat.BOX.msgs[more["id"]]
+        chat.clear_threads(undo=True)
+        self.assertEqual(len(chat.BOX.threads()), 2)
