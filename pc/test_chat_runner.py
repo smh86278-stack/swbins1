@@ -185,6 +185,14 @@ class RunnerTest(unittest.TestCase):
 
     # ---------- 받기 · 실행 · 회신
 
+    def test_read_instruction_slash_is_not_expanded_as_skill(self):
+        """읽기 지시가 '/스킬' 로 시작하면 슬래시 명령으로 펼치지 않는다 — 스킬 allowed-tools 가 쓰기를 열기 때문."""
+        self.turn_on()
+        add(self.box, mail("#c /연동분석 몰A", "")[0])
+        self.step()
+        self.assertEqual([c["prompt"] for c in self.calls_made()], [runner.SLASH_GUARD + "/연동분석 몰A"])
+        self.assertIn("Skill", runner.WRITE_TOOLS)                       # 쓰기 지시는 Skill 이 있어 슬래시 명령을 그대로 둔다
+
     def test_runs_own_instruction_and_replies_like_gateway(self):
         self.turn_on()
         raw, mid = mail("#c 로그 봐 줘 ASK", "자세히", headers={"X-Dispatch-Client": "chat"})
@@ -198,6 +206,8 @@ class RunnerTest(unittest.TestCase):
         self.assertIn("-p", args)
         self.assertEqual(args[args.index("--allowedTools") + 1:args.index("--allowedTools") + 4], ["Read", "Glob", "Grep"])
         self.assertNotIn("Edit", args)                                   # 읽기 지시는 읽기 도구만
+        self.assertEqual(args[args.index("--permission-mode") + 1], "dontAsk")   # 허용 목록이 상한이 되게
+        self.assertIn("Bash(rtk git log:*)", args)                        # rtk 훅이 다시 쓴 명령도 허용
         self.assertTrue(args[args.index("--append-system-prompt-file") + 1].endswith("chat-protocol.md"))
         self.assertEqual(self.replies("ack"), [])                         # 이 앱에서 보낸 지시엔 접수 신호가 없다
         rep = self.replies("reply")[0]

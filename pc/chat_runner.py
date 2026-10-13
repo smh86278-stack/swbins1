@@ -48,7 +48,11 @@ IS_MAC = sys.platform == "darwin"
 
 # 읽기 지시(#c)는 읽기 도구만, 쓰기 지시(#cw)는 고치기·명령까지 — 게이트웨이·워커 기본값과 같다(브라우저는 설정에서 켤 때만)
 READ_TOOLS = ["Read", "Glob", "Grep", "Bash(git log:*)", "Bash(git status:*)", "Bash(git diff:*)", "Bash(git show:*)"]
-WRITE_TOOLS = ["Read", "Glob", "Grep", "Edit", "Write", "NotebookEdit", "Bash"]
+WRITE_TOOLS = ["Read", "Glob", "Grep", "Edit", "Write", "NotebookEdit", "Bash", "Skill", "WebFetch", "WebSearch"]
+# claude -p 는 --permission-mode dontAsk 로 돌린다 — 그래야 위 목록이 상한이 된다. 전역 설정이 auto 모드면 목록 밖 도구도
+# 통과한다(2026-10-14 실측). 읽기 지시가 '/' 로 시작하면 슬래시 명령으로 펼치지 않는다 — 스킬의 allowed-tools 가
+# 목록을 넘어 Write·Bash 를 연다(거부 목록 말고는 못 막는다). Skill 이 있는 잡(쓰기·Jira)만 슬래시 명령을 그대로 둔다.
+SLASH_GUARD = "메일 지시: "
 
 # 전용 브라우저(설정 run_browser, 기본 꺼짐) — 쓰기 지시에 Playwright MCP. 워커와 같은 이름(mcp__browser__*)·같은 판
 BROWSER_TOOL = "mcp__browser"
@@ -1276,7 +1280,9 @@ class Runner:
             args += ["--resume", str(job["resume_id"])]
         if job.get("attach_dir") and os.path.isdir(job["attach_dir"]):
             args += ["--add-dir", job["attach_dir"]]
-        args += ["--output-format", "json", "--allowedTools"] + tools
+        # rtk 훅이 Bash 명령을 'rtk <명령>' 으로 다시 쓰므로 Bash(…) 허용 규칙마다 rtk 접두 짝을 더한다
+        tools = tools + ["Bash(rtk %s" % t[5:] for t in tools if t.startswith("Bash(") and not t.startswith("Bash(rtk ")]
+        args += ["--output-format", "json", "--permission-mode", "dontAsk", "--allowedTools"] + tools
         if deny:
             args += ["--disallowedTools"] + deny
         proto = os.path.join(C.RES, "chat-protocol.md")
@@ -1287,8 +1293,11 @@ class Runner:
         C.log("[실행] 시작 %s (폴더 %s%s)" % (jid, job.get("workdir"), ", 세션 %s 이어받기" % job["resume_id"] if job.get("resume_id") else ""))
         t0, tree, stopped, finished = time.time(), None, False, False
         try:
+            prompt = str(job.get("prompt") or "")
+            if prompt.lstrip().startswith("/") and "Skill" not in tools:
+                prompt = SLASH_GUARD + prompt
             with open(pf, "wb") as f:                     # 줄바꿈을 바꾸지 않고 그대로(stdin 으로 넘긴다)
-                f.write(str(job.get("prompt") or "").encode("utf-8"))
+                f.write(prompt.encode("utf-8"))
             mcp = self.mcp_config(job, cfg, os.path.join(logs, jid))
             if mcp:
                 at = args.index("-p")
