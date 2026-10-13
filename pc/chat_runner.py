@@ -89,6 +89,7 @@ SUBJECT_KEY_RE = re.compile(r"\s*\[k:([^\]\s]{1,64})\]\s*$")
 BODY_KEY_RE = re.compile(r"^[ \t]*\[k:([^\]\s]{1,64})\][ \t\r]*$", re.M)
 CHOICES_RE = re.compile(r"```choices[ \t]*\n(.*?)\n?```\s*$", re.S)
 STOP_WORDS = {"멈춤", "그만", "stop"}
+RETRY_WORDS = {"다시 실행", "다시실행", "재실행", "retry"}   # 실패한 대화의 지시를 그대로 다시(🔁 단추가 보내는 말) — 게이트웨이와 같게
 CONFIRM_YES = {"1", "확인", "실행", "ok", "yes", "y", "네", "예", "go"}
 CONFIRM_NO = {"2", "취소", "no", "n", "아니오", "아니요", "x", "stop", "멈춤", "그만"}
 STOPPED_BEFORE_START = "멈췄습니다 — 시작하기 전에 멈춤 요청을 받아 실행하지 않았습니다."
@@ -741,6 +742,18 @@ class Runner:
                 return j
         return None
 
+    def find_failed_job(self, thread_no, refs):
+        """이 말이 가리키는 대화의 가장 최근 작업이 실패(error)했으면 그 작업 — '다시 실행' 으로 같은 지시를 다시 돌린다.
+        가장 최근 작업이 실패가 아니면 None(이미 다시 돌렸거나 잘 끝남 — 그때 '다시 실행' 은 평범한 이어 말하기)."""
+        refset = set(refs)
+        hits = [j for j in self.iter_jobs() if (thread_no is not None and j.get("thread") == thread_no) or
+                ({x for x in (j.get("reply_msgid"), j.get("mail_msgid")) if x} & refset)]
+        retried = {j.get("retry_of") for j in hits}      # 작업 id 는 초 단위라 같은 초의 다시 실행이 실패보다 뒤로 정렬될 수 있다
+        for j in hits:
+            if j["id"] not in retried:
+                return j if j.get("status") == "error" else None
+        return None
+
     def find_live_job(self, thread_no, refs):
         refset = set(refs)
         for j in self.iter_jobs():
@@ -952,6 +965,28 @@ class Runner:
                     st["early_stops"].update({r: time.time() for r in refs})
                 C.log("[실행] 멈춤 — 멈출 일이 아직 없음(지시보다 먼저 옴): %s" % (", ".join(refs) or "대상 없음"))
                 return False
+
+        if said.strip().lower() in RETRY_WORDS:
+            # 실패한 대화에 '다시 실행'(🔁 단추) — 그 지시를 같은 대화 번호·폴더·권한으로 그대로 다시 돌린다.
+            # 시간 초과처럼 세션 없이 실패한 대화는 이어받을 세션이 없어, 그냥 답하면 새 지시로 갈라졌다.
+            # 처음 실행 때 쓰기 확인을 이미 거쳤으므로 다시 묻지 않는다.
+            failed = self.find_failed_job(thread_no, refs)
+            if failed:
+                with self.lock:
+                    st["seen"][key] = None
+                self.save_state()
+                jid = datetime.now().strftime("%Y%m%d-%H%M%S") + "-%04x" % random.randrange(0x10000)
+                job = {k: failed.get(k) for k in ("prompt", "workdir", "workdir_label", "mode", "allowed_tools",
+                                                    "disallowed_tools", "resume_id", "attach_dir", "chat") if failed.get(k)}
+                job.update(id=jid, created_at=now_text(), status="queued", started_at=None, finished_at=None, result=None,
+                           error=None, denials=[], cost_usd=None, duration_ms=None, source="mail", runner="chat",
+                           mail_msgid=msgid, mail_subject=failed.get("mail_subject") or clean, mail_from=sender, replied=False,
+                           client=str(msg.get("X-Dispatch-Client") or ""), retry_of=failed["id"])
+                if failed.get("thread") or thread_no:
+                    job["thread"] = failed.get("thread") or thread_no
+                self.write_job(job)
+                C.log("[실행] 다시 실행 %s ← 실패한 %s" % (jid, failed["id"]))
+                return True
 
         prompt, workdir, label, mode = self.build_instruction(clean, body, cfg)
         if not prompt:

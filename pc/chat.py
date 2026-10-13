@@ -855,12 +855,14 @@ def compose(cfg, data, threads):
             raise ValueError("아직 번호가 없는 대화입니다 — 첫 회신이 오면 이어서 말할 수 있습니다")
         if data.get("stop"):
             body = "멈춤"
+        elif data.get("retry"):                     # 🔁 실패한 지시를 그대로 다시 — 받는 쪽(게이트웨이·직접 실행)이 RETRY_WORDS 로 알아본다
+            body = "다시 실행"
         else:
             body = (",".join(str(p) for p in sorted(set(picks))) + (" " if picks and text else "") + text).strip()
         if not body:
             raise ValueError("보낼 말이 없습니다")
         subject = "Re: %s [T%d] %s" % (t["tag"] or tag_read, t["no"], t["title"])[:160]
-        shown = "멈춤" if data.get("stop") else ((("☑ " + " ☑ ".join(str(p) for p in sorted(set(picks)))) if picks else "") +
+        shown = "멈춤" if data.get("stop") else "🔁 다시 실행" if data.get("retry") else ((("☑ " + " ☑ ".join(str(p) for p in sorted(set(picks)))) if picks else "") +
                                                  ("\n" if picks and text else "") + text)
         return subject, body, t.get("reply_to") or "", {"thread": t["no"], "mode": t["mode"], "tag": t["tag"], "text": shown}
     jira = (data.get("jira") or "").strip()
@@ -974,6 +976,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "local": bool(jobs_dir()), "runner": run,
                 "folders": list((cfg.get("run_dirs") or {}).keys()) if run["active"] else (cfg.get("workdir_keys") or []),
                 "jira_prefix": cfg.get("jira_prefix") or "",
+                "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
                 "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":

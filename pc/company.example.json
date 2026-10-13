@@ -6,6 +6,7 @@
   "smtp_port": 587,
   "jira_prefix": "PROJ-",
   "jira_url": "https://jira.example.com",
+  "support_email": "",
   "presets": [
     ["^example\\.com$", "mail.example.com", 993, "mail.example.com", 587, "회사 메일 — 평소 메일 비밀번호."]
   ]

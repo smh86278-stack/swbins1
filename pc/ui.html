@@ -109,6 +109,9 @@ main{display:flex;flex-direction:column;min-height:0;min-width:0}
 .opt .n{font-weight:800;color:var(--accent);min-width:14px}
 .choice .acts{display:flex;gap:6px;align-items:center;margin-top:8px}
 .choice .acts input{flex:1;min-width:0}
+.choice.fail{border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.choice.fail .acts{flex-wrap:wrap}
+.choice.fail .hint{margin:0}
 
 /* 입력부 */
 .composer{border-top:1px solid var(--line);background:var(--panel);backdrop-filter:blur(14px);padding:10px 18px 14px}
@@ -353,6 +356,7 @@ function drawThread(scroll) {
     box.append(row);
     if (m.bot && m.ask && i === t.msgs.length - 1) box.append(choiceCard(m.ask, m.kind === 'confirm'));
   });
+  if (t.status === 'error' && t.no) box.append(failCard(t));
   const card = t.status === 'running' && prog && progKey === t.key;
   if (card) box.append(progCard());
   if (['sent', 'queued', 'running'].includes(t.status)) {
@@ -386,6 +390,43 @@ function choiceCard(ask, confirm) {
   if (!confirm) acts.append(extra);
   acts.append(go); c.append(acts);
   return c;
+}
+/* 실패한 대화 — 🔁 그 지시를 그대로 다시(받는 쪽이 같은 번호·폴더·권한으로 다시 돌린다) · 문의할 때 붙일 기록 */
+function failCard(t) {
+  const c = el('div', 'choice fail');
+  c.append(el('div', 'q', '⚠ 실행에 실패했습니다'),
+    el('div', 'hint', '같은 지시를 그대로 다시 돌리거나, 실패 기록을 붙여 문의할 수 있습니다.'));
+  const acts = el('div', 'acts');
+  const again = el('button', 'send', '🔁 다시 실행');
+  again.onclick = () => { if (confirm('실패한 지시를 그대로 다시 실행할까요?' + (t.mode === 'write' ? '\n(수정 허용 대화입니다 — 파일을 다시 고칠 수 있습니다)' : ''))) sendSay({ retry: true }); };
+  const copy = el('button', 'ghost', '📋 실패 기록 복사');
+  copy.onclick = () => copyText(failReport(t)).then(() => toast('실패 기록을 복사했습니다 — 문의 글에 붙여 넣으세요'), () => toast('복사하지 못했습니다'));
+  acts.append(again, copy);
+  if (state.support_email) {
+    const ask = el('button', 'ghost', '✉ 문의');
+    ask.onclick = () => { location.href = 'mailto:' + state.support_email + '?subject=' + encodeURIComponent('[D&C 문의] 실행 실패 T' + t.no + ' ' + t.title)
+      + '&body=' + encodeURIComponent(failReport(t).slice(0, 1800)); };
+    acts.append(ask);
+  }
+  c.append(acts);
+  return c;
+}
+function failReport(t) {
+  const stamp = ts => { const d = new Date(ts * 1000); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  const first = t.msgs.find(m => !m.bot), bad = [...t.msgs].reverse().find(m => m.bot);
+  const clip = (s, n) => { s = String(s || '').trim(); return s.length > n ? s.slice(0, n) + ' …' : s; };
+  return ['[D&C 메신저 실패 기록]',
+    '대화: T' + t.no + ' ' + t.title + ' (' + (t.mode === 'write' ? '수정 허용' : '읽기') + ')',
+    first ? '지시(' + stamp(first.ts) + '): ' + clip(first.text, 400) : '',
+    bad ? '실패(' + stamp(bad.ts) + '):\n' + clip(bad.text, 1200) : '',
+    bad && bad.foot ? '정보: ' + bad.foot.split('\n')[0] : '',
+    t.job ? '작업 번호: ' + t.job : '',
+    '보낸 PC: ' + navigator.userAgent.replace(/.*?\((.*?)\).*/, '$1')].filter(Boolean).join('\n');
+}
+async function copyText(s) {
+  try { await navigator.clipboard.writeText(s); return; } catch (e) {}
+  const ta = el('textarea'); ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.append(ta); ta.select();
+  const ok = document.execCommand('copy'); ta.remove(); if (!ok) throw new Error('copy');
 }
 async function sendSay(extra) {
   if (busy || !cur) return;

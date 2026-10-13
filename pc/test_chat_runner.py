@@ -41,6 +41,9 @@ FAKE_CLAUDE = textwrap.dedent(r'''
         with open(os.environ["FAKE_CLAUDE_CHILD"], "w") as f:
             f.write(str(c.pid))
         time.sleep(60)
+    if "FAIL" in prompt and not os.path.exists(os.environ["FAKE_CLAUDE_FAILED"]):   # 처음 한 번만 결과 없이 죽는다(세션도 없음)
+        open(os.environ["FAKE_CLAUDE_FAILED"], "w").close()
+        sys.exit(3)
     result = "끝냈습니다"
     if "ASK" in prompt:
         result += '\n\n```choices\n{"question": "다음은?", "multi": false, "options": ["더 보기", "여기서 멈춤"]}\n```'
@@ -140,6 +143,7 @@ class RunnerTest(unittest.TestCase):
             f.write(FAKE_CLAUDE)
         os.environ["FAKE_CLAUDE_LOG"] = self.calls
         os.environ["FAKE_CLAUDE_CHILD"] = os.path.join(self.tmp, "child.pid")
+        os.environ["FAKE_CLAUDE_FAILED"] = os.path.join(self.tmp, "failed-once")
         # 이 PC 의 진짜 설정·메일·게이트웨이와 닿지 않게 모두 바꿔 둔다
         for name, val in (("OWN_CFG", os.path.join(self.tmp, "config.json")), ("LOG_PATH", os.path.join(self.tmp, "chat.log")),
                           ("LOCALDATA", self.tmp), ("INBOX", ""), ("GATEWAY_CFG", ""), ("JOBS_DIR", ""),
@@ -253,6 +257,28 @@ class RunnerTest(unittest.TestCase):
         rep2 = self.replies("reply")[1]
         self.assertEqual(rep2["X-Dispatch-Thread"], "1")
         self.assertIn("이어서 실행", rep2.get_body(("plain",)).get_content())
+
+    def test_retry_failed_instruction(self):
+        self.turn_on()
+        add(self.box, mail("#c 조사 FAIL", "자세히")[0])
+        self.step()
+        rep = self.replies("reply")[0]
+        self.assertEqual((rep["X-Dispatch-Status"], rep["X-Dispatch-Thread"]), ("error", "1"))
+        # 🔁 다시 실행 — 세션 없이 실패했어도 같은 대화 번호로, 처음 지시 그대로 다시 돈다
+        add(self.box, mail("Re: #c [T1] 조사 FAIL", "다시 실행", reply_to=rep["Message-ID"])[0])
+        self.step()
+        calls = self.calls_made()
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1]["prompt"], calls[0]["prompt"])
+        self.assertNotIn("--resume", calls[1]["args"])
+        rep2 = self.replies("reply")[1]
+        self.assertEqual((rep2["X-Dispatch-Status"], rep2["X-Dispatch-Thread"]), ("done", "1"))
+        self.assertEqual(sum(1 for j in self.r.iter_jobs() if j.get("retry_of")), 1)   # id 가 같은 초면 순서는 무작위
+        # 잘 끝난 대화의 '다시 실행' 은 평범한 이어 말하기
+        add(self.box, mail("Re: #c [T1] 조사 FAIL", "다시 실행", reply_to=rep2["Message-ID"])[0])
+        self.step()
+        calls = self.calls_made()
+        self.assertEqual((calls[2]["prompt"], calls[2]["args"][calls[2]["args"].index("--resume") + 1]), ("다시 실행", SESSION))
 
     def test_write_asks_first(self):
         self.turn_on()
