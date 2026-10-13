@@ -56,6 +56,20 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .b-error{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
 @keyframes breathe{50%{opacity:.55}}
 .w{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+/* 🔥 급건 · 📝 저장해 두는 답 */
+.item.urgent{background:color-mix(in srgb,var(--warn) 9%,transparent);border-color:color-mix(in srgb,var(--warn) 35%,var(--line))}
+.item .fire{flex:none;font-size:12px}
+#urgBtn.on{color:var(--warn);border-color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--solid))}
+.snipwrap{position:relative}
+.snip{position:absolute;bottom:calc(100% + 6px);right:0;width:min(420px,80vw);max-height:300px;overflow:auto;background:var(--solid);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow2);padding:6px;z-index:20;display:none}
+.snip.open{display:block}
+.snip .it{display:flex;gap:6px;align-items:flex-start;padding:6px 8px;border-radius:10px;cursor:pointer}
+.snip .it:hover{background:var(--soft)}
+.snip .it span{flex:1;white-space:pre-wrap;word-break:break-word}
+.snip .it button{border:0;background:transparent;color:var(--muted);padding:0 4px}
+.snip .it button:hover{color:var(--bad)}
+.snip .add{display:block;width:100%;margin-top:4px;border:1px dashed var(--line);background:transparent;border-radius:10px;padding:5px;color:var(--muted);font-size:12px}
+.snip .add:hover{color:var(--accent);border-color:var(--accent)}
 
 /* ---------- 오른쪽: 대화 ---------- */
 main{display:flex;flex-direction:column;min-height:0;min-width:0}
@@ -194,7 +208,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   </div>
   <button class="newbtn" id="newBtn">＋ 새 대화</button>
   <div class="filters" id="filters">
-    <button data-f="all" class="on">전체</button><button data-f="wait">답할 것</button><button data-f="busy">진행 중</button>
+    <button data-f="all" class="on">전체</button><button data-f="wait">답할 것</button><button data-f="busy">진행 중</button><button data-f="urgent" title="급건 표시한 대화만">🔥</button>
     <button class="iconbtn" id="refreshBtn" style="margin-left:auto" title="메일함 다시 읽기">↻</button>
     <button class="iconbtn" id="setBtn" title="메일 계정">⚙</button>
   </div>
@@ -222,6 +236,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       </div>
       <div class="inrow">
         <textarea id="newText" rows="3" placeholder="할 일을 적으세요 — 첫 줄이 제목이 됩니다 (Ctrl+Enter 로 보내기)"></textarea>
+        <span class="snipwrap"><button class="ghost snipbtn" data-for="newText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">📝</button><div class="snip"></div></span>
         <button class="send" id="newSend" disabled>보내기</button>
       </div>
       <div class="hint" id="newHint">읽기: 조회·분석만 · 수정 허용: 파일 수정·명령 실행까지(PC 가 실행 전에 확인 메일을 한 번 보냅니다)</div>
@@ -237,12 +252,14 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div class="head">
       <button class="iconbtn" id="backBtn" style="display:none">←</button>
       <span class="no" id="tNo"></span><h2 id="tTitle"></h2><span id="tMode"></span><span id="tStatus"></span>
-      <button class="iconbtn" id="delBtn" style="margin-left:auto" title="이 대화 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다">🗑</button>
+      <button class="iconbtn" id="urgBtn" style="margin-left:auto" title="급건 표시 — 목록 맨 위에 고정합니다(이 PC 에서만)">🔥 급건</button>
+      <button class="iconbtn" id="delBtn" title="이 대화 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다">🗑</button>
     </div>
     <div id="msgs"></div>
     <div class="composer">
       <div class="inrow">
         <textarea id="sayText" rows="1" placeholder="이어서 말하기 (Ctrl+Enter 로 보내기)"></textarea>
+        <span class="snipwrap"><button class="ghost snipbtn" data-for="sayText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">📝</button><div class="snip"></div></span>
         <button class="ghost" id="stopBtn" title="하던 일을 정리하고 멈추게 합니다">멈춤</button>
         <button class="send" id="saySend" disabled>보내기</button>
       </div>
@@ -313,11 +330,13 @@ function badge(st) { return el('span', 'badge b-' + st, STATUS[st] || st); }
 /* ---------- 목록 ---------- */
 function drawList() {
   const box = $('#list'); box.replaceChildren();
-  const show = state.threads.filter(t => filter === 'all' || (filter === 'wait' ? ['ask', 'confirm'].includes(t.status) : ['sent', 'queued', 'running'].includes(t.status)));
+  const show = state.threads.filter(t => filter === 'all' || (filter === 'urgent' ? t.urgent : filter === 'wait' ? ['ask', 'confirm'].includes(t.status) : ['sent', 'queued', 'running'].includes(t.status)))
+    .sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));        // 🔥 급건은 맨 위(그 안에서는 최근 순 그대로)
   if (!show.length) { box.append(el('div', 'hint', state.threads.length ? '해당하는 대화가 없습니다' : '최근 대화가 없습니다 — ＋ 새 대화로 시작하세요')); return; }
   for (const t of show) {
-    const b = el('button', 'item' + (t.key === sel ? ' sel' : ''));
+    const b = el('button', 'item' + (t.key === sel ? ' sel' : '') + (t.urgent ? ' urgent' : ''));
     const top = el('div', 'top');
+    if (t.urgent) top.append(el('span', 'fire', '🔥'));
     if (t.no) top.append(el('span', 'no', 'T' + t.no));
     top.append(el('span', 'title', t.title));
     if (t.mode === 'write') top.append(el('span', 'badge w', '수정'));
@@ -341,6 +360,7 @@ function drawThread(scroll) {
   $('#tTitle').textContent = t.title;
   $('#tMode').replaceChildren(t.mode === 'write' ? el('span', 'badge w', '수정 허용') : el('span', 'badge b-sent', '읽기'));
   $('#tStatus').replaceChildren(badge(t.status));
+  $('#urgBtn').classList.toggle('on', !!t.urgent);
   const box = $('#msgs'), near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   box.replaceChildren();
   let lastDay = '';
@@ -437,6 +457,39 @@ async function sendSay(extra) {
   finally { busy = false; refreshBtns(); }
 }
 $('#saySend').onclick = () => sendSay({ text: $('#sayText').value.trim() });
+$('#urgBtn').onclick = async () => {                      // 🔥 급건 표시 — 이 PC 목록에서만
+  if (!cur) return;
+  const on = !cur.urgent;
+  try { await api('/api/urgent', { key: cur.key, on }); cur.urgent = on; $('#urgBtn').classList.toggle('on', on);
+    const t = state.threads.find(x => x.key === cur.key); if (t) t.urgent = on; drawList(); toast(on ? '급건으로 표시했습니다' : '급건 표시를 뺐습니다'); }
+  catch (e) { toast(e.message); }
+};
+/* 📝 저장해 두는 답 — 누르면 목록, 고르면 입력칸에 넣는다. 지금 칸의 글을 저장하거나 × 로 뺀다(이 PC 에만) */
+let snippets = null;
+async function openSnip(btn){
+  const box = btn.nextElementSibling, ta = document.getElementById(btn.dataset.for);
+  if (box.classList.contains('open')) { box.classList.remove('open'); return; }
+  for (const x of document.querySelectorAll('.snip.open')) x.classList.remove('open');
+  if (!snippets) { try { snippets = (await api('/api/snippets')).snippets; } catch (e) { toast(e.message); return; } }
+  const draw = () => {
+    box.replaceChildren();
+    if (!snippets.length) box.append(el('div', 'hint', '저장한 답이 없습니다'));
+    for (const text of snippets){
+      const it = el('div', 'it'), del = el('button', '', '×'); del.title = '이 답 빼기';
+      it.append(el('span', '', text), del);
+      it.onclick = () => { ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, '\n') + text : text; grow(ta); refreshBtns(); ta.focus(); box.classList.remove('open'); };
+      del.onclick = async e => { e.stopPropagation(); try { snippets = (await api('/api/snippets', { remove: text })).snippets; draw(); } catch (err) { toast(err.message); } };
+      box.append(it);
+    }
+    const add = el('button', 'add', '＋ 지금 입력칸의 글을 저장');
+    add.disabled = !ta.value.trim();
+    add.onclick = async e => { e.preventDefault(); try { snippets = (await api('/api/snippets', { add: ta.value.trim() })).snippets; draw(); toast('저장했습니다'); } catch (err) { toast(err.message); } };
+    box.append(add);
+  };
+  draw(); box.classList.add('open');
+}
+for (const b of document.querySelectorAll('.snipbtn')) b.onclick = e => { e.preventDefault(); openSnip(b); };
+document.addEventListener('click', e => { if (!e.target.closest('.snipwrap')) for (const x of document.querySelectorAll('.snip.open')) x.classList.remove('open'); });
 $('#stopBtn').onclick = () => { if (confirm('이 대화의 일을 멈추게 할까요?')) sendSay({ stop: true }); };
 
 /* ---------- 새 대화 ---------- */

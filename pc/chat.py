@@ -113,6 +113,8 @@ else:                                                      # 맥(리눅스도) �
 OWN_CFG = os.path.join(APPDATA, "config.json")
 LOG_PATH = os.path.join(LOCALDATA, "chat.log")
 HIDDEN_PATH = os.path.join(LOCALDATA, "hidden.json")      # 화면에서 지운 대화(키 목록) — 메일은 그대로, 이 PC 목록에서만 숨긴다
+URGENT_PATH = os.path.join(LOCALDATA, "urgent.json")      # 🔥 급건 표시한 대화(키 목록) — 목록 맨 위
+SNIPPETS_PATH = os.path.join(LOCALDATA, "snippets.json")  # 📝 저장해 두는 답(글 목록) — 없으면 기본 몇 개
 KEY_RE = re.compile(r"\s*\[k:[^\]\s]{1,64}\]\s*$")       # 폰이 제목 끝에 붙이는 암호 단어 — 화면에는 안 보인다
 BODY_KEY_RE = re.compile(r"^[ \t]*\[k:[^\]\s]{1,64}\][ \t\r]*$", re.M)   # 폰(Gmail) 페이지는 본문 마지막 줄에 붙인다
 PORT = int(os.environ.get("DISPATCH_CHAT_PORT") or 8620)   # 그 PC 에서 8620 이 이미 쓰이면 바꿔 띄운다
@@ -813,8 +815,14 @@ class Box:
     def threads(self):
         with self.lock:
             msgs = [dict(m) for m in self.msgs.values()] + [dict(e) for e in self.echo]
-        hidden = load_hidden()
-        return [t for t in build_threads(msgs, *local_jobs()) if t["key"] not in hidden]
+        hidden, urgent = load_hidden(), load_urgent()
+        out = []
+        for t in build_threads(msgs, *local_jobs()):
+            if t["key"] in hidden:
+                continue
+            t["urgent"] = t["key"] in urgent
+            out.append(t)
+        return out
 
 
 def load_hidden():
@@ -836,6 +844,66 @@ def hide_thread(key):
     with open(HIDDEN_PATH, "w", encoding="utf-8") as f:
         json.dump(sorted(keys), f, ensure_ascii=False, indent=1)
     return {"ok": True, "hidden": len(keys)}
+
+
+# 급건 표시와 저장해 두는 답 — 대화 지우기처럼 이 PC 에만 남긴다(메일·다른 PC 와 나누지 않는다)
+def _read_local(path, default):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def _write_local(path, data):
+    os.makedirs(LOCALDATA, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+
+
+def load_urgent():
+    got = _read_local(URGENT_PATH, [])
+    return set(got) if isinstance(got, list) else set()
+
+
+def set_urgent(key, on):
+    """🔥 급건 표시 — 목록 맨 위에 고정하고 눈에 띄게 보인다."""
+    key = str(key or "").strip()
+    if not key:
+        raise ValueError("대화가 없습니다")
+    keys = load_urgent()
+    (keys.add if on else keys.discard)(key)
+    _write_local(URGENT_PATH, sorted(keys))
+    BOX.version += 1
+    return {"ok": True, "urgent": bool(on)}
+
+
+DEFAULT_SNIPPETS = ["진행 상황을 짧게 알려 줘", "여기까지 한 것을 정리해서 보고해 줘",
+                    "추천한 것으로 진행해 줘", "고친 다음 테스트까지 돌려서 결과 알려 줘"]
+SNIPPET_MAX = 40
+
+
+def load_snippets():
+    got = _read_local(SNIPPETS_PATH, None)
+    return [str(x) for x in got if str(x).strip()] if isinstance(got, list) else list(DEFAULT_SNIPPETS)
+
+
+def edit_snippets(data):
+    """📝 저장해 두는 답 — {"add": 글} 이면 맨 앞에 넣고(같은 글은 하나만), {"remove": 글} 이면 뺀다."""
+    items = load_snippets()
+    add = str(data.get("add") or "").strip()
+    rem = str(data.get("remove") or "").strip()
+    if add:
+        if len(add) > 2000:
+            raise ValueError("저장할 글이 너무 깁니다(2000자까지)")
+        items = [add] + [x for x in items if x != add]
+    if rem:
+        items = [x for x in items if x != rem]
+    items = items[:SNIPPET_MAX]
+    _write_local(SNIPPETS_PATH, items)
+    return {"ok": True, "snippets": items}
 
 
 BOX = Box()
@@ -977,7 +1045,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "folders": list((cfg.get("run_dirs") or {}).keys()) if run["active"] else (cfg.get("workdir_keys") or []),
                 "jira_prefix": cfg.get("jira_prefix") or "",
                 "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
-                "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress")} for t in BOX.threads()],
+                "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress", "urgent")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":
             key = (parse_qs(u.query).get("key") or [""])[0]
@@ -990,6 +1058,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"progress": job_progress(job_id), "local": bool(jobs_dir())})
         if u.path == "/api/runner":                                                 # 이 PC 에서 직접 실행 — 스위치 상태
             return self._send(200, RUNNER.info())
+        if u.path == "/api/snippets":
+            return self._send(200, {"snippets": load_snippets()})
         if u.path == "/api/setup":
             cfg, src = load_cfg()
             return self._send(200, {k: cfg.get(k) for k in ("user", "login_user", "imap_host", "imap_port", "smtp_host", "smtp_port",
@@ -1011,6 +1081,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, send(data))
             if u.path == "/api/hide":
                 return self._send(200, hide_thread(data.get("key")))
+            if u.path == "/api/urgent":                                             # 🔥 급건 표시 {key, on}
+                return self._send(200, set_urgent(data.get("key"), bool(data.get("on"))))
+            if u.path == "/api/snippets":                                           # 📝 저장해 두는 답 {add} · {remove}
+                return self._send(200, edit_snippets(data))
             if u.path == "/api/refresh":
                 BOX.wake.set()
                 return self._send(200, {"ok": True})

@@ -103,3 +103,38 @@ class Progress(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LocalMarks(unittest.TestCase):
+    """🔥 급건 · 📝 저장해 두는 답 — 이 PC 의 LOCALDATA 에만 남는다."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        for name in ("LOCALDATA", "URGENT_PATH", "SNIPPETS_PATH"):
+            self.addCleanup(setattr, chat, name, getattr(chat, name))
+        chat.LOCALDATA = self.tmp
+        chat.URGENT_PATH = os.path.join(self.tmp, "urgent.json")
+        chat.SNIPPETS_PATH = os.path.join(self.tmp, "snippets.json")
+
+    def test_urgent(self):
+        self.assertEqual(chat.load_urgent(), set())
+        chat.set_urgent("T3", True)
+        chat.set_urgent("T5", True)
+        chat.set_urgent("T3", False)
+        self.assertEqual(chat.load_urgent(), {"T5"})
+        with self.assertRaises(ValueError):
+            chat.set_urgent("", True)
+
+    def test_snippets(self):
+        self.assertEqual(chat.load_snippets(), chat.DEFAULT_SNIPPETS)          # 처음엔 기본 몇 개
+        got = chat.edit_snippets({"add": "로그 먼저 보여 줘"})["snippets"]
+        self.assertEqual(got[0], "로그 먼저 보여 줘")
+        got = chat.edit_snippets({"add": chat.DEFAULT_SNIPPETS[1]})["snippets"]  # 같은 글은 맨 앞으로 하나만
+        self.assertEqual(got[0], chat.DEFAULT_SNIPPETS[1])
+        self.assertEqual(got.count(chat.DEFAULT_SNIPPETS[1]), 1)
+        got = chat.edit_snippets({"remove": "로그 먼저 보여 줘"})["snippets"]
+        self.assertNotIn("로그 먼저 보여 줘", got)
+        self.assertEqual(chat.load_snippets(), got)
+        with self.assertRaises(ValueError):
+            chat.edit_snippets({"add": "x" * 2001})
