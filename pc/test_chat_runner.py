@@ -485,6 +485,28 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.calls_made(), [])
         self.assertIn("시작하기 전에", self.replies("reply")[0].get_body(("plain",)).get_content())
 
+    def test_unanswered_question_closes_once(self):
+        """선택지로 물은 뒤 하루 넘게 답이 없으면 질문을 닫는 알림 1통(선택지 없음) — 답이 와서 다음 작업이 있거나 일주일 넘은 것은 빼고."""
+        self.turn_on()
+        ago = lambda h: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - h * 3600))
+        ask = {"question": "어느 쪽?", "multi": False, "options": ["A", "B"]}
+        base = {"source": "mail", "status": "done", "replied": True, "workdir": self.work, "prompt": "일", "mail_subject": "#c 일",
+                "ask": ask, "acked": True}
+        self.r.write_job(dict(base, id="20261013-01-a", thread=1, mail_msgid="<a@x>", finished_at=ago(25)))   # 닫힌다
+        self.r.write_job(dict(base, id="20261013-02-b", thread=2, mail_msgid="<b@x>", finished_at=ago(26)))   # 답이 왔다 ↓
+        self.r.write_job(dict(base, id="20261013-03-c", thread=2, mail_msgid="<c@x>", finished_at=ago(25), ask=None))
+        self.r.write_job(dict(base, id="20261013-04-d", thread=3, mail_msgid="<d@x>", finished_at=ago(5)))    # 아직
+        self.r.write_job(dict(base, id="20261001-05-e", thread=4, mail_msgid="<e@x>", finished_at=ago(24 * 9)))  # 너무 오래됨
+        cfg, _ = chat.load_cfg()
+        self.r.send_out(cfg)
+        closed = self.replies("closed")
+        self.assertEqual([m["In-Reply-To"] for m in closed], ["<a@x>"])
+        self.assertIsNone(closed[0]["X-Dispatch-Ask"])
+        self.assertIn("[T1]", closed[0].get_content())
+        self.r.send_out(cfg)
+        self.assertEqual(len(self.replies("closed")), 1)                       # 한 번만
+        self.assertEqual(self.r.due_asks(dict(cfg, ask_ttl_hours=0))[1], [])
+
     def test_progress_mail_once_for_long_phone_job(self):
         """몇 분 넘게 도는 폰·메일 앱 지시에 진행 메일 1통(읽음 표시로) — 게이트웨이 send_progress 와 같은 형식. 답으로 안 센다."""
         self.turn_on()

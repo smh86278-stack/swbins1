@@ -86,6 +86,8 @@ KEEP_JOBS = 200
 SEEN_KEEP = 800
 ACK_MAX_AGE = 1800
 PROGRESS_AFTER_MIN = 3            # 폰·메일 앱 지시가 이 분(分)보다 오래 돌면 진행 메일 1통(설정 progress_after_min, 0 이면 끔)
+ASK_TTL_HOURS = 24                # 선택지로 물은 뒤 답 없이 이 시간이 지나면 질문을 닫고 알림 1통(설정 ask_ttl_hours, 0 이면 끔)
+ASK_CLOSE_SILENT_DAYS = 7         # 이보다 오래된 질문은 알리지 않는다(처음 켤 때 몰아 보내지 않게)
 REPLY_TRIES = 3
 IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
 MAX_IMAGES, MAX_IMAGE_BYTES = 5, 10 * 1024 * 1024
@@ -1127,6 +1129,38 @@ class Runner:
         msg.add_alternative(reply_html(cfg, job, ask, text, footer), subtype="html")
         return msg, mid
 
+    def ask_closed_message(self, cfg, job, hours):
+        """답 기한이 지나 질문을 닫았다는 알림(선택지 없음 — '답할 것' 에서 빠진다). 게이트웨이 expire_asks 와 같은 모양."""
+        msg, mid = self._new_msg(cfg, job, "closed")
+        msg.set_content("답을 기다리던 질문을 %d시간이 지나 닫았습니다.\n늦게 답해도 이 대화는 그대로 이어집니다(번호로 답해도 됩니다). "
+                        "더 할 일이 없으면 그냥 두세요.\n\n--\n%s" % (int(hours), reply_footer(job)))
+        return msg, mid
+
+    def due_asks(self, cfg, now=None):
+        """선택지로 물은 회신 중 ask_ttl_hours 가 지나도록 답이 없는 것(대화의 가장 최근 작업만, 일주일 넘은 것은 빼고)."""
+        try:
+            hours = float(cfg.get("ask_ttl_hours", ASK_TTL_HOURS) or 0)
+        except (TypeError, ValueError):
+            hours = ASK_TTL_HOURS
+        if hours <= 0:
+            return hours, []
+        now = time.time() if now is None else now
+        seen, out = set(), []
+        for j in self.iter_jobs(newest=True):
+            th = j.get("thread")
+            newest = th is None or th not in seen
+            if th is not None:
+                seen.add(th)
+            if not newest or j.get("ask_closed") or j.get("status") != "done" or not j.get("replied") or not j.get("ask"):
+                continue
+            try:
+                age = now - datetime.strptime(j.get("finished_at") or "", "%Y-%m-%d %H:%M:%S").timestamp()
+            except ValueError:
+                continue
+            if hours * 3600 <= age < ASK_CLOSE_SILENT_DAYS * 86400:
+                out.append(j)
+        return hours, out
+
     def send_out(self, cfg, pw=None):
         """확인 메일 · 접수 신호와 진행 메일(폰·메일 앱에서 온 지시에만, 읽음 표시로) · 회신을 받은편지함에 써 넣는다. 써 넣은 건 수."""
         C = self.C
@@ -1213,6 +1247,16 @@ class Runner:
                                 conn.pop().logout()
                             except Exception:
                                 pass
+                hours, due = self.due_asks(cfg)
+                for j in due:                          # 답 없는 질문 닫기 — 잡당 1통, 실패해도 다시 안 보낸다
+                    self.update_job(j["id"], ask_closed=True)
+                    try:
+                        put(self.ask_closed_message(cfg, j, hours)[0])
+                        n += 1
+                        C.log("[실행] 질문 닫음 %s (답 기한 %d시간 지남)" % (j["id"], int(hours)))
+                    except Exception as e:
+                        C.log("[실행] 질문 닫기 알림 실패 %s — %s" % (j["id"], e))
+                        conn.clear()
             finally:
                 for c in conn:
                     try:

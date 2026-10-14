@@ -84,6 +84,16 @@ class Progress(unittest.TestCase):
                                 dict(me, id="<m2@x>", ts=350.0, thread=4, text="더 해 줘")])[0]
         self.assertEqual((len(t["msgs"]), t["status"], t["progress"], t["last_bot"]), (3, "running", pr["text"], False))
 
+    def test_closed_question_leaves_waiting(self):
+        """답 기한이 지나 닫힌 질문(kind 'closed', 선택지 없음)이 오면 '답할 것' 에서 빠진다."""
+        me = {"id": "<m1@x>", "thread": 4, "ts": 1.0, "bot": False, "mode": "read", "tag": "#c", "text": "일 해 줘", "rest": "", "refs": []}
+        rep = {"id": "<r1@x>", "thread": 4, "ts": 2.0, "bot": True, "kind": "reply", "status": "done", "mode": "read", "tag": "#c",
+               "text": "어느 쪽?", "foot": "", "rest": "", "refs": ["<m1@x>"], "ask": {"question": "어느 쪽?", "options": ["A", "B"]}}
+        self.assertEqual(chat.build_threads([dict(me), dict(rep)])[0]["status"], "ask")
+        closed = dict(rep, id="<c1@x>", ts=3.0, kind="closed", text="답을 기다리던 질문을 24시간이 지나 닫았습니다.", ask=None)
+        t = chat.build_threads([dict(me), dict(rep), closed])[0]
+        self.assertEqual((t["status"], t["ask"], len(t["msgs"])), ("done", None, 3))
+
     def test_find_transcript_by_prompt(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
