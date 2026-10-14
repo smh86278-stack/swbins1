@@ -477,7 +477,8 @@ class Runner:
                 "browser": bool(cfg.get("run_browser")), "browser_path": find_browser()[0], "npx": bool(find_tool("npx")),
                 "jira": bool(cfg.get("run_jira")), "jira_url": cfg.get("run_jira_url") or "",
                 "jira_dir": cfg.get("run_jira_dir") or "", "has_jira_token": bool(cfg.get("run_jira_token_enc")),
-                "jira_skill": cfg.get("run_jira_skill") or "", "jira_allow_net": bool(cfg.get("run_jira_allow_net"))}
+                "jira_skill": cfg.get("run_jira_skill") or "", "jira_allow_net": bool(cfg.get("run_jira_allow_net")),
+                "cost": cost_limit(cfg), "spent": spent_today(self.jobs_dir)}
 
     def configure(self, data):
         """설정 화면의 스위치·작업 폴더. 켜는 순간을 run_since 로 남긴다 — 그 전에 온 메일은 실행하지 않는다."""
@@ -515,7 +516,13 @@ class Runner:
         return self.info()
 
     def configure_extras(self, own, data):
-        """브라우저·Jira 스위치와 Jira 값. 켤 때 필요한 것이 없으면 이유와 함께 막는다."""
+        """브라우저·Jira 스위치와 Jira 값, 하루 비용 한도. 켤 때 필요한 것이 없으면 이유와 함께 막는다."""
+        if "cost" in data:
+            raw = str(data.get("cost") or "").strip()
+            try:
+                own["daily_cost_usd"] = max(0.0, float(raw)) if raw else 0.0
+            except ValueError:
+                raise ValueError("하루 비용 한도는 숫자(달러)로 넣어 주세요 — 0 이면 없음: %s" % raw)
         if "jira_url" in data:
             url = str(data.get("jira_url") or "").strip().rstrip("/")
             if url and not re.match(r"^https?://[^\s/]+", url):
@@ -553,6 +560,14 @@ class Runner:
                 if not find_tool("uvx"):
                     raise ValueError("uvx(uv)를 찾지 못했습니다 — uv 를 설치하거나, 토큰을 비우고 이 PC 의 Claude Code 에 이미 있는 jira MCP 를 쓰세요.")
             own["run_jira"] = want
+
+    def cost_block(self, cfg):
+        """이 PC 에서 직접 실행 — 하루 비용 한도(설정 daily_cost_usd, 0 이면 없음)에 닿았으면 사람이 읽을 이유, 아니면 ''."""
+        limit = cost_limit(cfg)
+        if limit <= 0:
+            return ""
+        spent = spent_today(self.jobs_dir)
+        return COST_BLOCKED % (spent, limit) if spent >= limit else ""
 
     def jira_parts(self, cfg, key, workdir, label):
         """'/jira 키' 작업의 (지시문, 폴더, 폴더 이름, 도구, 거부 목록) — 메일 지시(#cw /jira 키)와 Jira 새 티켓 감시가 같이 쓴다."""
@@ -1002,6 +1017,9 @@ class Runner:
                            client=str(msg.get("X-Dispatch-Client") or ""), retry_of=failed["id"])
                 if failed.get("thread") or thread_no:
                     job["thread"] = failed.get("thread") or thread_no
+                blocked = self.cost_block(cfg)
+                if blocked:
+                    job.update(status="error", error=blocked, policy_denied=True, finished_at=now_text())
                 self.write_job(job)
                 C.log("[실행] 다시 실행 %s ← 실패한 %s" % (jid, failed["id"]))
                 return True
@@ -1051,11 +1069,15 @@ class Runner:
             job["disallowed_tools"] = list(denied)
         if attach_dir:
             job["attach_dir"] = attach_dir
+        blocked = "" if stopped or prompt.strip() in STOP_WORDS | {"멈춤"} else self.cost_block(cfg)
         if not os.path.isdir(workdir or ""):
             job.update(status="error", error="작업 폴더를 찾을 수 없습니다: %s — ⚙ 설정에서 작업 폴더를 확인하세요." % workdir,
                        finished_at=now_text())
         elif stopped:
             job.update(status="done", result=STOPPED_BEFORE_START, finished_at=now_text())
+        elif blocked:                                 # 하루 비용 한도 — 실행하지 않고 이유만 회신('멈춤' 은 막지 않는다)
+            job.update(status="error", error=blocked, policy_denied=True, finished_at=now_text())
+            C.log("[실행] 비용 한도로 막음 %s" % jid)
         elif mode == "write" and not resume_id:
             job.update(status="awaiting_confirm", confirm_sent=False)
         self.write_job(job)
@@ -1524,6 +1546,60 @@ def read_result(path):
         if isinstance(d, dict) and ("result" in d or "is_error" in d):
             return d
     return None
+
+
+def spent_today(jobs_dir, audit_path="", sender="", now=None):
+    """오늘(이 PC 날짜) 받은 작업들의 cost_usd 합 — 작업 파일 + (게이트웨이면) 지시 실행 기록. 게이트웨이 spent_today 와 같은 셈.
+    sender 가 있으면 그 주소만."""
+    day = (now or datetime.now()).strftime("%Y-%m-%d")
+    who = (sender or "").strip().lower()
+    seen, total = set(), 0.0
+
+    def add(jid, created, frm, cost):
+        nonlocal total
+        if jid in seen:
+            return
+        seen.add(jid)
+        if str(created or "")[:10] == day and (not who or str(frm or "").strip().lower() == who) \
+                and isinstance(cost, (int, float)):
+            total += float(cost)
+    try:
+        names = [n for n in os.listdir(jobs_dir) if n.endswith(".json")] if jobs_dir else []
+    except OSError:
+        names = []
+    for n in names:
+        try:
+            with open(os.path.join(jobs_dir, n), encoding="utf-8-sig") as f:
+                j = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(j, dict) and j.get("id"):
+            add(j["id"], j.get("created_at"), j.get("mail_from"), j.get("cost_usd"))
+    try:
+        with open(audit_path, encoding="utf-8") as f:
+            for line in f:
+                if day not in line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(r, dict) and r.get("id"):
+                    add(r["id"], r.get("created"), r.get("from"), r.get("cost_usd"))
+    except (OSError, TypeError):
+        pass
+    return round(total, 4)
+
+
+def cost_limit(cfg, key="daily_cost_usd"):
+    try:
+        return max(0.0, float(cfg.get(key) or 0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+COST_BLOCKED = ("오늘 쓴 비용($%.2f)이 하루 한도($%.2f)에 닿아 새 지시를 실행하지 않았습니다 — 내일 다시 보내거나 "
+                "⚙ 설정의 하루 비용 한도를 올리세요.")
 
 
 def parse_dirs(text):

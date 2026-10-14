@@ -485,6 +485,22 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.calls_made(), [])
         self.assertIn("시작하기 전에", self.replies("reply")[0].get_body(("plain",)).get_content())
 
+    def test_daily_cost_limit_blocks_new_instruction(self):
+        """하루 비용 한도(daily_cost_usd)에 닿으면 새 지시는 실행하지 않고 이유만 회신 — 0 이면 없음."""
+        self.turn_on(daily_cost_usd=1)
+        self.r.write_job({"id": "20261014-080000-aaaa", "created_at": runner.now_text(), "status": "done", "replied": True,
+                          "cost_usd": 1.25, "workdir": self.work, "mail_subject": "#c 앞선 일"})
+        self.assertEqual(runner.spent_today(self.r.jobs_dir), 1.25)
+        add(self.box, mail("#c 오늘 일 하나 더", "")[0])
+        self.step()
+        self.assertEqual(self.calls_made(), [])                                  # claude 를 부르지 않았다
+        rep = self.replies("reply")[-1]
+        self.assertEqual(rep["X-Dispatch-Status"], "error")
+        self.assertIn("하루 한도($1.00)", rep.get_body(("plain",)).get_content())
+        self.assertEqual(self.r.info()["cost"], 1.0)
+        with self.assertRaises(ValueError):
+            self.r.configure({"cost": "다섯"})
+
     def test_unanswered_question_closes_once(self):
         """선택지로 물은 뒤 하루 넘게 답이 없으면 질문을 닫는 알림 1통(선택지 없음) — 답이 와서 다음 작업이 있거나 일주일 넘은 것은 빼고."""
         self.turn_on()

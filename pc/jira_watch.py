@@ -250,6 +250,22 @@ class JiraWatch:
 
     # ---------- 작업 넣기
 
+    def cost_block(self, cfg, where, jobs):
+        """하루 비용 한도에 닿았으면 이유(''이면 넣어도 됨). 게이트웨이로 넣을 땐 게이트웨이 설정(daily_cost_usd)과
+        그 작업·지시 실행 기록으로, 이 PC 에 넣을 땐 메신저 설정으로 센다."""
+        from chat_runner import cost_limit, spent_today
+        if where == "gateway":
+            limit = cost_limit(self.gateway_cfg(jobs))
+            if limit <= 0:
+                return ""
+            spent = spent_today(jobs, os.path.join(os.path.dirname(jobs), "job-audit.jsonl"))
+            return "오늘 쓴 비용($%.2f)이 게이트웨이 하루 한도($%.2f)에 닿아" % (spent, limit) if spent >= limit else ""
+        limit = cost_limit(cfg)
+        if limit <= 0:
+            return ""
+        spent = spent_today(self.R.jobs_dir)
+        return "오늘 쓴 비용($%.2f)이 하루 한도($%.2f)에 닿아" % (spent, limit) if spent >= limit else ""
+
     def queue_gateway(self, issue, cfg, jobs):
         """옛 폴러 queue_job 과 같은 모양 — 워커·게이트웨이가 그대로 처리한다(source 'jira-mail' 만 회신 메일을 낸다).
         제목 앞의 쓰기 태그('cw ')가 있어야 답장(번호 선택)을 게이트웨이가 지시로 알아보고 쓰기 모드가 이어진다."""
@@ -318,7 +334,7 @@ class JiraWatch:
         ignore = set(rules["ignore"])
         fresh = [i for i in issues if not reasons[i["key"]] and i["key"] not in processed and i["num"] not in ignore]
         res = {"ts": now_text(), "scanned": len(issues), "qc_skipped": sum(tally.values()), "skipped": tally,
-               "queued": [], "away_skipped": [], "seeded": [], "dry": bool(dry)}
+               "queued": [], "away_skipped": [], "cost_skipped": [], "seeded": [], "dry": bool(dry)}
         if dry:
             res["fresh"] = [i["key"] for i in fresh]
             res["candidates"] = [i["key"] for i in issues if not reasons[i["key"]]]
@@ -351,6 +367,18 @@ class JiraWatch:
             where, jobs = self.target(cfg, src)
             if not where:
                 raise ValueError("자리비움 중인데 작업을 넣을 곳이 없습니다 — 이 PC 에서 직접 실행을 켜거나 게이트웨이 PC 에서 쓰세요.")
+            why = self.cost_block(cfg, where, jobs)
+            if why:
+                # 하루 비용 한도 — 넣지 않고 처리됨으로만(내일 몰려 돌지 않게), 화면에 이유와 함께 알린다
+                mark([i["key"] for i in fresh])
+                res["cost_skipped"] = [i["key"] for i in fresh]
+                stamp = now_text()
+                st["note"] = list(st["note"]) + [{"key": i["key"], "summary": i["summary"][:80], "ts": stamp, "why": "비용 한도"}
+                                                 for i in fresh]
+                st["recent"] = list(st["recent"]) + [{"key": i["key"], "summary": i["summary"][:80], "ts": stamp, "act": "cost"}
+                                                     for i in fresh]
+                C.log("[Jira 감시] 새 티켓 %d건 — %s 처리됨으로만 적었습니다: %s" % (len(fresh), why, ", ".join(res["cost_skipped"])))
+                fresh = []
             for i in fresh[:rules["max"]]:
                 mark([i["key"]])                          # 넣기 전에 먼저 적는다 — 중간에 죽어도 같은 티켓이 두 번 들어가지 않게
                 job = self.queue_gateway(i, cfg, jobs) if where == "gateway" else self.queue_here(i, cfg)

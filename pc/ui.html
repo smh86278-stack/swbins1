@@ -339,6 +339,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div class="two half"><div class="field"><label>Jira 작업 폴더 (비우면 기본 작업 폴더)</label><input id="runJiraDir" type="text"></div>
       <div class="field"><label>Jira 스킬 이름</label><input id="runJiraSkill" type="text" placeholder="jira (예: task-input)"></div></div>
     <label class="chk"><input type="checkbox" id="runJiraNet"> curl·ssh 허용 — 스킬이 curl 로 Jira REST 를 부를 때(예: bo-workspace task-input)</label>
+    <div class="field"><label>하루 비용 한도 ($ — 비우거나 0 이면 없음. 닿으면 새 지시는 실행하지 않고 이유만 답합니다)</label><input id="runCost" type="text" inputmode="decimal" placeholder="예: 5"></div>
     <div id="runErr"></div>
     <div class="acts" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="ghost" id="runLogin">로그인 창 열기</button><button type="button" class="ghost" id="runSave">저장</button></div>
   </div>
@@ -749,6 +750,7 @@ function drawRunner(r) {
   $('#runLogin').disabled = !r.browser_path;
   $('#runJiraUrl').value = r.jira_url || ''; $('#runJiraDir').value = r.jira_dir || ''; $('#runJiraTok').value = '';
   $('#runJiraSkill').value = r.jira_skill || ''; $('#runJiraNet').checked = !!r.jira_allow_net;
+  $('#runCost').value = r.cost ? r.cost : ''; $('#runCost').title = '오늘 쓴 비용 $' + Number(r.spent || 0).toFixed(2);
   $('#runJiraTok').placeholder = r.has_jira_token ? '저장됨 — 바꿀 때만 입력' : '비우면 이 PC 의 jira MCP';
   let msg = '', cls = '';
   if (r.blocked) { msg = r.blocked; cls = 'warn'; }
@@ -767,7 +769,7 @@ async function saveRunner(enabled, done) {
     const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value,
       browser: $('#runBrowser').checked, jira: $('#runJira').checked, jira_url: $('#runJiraUrl').value,
       jira_token: $('#runJiraTok').value, jira_dir: $('#runJiraDir').value,
-      jira_skill: $('#runJiraSkill').value, jira_allow_net: $('#runJiraNet').checked });
+      jira_skill: $('#runJiraSkill').value, jira_allow_net: $('#runJiraNet').checked, cost: $('#runCost').value });
     drawRunner(r); toast(done || '저장했습니다'); poll(true);
   } catch (e) { $('#runErr').textContent = e.message; loadRunner(); }
 }
@@ -802,7 +804,8 @@ function drawAway(w) {
   if (w.error) { note.className = 'awaynote err'; $('#awayNoteTx').textContent = 'Jira 감시 — 확인 실패: ' + w.error; $('#awayNoteX').hidden = true; note.hidden = false; }
   else if (notes.length) {
     note.className = 'awaynote'; $('#awayNoteX').hidden = false; note.hidden = false;
-    $('#awayNoteTx').textContent = '새 티켓 ' + notes.length + '건 — 자리비움 꺼짐이라 직접 처리: ' + notes.map(n => n.key).join(', ');
+    const cost = notes.some(n => n.why);
+    $('#awayNoteTx').textContent = '새 티켓 ' + notes.length + '건 — ' + (cost ? '자리비움 꺼짐·비용 한도라' : '자리비움 꺼짐이라') + ' 직접 처리: ' + notes.map(n => n.key + (n.why ? '(' + n.why + ')' : '')).join(', ');
     note.title = notes.map(n => n.key + ' ' + (n.summary || '') + ' (' + (n.ts || '').slice(5, 16) + ')').join('\n');
   } else note.hidden = true;
 }
@@ -837,7 +840,7 @@ function drawJw(r) {
     if ((r.recent || []).length) {
       const ul = el('ul');
       for (const x of r.recent.slice(0, 8)) ul.append(el('li', '', (x.ts || '').slice(5, 16) + ' ' + x.key + ' ' + (x.summary || '') + ' — '
-        + (x.act === 'queued' ? '자동 처리(' + (x.where === 'gateway' ? '게이트웨이' : '이 PC') + ')' : '알림만(자리비움 꺼짐)')));
+        + (x.act === 'queued' ? '자동 처리(' + (x.where === 'gateway' ? '게이트웨이' : '이 PC') + ')' : x.act === 'cost' ? '알림만(비용 한도)' : '알림만(자리비움 꺼짐)')));
       box.append(ul);
     }
   }

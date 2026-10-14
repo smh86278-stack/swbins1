@@ -242,6 +242,25 @@ class JiraWatchTest(unittest.TestCase):
         self.assertIn("--disallowedTools", call["args"])
         self.assertEqual(os.path.normcase(call["cwd"]), os.path.normcase(self.work))
 
+    def test_cost_limit_stops_queueing(self):
+        """하루 비용 한도에 닿으면 자리비움이어도 넣지 않고 처리됨으로만 + 이유 알림 — 게이트웨이는 그 설정·작업·지시 실행 기록으로 센다."""
+        jobs = self.make_gateway()
+        today = datetime.now().strftime("%Y-%m-%d")
+        chat.write_json(os.path.join(self.gw, "inbox", "mail.local.json"),
+                        {"default_workdir": self.work, "workdir_keys": {}, "daily_cost_usd": 1})
+        with open(os.path.join(self.gw, "inbox", "job-audit.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"id": "old", "created": today + " 08:00:00", "cost_usd": 1.2}) + "\n")
+        self.enable(away=True)
+        self.w.tick()
+        self.jira.issues = [issue(40), issue(41)]
+        r = self.poll()
+        self.assertEqual((r["queued"], r["cost_skipped"]), ([], ["PROJ-40", "PROJ-41"]))
+        self.assertEqual(self.gw_jobs(jobs), [])
+        info = self.w.info()
+        self.assertEqual([(n["key"], n.get("why")) for n in info["note"]], [("PROJ-40", "비용 한도"), ("PROJ-41", "비용 한도")])
+        self.assertIn("게이트웨이 하루 한도($1.00)", self.log_text())
+        self.assertEqual(self.poll()["cost_skipped"], [])                  # 같은 티켓을 다음에 다시 넣지 않는다
+
     def test_away_on_without_target_keeps_tickets(self):
         """게이트웨이도 직접 실행도 없으면 실패로 적고 티켓은 처리됨으로 넣지 않는다(실행할 곳이 생기면 그때)."""
         self.enable(away=True)
