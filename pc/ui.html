@@ -550,8 +550,10 @@ for (const b of document.querySelectorAll('#newChips [data-mode]')) b.onclick = 
 };
 function drawFolders() {
   const box = $('#folderChips'); box.replaceChildren();
+  const home = state.default_folder || {};
   for (const f of [''].concat(state.folders || [])) {
-    const b = el('button', 'chip' + (f === folder ? ' on' : ''), f ? '@' + f : '기본 폴더');
+    const b = el('button', 'chip' + (f === folder ? ' on' : ''), f ? '@' + f : '기본 폴더' + (home.label ? ' · ' + home.label : ''));
+    if (!f) b.title = home.path ? '폴더를 고르지 않으면 여기서 돕니다 — ' + home.path : '폴더를 고르지 않으면 기본 작업 폴더에서 돕니다';
     b.onclick = () => { folder = f; drawFolders(); }; box.append(b);
   }
 }

@@ -149,6 +149,21 @@ class LocalMarks(unittest.TestCase):
         with self.assertRaises(ValueError):
             chat.edit_snippets({"add": "x" * 2001})
 
+    def test_gateway_folders_and_default(self):
+        """게이트웨이 설정을 따를 때 — 기본 폴더와 같은 곳·같은 경로의 두 번째 키는 칩에서 빼고, 기본 폴더 칩에 그 이름을 붙인다."""
+        for name in ("OWN_CFG", "GATEWAY_CFG"):
+            self.addCleanup(setattr, chat, name, getattr(chat, name))
+        chat.OWN_CFG = os.path.join(self.tmp, "own.json")
+        chat.GATEWAY_CFG = os.path.join(self.tmp, "mail.local.json")
+        chat.write_json(chat.GATEWAY_CFG, {"user": "me@x.test", "default_workdir": r"C:\work\main",
+                                           "workdir_keys": {"main": r"C:\work\main", "tools": r"C:\work\tools",
+                                                            "tools2": "C:\\work\\tools\\", "docs": r"C:\work\docs"}})
+        cfg, src = chat.load_cfg()
+        self.assertEqual((src, cfg["workdir_keys"]), ("gateway", ["tools", "docs"]))
+        self.assertEqual(chat.default_folder(cfg, False), ("main", r"C:\work\main"))
+        self.assertEqual(chat.default_folder(dict(cfg, run_workdir=r"D:\proj\shop"), True), ("shop", r"D:\proj\shop"))
+        self.assertEqual(chat.DEFAULTS["workdir_keys"], [])                     # 코드 기본값엔 이 PC 폴더 이름이 없다
+
     def test_clear_all(self):
         """🧹 전체 지우기 — 끝난 대화만 목록에서 빠지고, 일하는 중인 대화는 남고, 새 글이 오면 다시 보이고, 되돌릴 수 있다."""
         for name in ("CLEARED_PATH", "HIDDEN_PATH", "LOG_PATH", "local_jobs"):

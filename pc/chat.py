@@ -144,7 +144,7 @@ DEFAULTS = {
     # 내가 나에게 보낸 메일은 메일 규칙이 'Inbox.본인' 으로 옮긴다 — 게이트웨이와 같은 두 폴더를 본다
     "folders": ["INBOX", "Inbox.본인"],
     "tags": ["#c", "c"], "write_tags": ["#cw", "cw"],
-    "workdir_keys": ["hub", "mobile"],
+    "workdir_keys": [],                                                   # 지시에 @키 로 고를 폴더 이름(게이트웨이 PC 면 그 설정에서)
     "jira_prefix": "",
     "run_jira_url": "",                                                     # 직접 실행 Jira 처리 — 회사 값 jira_url 이 있으면 그것(각자 토큰만 넣게)
     # Jira 새 티켓 감시(jira_watch.py) 제외 규칙 — 회사마다 다르니 코드 기본값은 비우고 company.json 에 둔다
@@ -277,9 +277,27 @@ def load_cfg():
             if gw.get(k) not in (None, ""):
                 cfg[k] = gw[k]
         if isinstance(gw.get("workdir_keys"), dict):
-            cfg["workdir_keys"] = [k for k in gw["workdir_keys"] if k != "link"]
+            # 기본 폴더(default_workdir)와 같은 곳·이미 나온 곳을 가리키는 키는 칩에서 뺀다 — 기본 폴더 칩에 그 이름을 붙인다
+            norm = lambda p: os.path.normcase(os.path.normpath(str(p or ""))).rstrip("\\/")
+            home, seen, keys = norm(gw.get("default_workdir")), set(), []
+            for k, p in gw["workdir_keys"].items():
+                if norm(p) == home and home:
+                    cfg.setdefault("default_label", k)
+                elif norm(p) not in seen:
+                    seen.add(norm(p))
+                    keys.append(k)
+            cfg["workdir_keys"] = keys
+            if gw.get("default_workdir"):
+                cfg["default_path"] = gw["default_workdir"]
     cfg.update({k: v for k, v in own.items() if v not in (None, "")})
     return cfg, src
+
+
+def default_folder(cfg, active):
+    """(이름, 경로) — 폴더를 고르지 않은 지시가 도는 곳. 직접 실행 중이면 그 기본 작업 폴더, 게이트웨이면 default_workdir."""
+    path = (cfg.get("run_workdir") if active else cfg.get("default_path")) or ""
+    label = "" if active else (cfg.get("default_label") or "")
+    return label or os.path.basename(str(path).rstrip("\\/")), path
 
 
 def password(cfg):
@@ -1083,6 +1101,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "user": cfg.get("user"), "source": src, "error": BOX.error, "polled": BOX.polled, "version": BOX.version,
                 "local": bool(jobs_dir()), "runner": run, "jira_watch": RUNNER.jira.summary(),
                 "folders": list((cfg.get("run_dirs") or {}).keys()) if run["active"] else (cfg.get("workdir_keys") or []),
+                "default_folder": dict(zip(("label", "path"), default_folder(cfg, run["active"]))),
                 "jira_prefix": cfg.get("jira_prefix") or "",
                 "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
                 "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress", "urgent")} for t in BOX.threads()],
