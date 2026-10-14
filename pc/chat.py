@@ -183,7 +183,7 @@ def log(msg):
 
 def read_json(path):
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:              # 메모장·PowerShell 이 붙인 BOM 도 읽는다
             return json.load(f)
     except (OSError, ValueError):
         return None
@@ -291,6 +291,47 @@ def load_cfg():
                 cfg["default_path"] = gw["default_workdir"]
     cfg.update({k: v for k, v in own.items() if v not in (None, "")})
     return cfg, src
+
+
+def folders_info():
+    """⚙ 작업 폴더 칸 — 게이트웨이 설정을 따르는 메신저면 그 기본 폴더·키=폴더(고칠 수 있음). 아니면 직접 실행 칸을 쓴다."""
+    _cfg, src = load_cfg()
+    if src != "gateway" or not GATEWAY_CFG:
+        return {"mode": "own"}
+    gw = read_json(GATEWAY_CFG) or {}
+    keys = gw.get("workdir_keys") if isinstance(gw.get("workdir_keys"), dict) else {}
+    return {"mode": "gateway", "workdir": gw.get("default_workdir") or "", "file": GATEWAY_CFG,
+            "dirs": "\n".join("%s=%s" % kv for kv in keys.items()),
+            "company": gw.get("company_workdirs")}
+
+
+def save_gateway_folders(data):
+    """게이트웨이 설정(mail.local.json)의 기본 폴더·키=폴더를 고친다 — 게이트웨이는 폴링마다 설정을 다시 읽어 바로 따른다.
+    회사 모드(company_workdirs)를 따로 안 정했으면 기본 폴더를 따라가므로, 기본 폴더를 바꿀 때 옛 기본 폴더를 회사 폴더로 박아 둔다
+    (폰으로 회사 소스가 나가지 않게 막던 폴더가 조용히 바뀌지 않게)."""
+    if load_cfg()[1] != "gateway" or not GATEWAY_CFG:
+        raise ValueError("게이트웨이 설정을 따르는 메신저가 아닙니다 — 아래 '이 PC 에서 직접 실행' 칸에서 폴더를 정하세요.")
+    wd = str(data.get("workdir") or "").strip()
+    if not wd or not os.path.isdir(wd):
+        raise ValueError("기본 폴더가 없습니다: %s" % (wd or "(비어 있음)"))
+    dirs = chat_runner.parse_dirs(data.get("dirs"))
+    with open(GATEWAY_CFG, "rb") as f:
+        raw = f.read()
+    gw = json.loads(raw.decode("utf-8-sig"))
+    old, new = gw.get("default_workdir") or "", os.path.abspath(wd)
+    same = lambda a, b: os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+    note = ""
+    if old and not same(old, new) and gw.get("company_workdirs") is None:
+        gw["company_workdirs"] = [old]
+        note = "회사 모드 폴더는 옛 기본 폴더(%s) 그대로 둡니다." % old
+    gw["default_workdir"], gw["workdir_keys"] = new, dirs
+    txt = json.dumps(gw, ensure_ascii=False, indent=2) + "\n"
+    tmp = GATEWAY_CFG + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write((b"\xef\xbb\xbf" if raw.startswith(b"\xef\xbb\xbf") else b"") + txt.encode("utf-8"))
+    os.replace(tmp, GATEWAY_CFG)
+    log("[폴더] 게이트웨이 작업 폴더를 바꿨습니다 — 기본 %s · 키 %s%s" % (new, ", ".join(dirs) or "없음", " · " + note if note else ""))
+    return dict(folders_info(), note=note)
 
 
 def default_folder(cfg, active):
@@ -1121,6 +1162,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, RUNNER.jira.info())
         if u.path == "/api/snippets":
             return self._send(200, {"snippets": load_snippets()})
+        if u.path == "/api/folders":                                                # ⚙ 작업 폴더(게이트웨이 설정을 따를 때)
+            return self._send(200, folders_info())
         if u.path == "/api/setup":
             cfg, src = load_cfg()
             return self._send(200, {k: cfg.get(k) for k in ("user", "login_user", "imap_host", "imap_port", "smtp_host", "smtp_port",
@@ -1155,7 +1198,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, save_setup(data))
             if u.path == "/api/runner":
                 return self._send(200, RUNNER.configure(data))
-            if u.path == "/api/jira-watch":                                         # {enabled, away, 규칙…, check_now, dismiss}
+            if u.path == "/api/folders":                                            # {workdir, dirs} — 게이트웨이 설정에 저장
+                return self._send(200, save_gateway_folders(data))
+            if u.path == "/api/jira-watch":                                      # {enabled, away, 규칙…, check_now, dismiss}
                 return self._send(200, RUNNER.jira.configure(data))
             if u.path == "/api/browser-login":                                      # 직접 실행 — 전용 브라우저에 로그인해 두기
                 return self._send(200, RUNNER.browser_login())

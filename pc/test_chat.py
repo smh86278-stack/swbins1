@@ -164,6 +164,31 @@ class LocalMarks(unittest.TestCase):
         self.assertEqual(chat.default_folder(dict(cfg, run_workdir=r"D:\proj\shop"), True), ("shop", r"D:\proj\shop"))
         self.assertEqual(chat.DEFAULTS["workdir_keys"], [])                     # 코드 기본값엔 이 PC 폴더 이름이 없다
 
+    def test_save_gateway_folders(self):
+        """⚙ 작업 폴더 — 게이트웨이 설정에 기본 폴더·키=폴더를 저장(BOM 유지). 기본 폴더를 바꾸면 회사 모드 폴더는 옛 기본 폴더로 박는다."""
+        for name in ("OWN_CFG", "GATEWAY_CFG", "LOG_PATH"):
+            self.addCleanup(setattr, chat, name, getattr(chat, name))
+        chat.OWN_CFG = os.path.join(self.tmp, "own.json")
+        chat.GATEWAY_CFG = os.path.join(self.tmp, "mail.local.json")
+        chat.LOG_PATH = os.path.join(self.tmp, "chat.log")
+        main, web = os.path.join(self.tmp, "main"), os.path.join(self.tmp, "web")
+        os.makedirs(main), os.makedirs(web)
+        with open(chat.GATEWAY_CFG, "wb") as f:
+            f.write(b"\xef\xbb\xbf" + json.dumps({"user": "me@x.test", "default_workdir": main, "workdir_keys": {"main": main}}).encode())
+        self.assertEqual(chat.folders_info()["workdir"], main)
+        r = chat.save_gateway_folders({"workdir": main, "dirs": "main=%s\nweb=%s" % (main, web)})
+        self.assertEqual((r["dirs"].splitlines(), r["note"]), (["main=" + main, "web=" + web], ""))
+        with open(chat.GATEWAY_CFG, "rb") as f:
+            self.assertTrue(f.read().startswith(b"\xef\xbb\xbf"))
+        r = chat.save_gateway_folders({"workdir": web, "dirs": "main=" + main})
+        self.assertIn("회사 모드", r["note"])
+        gw = chat.read_json(chat.GATEWAY_CFG)
+        self.assertEqual((gw["default_workdir"], gw["company_workdirs"], gw["user"]), (web, [main], "me@x.test"))
+        with self.assertRaises(ValueError):
+            chat.save_gateway_folders({"workdir": os.path.join(self.tmp, "없는폴더"), "dirs": ""})
+        with self.assertRaises(ValueError):
+            chat.save_gateway_folders({"workdir": main, "dirs": "잘못된 줄"})
+
     def test_clear_all(self):
         """🧹 전체 지우기 — 끝난 대화만 목록에서 빠지고, 일하는 중인 대화는 남고, 새 글이 오면 다시 보이고, 되돌릴 수 있다."""
         for name in ("CLEARED_PATH", "HIDDEN_PATH", "LOG_PATH", "local_jobs"):

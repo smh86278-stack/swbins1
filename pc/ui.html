@@ -311,6 +311,15 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div id="setErr"></div>
     <div class="acts"><button type="button" class="ghost" id="setCancel">닫기</button><button type="submit" class="send" id="setSave">연결 확인 후 저장</button></div>
   </form>
+  <!-- 작업 폴더 — 게이트웨이 설정을 따르는 메신저일 때만(직접 실행 PC 는 아래 칸에서 정한다) -->
+  <div class="run" id="gwFolderBox" hidden>
+    <h3>작업 폴더 (게이트웨이)</h3>
+    <p>폴더를 고르지 않은 지시가 도는 <b>기본 폴더</b>와, 지시에 <code>@키</code> 로 고르는 폴더들입니다. 이 PC 게이트웨이 설정(<span id="gwFile"></span>)에 저장하고 게이트웨이가 바로 따릅니다.</p>
+    <div class="field"><label>기본 폴더</label><input id="gwDir" type="text" placeholder="C:\work\main"></div>
+    <div class="field"><label>다른 작업 폴더 (한 줄에 <code>키=폴더</code>)</label><textarea id="gwDirs" rows="3" placeholder="web=C:\work\web"></textarea></div>
+    <div id="gwErr" style="color:var(--bad);font-size:12.5px;min-height:16px"></div>
+    <div class="acts" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" id="gwSave">저장</button></div>
+  </div>
   <!-- 이 PC 에서 직접 실행(chat_runner.py) — 기본 꺼짐 -->
   <div class="run" id="runBox">
     <h3>이 PC 에서 직접 실행 <label class="switch" title="켜면 이 PC 의 Claude Code 가 내 메일함의 지시를 받아 실행합니다"><input type="checkbox" id="runOn"><span></span></label></h3>
@@ -556,7 +565,26 @@ function drawFolders() {
     if (!f) b.title = home.path ? '폴더를 고르지 않으면 여기서 돕니다 — ' + home.path : '폴더를 고르지 않으면 기본 작업 폴더에서 돕니다';
     b.onclick = () => { folder = f; drawFolders(); }; box.append(b);
   }
+  const add = el('button', 'chip', '＋'); add.title = '작업 폴더 더하기·기본 폴더 바꾸기 (⚙ 설정)';
+  add.onclick = async () => { await openSetup(); ($('#gwFolderBox').hidden ? $('#runDir') : $('#gwDirs')).scrollIntoView({block: 'center'}); };
+  box.append(add);
 }
+/* 작업 폴더 — 게이트웨이 설정을 따르는 메신저면 그 설정(mail.local.json)의 기본 폴더·키=폴더를 여기서 고친다 */
+async function loadGwFolders() {
+  $('#gwErr').textContent = '';
+  try {
+    const r = await api('/api/folders');
+    $('#gwFolderBox').hidden = r.mode !== 'gateway';
+    if (r.mode === 'gateway') { $('#gwDir').value = r.workdir || ''; $('#gwDirs').value = r.dirs || ''; $('#gwFile').textContent = r.file || ''; }
+  } catch (e) { $('#gwFolderBox').hidden = true; }
+}
+$('#gwSave').onclick = async () => {
+  $('#gwErr').textContent = '';
+  try {
+    const r = await api('/api/folders', { workdir: $('#gwDir').value, dirs: $('#gwDirs').value });
+    $('#gwDirs').value = r.dirs || ''; toast('작업 폴더를 저장했습니다' + (r.note ? ' — ' + r.note : '')); poll(true);
+  } catch (e) { $('#gwErr').textContent = e.message; }
+};
 async function sendNew(body, after) {
   if (busy) return; busy = true; refreshBtns();
   try { await api('/api/send', body); after(); toast('보냈습니다 — 회신이 오면 목록에 번호가 붙습니다'); await poll(true); }
@@ -706,7 +734,7 @@ async function openSetup(first) {
       'IMAP·SMTP 가 되는 메일이면 어디든 됩니다. 비밀번호는 이 PC 사용자만 풀 수 있게 둡니다(윈도우 DPAPI · 맥 키체인).';
   $('#sPw').placeholder = s.has_password ? '바꿀 때만 입력' : '비밀번호';
   $('#setErr').textContent = ''; $('#dlg').showModal();
-  loadRunner(); loadJw();
+  loadRunner(); loadJw(); await loadGwFolders();
 }
 /* 이 PC 에서 직접 실행 — 스위치는 바로 적용(켜는 순간 이후의 지시만 받는다) */
 function drawRunner(r) {
