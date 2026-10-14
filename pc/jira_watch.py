@@ -367,6 +367,10 @@ class JiraWatch:
             where, jobs = self.target(cfg, src)
             if not where:
                 raise ValueError("자리비움 중인데 작업을 넣을 곳이 없습니다 — 이 PC 에서 직접 실행을 켜거나 게이트웨이 PC 에서 쓰세요.")
+            if where == "gateway":                        # 넣기 전에 — 처리됨으로 적은 뒤 폴더가 없다고 실패하면 그 티켓을 잃는다
+                wd, _label = self.gateway_workdir(cfg, jobs)
+                if not wd or not os.path.isdir(wd):
+                    raise ValueError("Jira 작업 폴더를 찾을 수 없습니다: %s — ⚙ 설정의 'Jira 작업 폴더'를 넣어 주세요." % (wd or "(없음)"))
             why = self.cost_block(cfg, where, jobs)
             if why:
                 # 하루 비용 한도 — 넣지 않고 처리됨으로만(내일 몰려 돌지 않게), 화면에 이유와 함께 알린다

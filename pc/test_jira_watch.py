@@ -273,6 +273,22 @@ class JiraWatchTest(unittest.TestCase):
         self.assertNotIn("PROJ-30", self.w.state()["processed"])
         self.assertEqual(self.w.summary()["error"], info["error"])
 
+    def test_missing_gateway_folder_keeps_tickets(self):
+        """게이트웨이 작업 폴더가 없으면 처리됨으로 적기 전에 멈춘다 — 폴더를 고치면 그 티켓이 그때 들어간다."""
+        jobs = self.make_gateway()
+        chat.write_json(os.path.join(self.gw, "inbox", "mail.local.json"),
+                        {"default_workdir": os.path.join(self.tmp, "없는폴더"), "workdir_keys": {}})
+        self.enable(away=True)
+        self.w.tick()
+        self.jira.issues = [issue(50)]
+        self.w.force = True
+        self.assertIsNone(self.w.tick())
+        self.assertIn("작업 폴더를 찾을 수 없습니다", self.w.info()["error"])
+        self.assertNotIn("PROJ-50", self.w.state()["processed"])
+        chat.write_json(os.path.join(self.gw, "inbox", "mail.local.json"), {"default_workdir": self.work, "workdir_keys": {}})
+        self.assertEqual(self.poll()["queued"], ["PROJ-50"])
+        self.assertEqual(len(self.gw_jobs(jobs)), 1)
+
     def test_ignore_keys_and_dry_run(self):
         jobs = self.make_gateway()
         self.enable(away=True, ignore="34001")
