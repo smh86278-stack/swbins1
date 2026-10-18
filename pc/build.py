@@ -36,6 +36,7 @@ def main():
            "--name", "DispatchChat",
            "--add-data", os.path.join(HERE, "ui.html") + os.pathsep + ".",
            "--add-data", os.path.join(HERE, "chat-protocol.md") + os.pathsep + ".",   # 이 PC 에서 직접 실행할 때 claude 에 덧붙이는 대화 규칙
+           "--add-data", os.path.join(HERE, "browser-guard.js") + os.pathsep + ".",   # 브라우저 안전장치 훅(node 로 돈다)
            *[x for f in ("pets.js", "petwarp.js", "pets.css") for x in ("--add-data", os.path.join(PET, f) + os.pathsep + "pet")],
            "--add-data", os.path.join(PET, PET_SKIN, "plush") + os.pathsep + os.path.join("pet", "skin", "plush"),   # 인형 강아지·고양이
            *(["--add-data", COMPANY + os.pathsep + "."] if os.path.isfile(COMPANY) else []),
