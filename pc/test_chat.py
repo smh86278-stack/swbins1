@@ -164,6 +164,34 @@ class LocalMarks(unittest.TestCase):
         self.assertEqual(chat.default_folder(dict(cfg, run_workdir=r"D:\proj\shop"), True), ("shop", r"D:\proj\shop"))
         self.assertEqual(chat.DEFAULTS["workdir_keys"], [])                     # 코드 기본값엔 이 PC 폴더 이름이 없다
 
+    def test_instruction_word(self):
+        """지시 메일 본문 끝 [k:단어] — 앱 설정 key_word, 없으면 게이트웨이가 모든 지시에 단어를 요구할 때만 그 단어."""
+        for name in ("OWN_CFG", "GATEWAY_CFG"):
+            self.addCleanup(setattr, chat, name, getattr(chat, name))
+        chat.OWN_CFG = os.path.join(self.tmp, "own.json")
+        chat.GATEWAY_CFG = os.path.join(self.tmp, "mail.local.json")
+        gw = {"user": "Me@X.test", "keyed_senders": {"me@x.test": "phoneword1"}}
+        chat.write_json(chat.GATEWAY_CFG, gw)
+        cfg, src = chat.load_cfg()
+        self.assertEqual(chat.instruction_word(cfg, src), "")                    # 요구하지 않으면 붙이지 않는다
+        chat.write_json(chat.GATEWAY_CFG, dict(gw, require_word_all=True))
+        self.assertEqual(chat.instruction_word(cfg, src), "phoneword1")           # 내 주소의 keyed_senders 단어
+        chat.write_json(chat.GATEWAY_CFG, dict(gw, require_word_all=True, company_word="corpword9"))
+        self.assertEqual(chat.instruction_word(cfg, src), "corpword9")
+        self.assertEqual(chat.instruction_word(dict(cfg, key_word="own123"), src), "own123")
+
+    def test_setup_hides_key_word(self):
+        """토큰 없는 GET /api/setup 은 암호 단어 원문을 주지 않는다 — 저장할 때 비우면 그대로, '-' 면 지운다."""
+        for name in ("OWN_CFG", "GATEWAY_CFG"):
+            self.addCleanup(setattr, chat, name, getattr(chat, name))
+        chat.OWN_CFG = os.path.join(self.tmp, "own.json")
+        chat.GATEWAY_CFG = ""
+        chat.write_json(chat.OWN_CFG, {"user": "me@x.test", "key_word": "secretword"})
+        import inspect
+        src = inspect.getsource(chat.Handler.do_GET)
+        self.assertNotIn('"key_word")}', src)
+        self.assertIn('"has_key_word"', src)
+
     def test_save_gateway_folders(self):
         """⚙ 작업 폴더 — 게이트웨이 설정에 기본 폴더·키=폴더를 저장(BOM 유지). 기본 폴더를 바꾸면 회사 모드 폴더는 옛 기본 폴더로 박는다."""
         for name in ("OWN_CFG", "GATEWAY_CFG", "LOG_PATH"):

@@ -54,7 +54,7 @@ def new_id():
 # ----------------------------------------------------------------- 규칙 · Jira 조회(옛 폴러와 같은 정책)
 
 def rules_of(cfg):
-    """설정 → 감시 규칙. 프로젝트는 비우면 Jira 키 앞부분(SABANGNET- → SABANGNET), 담당자는 비우면 토큰 주인(currentUser())."""
+    """설정 → 감시 규칙. 프로젝트는 비우면 Jira 키 앞부분(PROJ- → PROJ), 담당자는 비우면 토큰 주인(currentUser())."""
     def num(k, d, lo, hi):
         try:
             return max(lo, min(hi, int(cfg.get(k) or d)))

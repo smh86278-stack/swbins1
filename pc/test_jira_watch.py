@@ -124,10 +124,10 @@ class JiraWatchTest(unittest.TestCase):
         self.assertEqual((rules["project"], rules["assignee"], rules["days"], rules["max"]), ("PROJ", "", 3, 3))
         jql = jw.build_jql(rules, today=datetime(2026, 10, 14))
         self.assertEqual(jql, 'project = "PROJ" AND assignee = currentUser() AND created >= "2026-10-11" ORDER BY created ASC')
-        rules.update(assignee="smh1205", project="")
+        rules.update(assignee="user01", project="")
         self.assertEqual(jw.build_jql(rules, today=datetime(2026, 10, 14)),
-                         'assignee = "smh1205" AND created >= "2026-10-11" ORDER BY created ASC')
-        self.assertEqual(jw.rules_of({"jira_watch_ignore": "SABANGNET-34097, 34102"})["ignore"], ["34097", "34102"])
+                         'assignee = "user01" AND created >= "2026-10-11" ORDER BY created ASC')
+        self.assertEqual(jw.rules_of({"jira_watch_ignore": "PROJ-34097, 34102"})["ignore"], ["34097", "34102"])
 
     def test_code_defaults_have_no_company_rules(self):
         """회사 전용 제외 규칙은 company.json 에만 — 코드 기본값은 비어 있다(상용 배포판은 어느 회사든 쓴다)."""
@@ -138,10 +138,10 @@ class JiraWatchTest(unittest.TestCase):
 
     def test_skip_reasons_like_old_poller(self):
         rules = {"exclude_account": "(?i)qc", "exclude_linked": "연동개발 요청"}
-        self.jira.issues = [issue(1, account="sbqctest"), issue(2, link="쇼핑몰 연동개발 요청 - 몰A"), issue(3, account="daou01")]
+        self.jira.issues = [issue(1, account="qctester1"), issue(2, link="연동개발 요청 - 몰A"), issue(3, account="user02")]
         got = jw.jira_search(URL, "t", "jql")
         self.assertEqual([jw.skip_reason(i, rules) for i in got], ["QC(계정)", "연동개발", None])
-        self.assertEqual(got[0]["account"], "sbqctest")
+        self.assertEqual(got[0]["account"], "qctester1")
         self.assertIn("/rest/api/2/search?", self.jira.calls[0][0])
 
     def test_tools_match_old_poller_config(self):
