@@ -78,7 +78,7 @@ function openMail(subject, body, rec) {
   const enc = s => encodeURIComponent(s).replace(/%0A/g, '%0D%0A');
   // 새 지시(사진 없음)는 메일 앱(iCloud)으로 — 회사 스팸 장비가 Gmail(API) 새 지시만 붙잡는다(2026-10-08 측정).
   // 이어 말하기·답하기·멈춤(답장)과 사진 메일은 Gmail 로 바로 가도 걸리지 않았다.
-  const viaApp = gOn() && !cfg.self && cfg.viaApp !== false && !(rec.thread > 0) && !(rec.files || []).length && (rec.kind === 'say' || rec.kind === 'jira');
+  const viaApp = gOn() && !cfg.self && cfg.viaApp !== false && !(rec.thread > 0) && !(rec.files || []).length && rec.kind === 'say';
   if (viaApp) {
     gloc.push({ at: Date.now(), subj: subject, text: rec.text, mode: rec.mode });
     gloc = gloc.filter(x => Date.now() - x.at < 7 * 86400e3).slice(-100); store.set('gloc', gloc);
@@ -116,12 +116,14 @@ $('#saySend').onclick = () => {
   if (!text && !files.length) return;
   if (!text) text = '사진 봐줘';                          // 사진만 보내면 이 말로
   const [first, ...rest] = text.split('\n');
-  const head = [TAG[mode]];
+  // '/jira 키' 줄이 든 새 지시는 수정 허용으로 — PC 는 쓰기 지시에서만 Jira 처리로 돌린다(옛 Jira 탭과 같게)
+  const m = !(t > 0) && /^[ \t]*\/jira[ \t]+[A-Za-z][A-Za-z0-9]+-\d+/im.test(text) ? 'write' : mode;
+  const head = [TAG[m]];
   if (t > 0) head.push('[T' + t + ']');
   else if (folder) head.push('@' + folder);             // 이어 쓰는 대화는 원래 폴더를 그대로 쓴다
   const subject = head.join(' ') + ' ' + first.trim().slice(0, 90);
   const body = (first.trim().length > 90 ? first.trim() + '\n' : '') + rest.join('\n').trim();
-  if (!openMail(subject, body, { kind: 'say', text, mode, files, thread: t > 0 ? t : '', label: (t > 0 ? 'T' + t + ' · ' : '') + (mode === 'write' ? '수정' : '읽기') + (folder && !(t > 0) ? ' @' + folder : '') })) return;
+  if (!openMail(subject, body, { kind: 'say', text, mode: m, files, thread: t > 0 ? t : '', label: (t > 0 ? 'T' + t + ' · ' : '') + (m === 'write' ? '수정' : '읽기') + (folder && !(t > 0) ? ' @' + folder : '') })) return;
   $('#sayText').value = ''; grow($('#sayText')); attach = []; drawAttach(); refresh();
 };
 
@@ -191,16 +193,10 @@ $('#ansSend').onclick = () => {
   if (gOn()) setTab('say');
 };
 
-/* ---- Jira ---- */
-$('#jiraSend').onclick = () => {
-  const n = $('#jiraNo').value.trim(); if (!n) return;
-  const key = (/^[A-Za-z]/.test(n) ? '' : (cfg.prefix || '')) + n.toUpperCase();   // 키 전체를 적었으면 앞부분을 붙이지 않는다
-  if (!openMail(TAG.write + ' /jira ' + key, '', { kind: 'jira', text: 'Jira ' + key + ' 처리 시작', mode: 'write', label: 'Jira' })) return;
-  $('#jiraNo').value = ''; refresh();
-};
-
 /* ---- 공통 ---- */
 function setTab(name) {
+  if (!document.querySelector('.tabs [data-pane="' + name + '"]')) name = 'say';   // 없앤 탭(옛 Jira)이 기억돼 있으면
+
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.pane === name);
   for (const p of document.querySelectorAll('.pane')) p.classList.toggle('on', p.id === name);
   store.set('tab', name);
@@ -211,23 +207,22 @@ function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHe
 function refresh() {
   $('#saySend').disabled = !$('#sayText').value.trim() && !attach.length;
   $('#ansSend').disabled = !(parseInt($('#ansThread').value, 10) > 0 && (picks.size || stop || $('#ansText').value.trim()));
-  $('#jiraSend').disabled = !$('#jiraNo').value.trim();
 }
 for (const id of ['#sayText', '#ansText']) $(id).addEventListener('input', e => { grow(e.target); refresh(); });
-for (const id of ['#ansThread', '#jiraNo', '#sayThread']) $(id).addEventListener('input', refresh);
+for (const id of ['#ansThread', '#sayThread']) $(id).addEventListener('input', refresh);
 
 function openSettings() {
   $('#setKey').value = cfg.key || ''; $('#setGcid').value = cfg.gcid || ''; $('#setViaApp').checked = cfg.viaApp !== false; $('#setSelf').checked = !!cfg.self;
   $('#gOff').style.display = gtok ? '' : 'none';
   $('#gHint').textContent = gtok && gtok.email ? gtok.email + ' 로 연결돼 있습니다.' : '넣고 저장하면 Google 로그인 화면이 열립니다. 그 Gmail 로 보내고, PC 의 답이 여기 말풍선으로 옵니다.';
   $('#clearSent').textContent = gOn() ? '대화 기록 비우기 (이 기기 화면에서만)' : '보낸 기록 모두 지우기 (이 기기에서만)';
-  $('#setMail').value = cfg.mail || ''; $('#setFolders').value = (cfg.folders || []).join(', '); $('#setPrefix').value = cfg.prefix || '';
+  $('#setMail').value = cfg.mail || ''; $('#setFolders').value = (cfg.folders || []).join(', ');
   $('#dlg').showModal();
 }
 $('#setBtn').onclick = openSettings;
 $('#dlg').addEventListener('close', () => {
   if ($('#dlg').returnValue !== 'ok') return;
-  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), prefix: $('#setPrefix').value.trim(), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim(), viaApp: $('#setViaApp').checked, self: $('#setSelf').checked };
+  cfg = { mail: $('#setMail').value.trim(), folders: $('#setFolders').value.split(',').map(s => s.trim().replace(/^@/, '')).filter(Boolean), key: $('#setKey').value.trim().replace(/[\s\[\]]/g, ''), gcid: $('#setGcid').value.trim(), viaApp: $('#setViaApp').checked, self: $('#setSelf').checked };
   store.set('cfg', cfg); applyCfg(); draw(); toast('저장했습니다');
   if (gOn() && cfg.mail) { if (gLive()) gPoll(); else gAuth(false); }   // 처음 넣었으면 바로 Google 로그인
 });
@@ -236,7 +231,6 @@ function applyCfg() {
   if (!(gOn() && room)) $('#who').textContent = !cfg.mail ? '설정에서 메일 주소를 넣어 주세요'
     : gOn() ? (gtok && gtok.email ? short(gtok.email) : 'Gmail') + (cfg.self ? ' · 나에게 보냄' : '') + ' · 실시간'
     : short(cfg.mail) + ' 로 보냅니다';
-  $('#jiraPrefix').textContent = cfg.prefix || '';
   if (!(cfg.folders || []).includes(folder)) folder = '';
   drawFolders();
 }
@@ -637,7 +631,6 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   $('#sayRow').style.display = $('#ansRow').style.display = 'none';     // 대화 번호는 방이 정한다
   $('#modeChips').style.display = inRoom ? 'none' : '';              // 이어 말하면 권한·폴더는 처음 그대로
   tab('answer').style.display = inRoom && r.ask ? '' : 'none';
-  tab('jira').style.display = inRoom ? 'none' : '';
   tab('say').textContent = inRoom ? '말하기' : '새 지시';
   $('.tabs').style.display = inRoom && !r.ask ? 'none' : '';      // 방 안에 질문이 없으면 탭이 하나뿐 — 줄을 숨긴다
   $('#sayThread').value = inRoom && r.no ? r.no : '';
@@ -645,7 +638,7 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   const wait = inRoom && !r.no;                        // 번호가 붙기 전엔 이어 말할 수 없다
   $('#clipBtn').style.display = wait ? 'none' : '';
   $('#sayText').disabled = wait;
-  $('#sayText').placeholder = wait ? '첫 답이 오면 이어서 말할 수 있어요' : inRoom ? '이어서 말하기' : '새로 맡길 일 (첫 줄이 제목)';
+  $('#sayText').placeholder = wait ? '첫 답이 오면 이어서 말할 수 있어요' : inRoom ? '이어서 말하기' : '새로 맡길 일 (첫 줄이 제목 · Jira 는 /jira 키)';
   const on = document.querySelector('.tabs button.on');
   if (!on || on.style.display === 'none') setTab('say');
   refresh();

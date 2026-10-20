@@ -209,7 +209,6 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
   <div class="tabs" role="tablist">
     <button data-pane="say" class="on">지시</button>
     <button data-pane="answer">답하기</button>
-    <button data-pane="jira">Jira</button>
   </div>
 
   <!-- 지시: 새 일을 맡기거나, 대화 번호를 넣어 이어서 말한다 -->
@@ -230,7 +229,7 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div class="row">
       <button class="clip" id="clipBtn" aria-label="사진 붙이기" style="display:none">📎</button>
       <input type="file" id="clipIn" accept="image/*" multiple hidden>
-      <textarea id="sayText" rows="1" placeholder="할 일을 적으세요 (첫 줄이 제목)"></textarea>
+      <textarea id="sayText" rows="1" placeholder="할 일을 적으세요 (첫 줄이 제목 · Jira 는 /jira 키)"></textarea>
       <button class="send" id="saySend" aria-label="보내기" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
   </section>
@@ -249,15 +248,6 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     </div>
     <div class="hint">메일 제목의 <b>[T번호]</b> 를 넣고 고르세요. 여러 개 고를 수 있습니다. <button class="stopbtn" id="stopBtn">멈춤</button></div>
   </section>
-
-  <!-- Jira: 티켓 번호로 jira 스킬 처리 시작(수정 허용 → PC 가 실행 확인 메일을 한 번 보낸다) -->
-  <section class="pane" id="jira">
-    <div class="row">
-      <div class="prefix"><span id="jiraPrefix"></span><input id="jiraNo" type="text" autocapitalize="characters" autocomplete="off" placeholder="번호 (설정에 키 앞부분을 넣으면 번호만)"></div>
-      <button class="send" id="jiraSend" aria-label="보내기" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-    </div>
-    <div class="hint">jira 스킬로 처리를 시작합니다. 수정 허용이라 PC 가 <b>실행 확인 메일</b>을 한 번 보냅니다 — 그 메일의 [실행] 단추를 누르세요.</div>
-  </section>
 </div>
 
 <dialog id="dlg">
@@ -268,8 +258,6 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
       <input id="setMail" type="email" autocomplete="email" placeholder="me@company.com" required></div>
     <div class="field"><label for="setFolders">작업 폴더 키 (쉼표로, 비우면 기본 폴더만)</label>
       <input id="setFolders" type="text" placeholder="hub, mobile"></div>
-    <div class="field"><label for="setPrefix">Jira 키 앞부분</label>
-      <input id="setPrefix" type="text" placeholder="PROJ-"></div>
     <div class="field"><label for="setKey">암호 단어 (폰 기본 메일이 iCloud 같은 개인 주소일 때)</label>
       <div class="row" style="display:flex;gap:6px"><input id="setKey" type="password" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="PC 에서 알려 준 단어" style="flex:1">
         <button type="button" id="setKeyShow">보기</button></div>
