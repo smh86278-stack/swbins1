@@ -116,6 +116,7 @@ CONFIRM_NO = {"2", "취소", "no", "n", "아니오", "아니요", "x", "stop", "
 GRANT_CEILING = tuple(WRITE_TOOLS) + (BROWSER_TOOL,)
 GRANT_WRITE = {"Edit", "Write", "NotebookEdit", "Bash", "Skill", "WebFetch", "WebSearch", BROWSER_TOOL}   # 고르면 대화가 수정 모드가 된다
 GRANT_OPTIONS = ["허용하고 이어서 하기", "허용하지 않음"]
+GRANT_EXTRA = "🔓 막힌 권한 허용하고 이어서 하기"   # Claude 가 먼저 물었을 때 그 선택지 끝에 붙이는 한 줄(grant_pick)
 _SAFE_RULE = re.compile(r"^[^\"'`\r\n()&|^%<>;$\\]{1,200}$")   # TOOL_RE 가 받는 괄호 속 글자(따옴표·줄바꿈·괄호 없음,
 #                                                         cmd.exe·셸이 해석하는 & | ^ % < > ; $ \ 도 없음 — 2026-10-19 보안 점검)
 
@@ -223,8 +224,8 @@ def parse_choices(text):
     return t[:m.start()].rstrip(), {"question": q, "multi": bool(d.get("multi")), "options": opts}
 
 
-def parse_answer(text, ask):
-    """번호 답('1,3' · '2번' · '1 3' · '4 이건 이렇게')을 선택지 내용으로 푼다. 번호 답이 아니면 None."""
+def answer_picks(text, ask):
+    """번호 답을 (고른 번호들, 첫 줄 번호 뒤의 말, 나머지 줄)로. 번호 답이 아니거나 없는 번호면 None."""
     if not ask or not text:
         return None
     lines = [l.strip() for l in text.splitlines() if l.strip()]
@@ -245,6 +246,15 @@ def parse_answer(text, ask):
             return None
         if i not in picked:
             picked.append(i)
+    return picked, rest, more
+
+
+def parse_answer(text, ask):
+    """번호 답('1,3' · '2번' · '1 3' · '4 이건 이렇게')을 선택지 내용으로 푼다. 번호 답이 아니면 None."""
+    got = answer_picks(text, ask)
+    if not got:
+        return None
+    picked, rest, more = got
     out = "사용자 답(번호 선택): " + " / ".join("☑ %d. %s" % (i, ask["options"][i - 1]) for i in picked)
     if not ask.get("multi") and len(picked) > 1:
         out += "\n(한 개만 고르는 질문이었지만 여러 개를 골랐다)"
@@ -345,8 +355,8 @@ def reply_body(job):
         lines = ["실행에 실패했습니다.", "", job.get("error") or ""] + (["", job["result"]] if job.get("result") else [])
     else:
         lines = [body]
-    if not ask and job.get("grant"):
-        ask = job.get("ask")                               # 권한 질문(회신 때 grant_ask 로 붙였다)
+    if job.get("grant") and job.get("ask"):
+        ask = job["ask"]                                   # 권한 질문, 또는 Claude 질문 끝에 '🔓 허용' 을 붙인 것(회신 때)
     denied = sorted({d.get("tool_name", "?") for d in (job.get("denials") or []) if isinstance(d, dict)})
     if denied and job.get("grant"):
         lines += ["", "--", "권한이 없어 막힌 도구: %s — 위에서 허용하면 그 권한만 더해 이어서 합니다" % ", ".join(denied)]
@@ -1138,19 +1148,29 @@ class Runner:
             thread_no = prev.get("thread") or thread_no
             mode = prev.get("mode") or mode           # 대화는 처음 권한 그대로(수정 대화에 #c 로 답해도 읽기로 떨어지지 않게)
             tools = prev.get("allowed_tools")
+            if prev.get("away"):
+                # 자리비움 잡(분석만)에 사람이 답했다 — 이제 사람이 있으니 평소 Jira 권한으로(jira_watch.queue_here 가 적어 둔 값)
+                tools, denied = prev.get("after_tools") or tools, prev.get("after_disallowed") or []
             if prev.get("workdir"):
                 workdir, label = prev["workdir"], prev.get("workdir_label") or label
             if said.strip().lower() in STOP_WORDS:
                 said = "멈춤"
             prompt = (parse_answer(said, prev.get("ask")) or said or prompt)[:MAX_PROMPT]
-            # 권한 질문(grant_ask)에 대한 답 — 허용이면 그 규칙을 더한 도구 목록으로, 수정 도구가 끼면 수정 모드로
-            decision = grant_answer(said) if prev.get("grant") else None
+            # 권한 질문(grant_ask)에 대한 답 — 허용이면 그 규칙을 더한 도구 목록으로, 수정 도구가 끼면 수정 모드로.
+            # Claude 질문 끝에 붙인 '🔓 허용' 줄(grant_pick)이면 그 번호를 골랐을 때만
+            if prev.get("grant") and prev.get("grant_pick"):
+                picks = answer_picks(said, prev.get("ask"))
+                decision = "allow" if picks and prev["grant_pick"] in picks[0] else None
+            else:
+                decision = grant_answer(said) if prev.get("grant") else None
             if decision == "allow":
                 tools = list(tools or READ_TOOLS)
                 tools += [r for r in prev["grant"] if r not in tools]
                 if any(grant_base(r) in GRANT_WRITE for r in prev["grant"]):
                     mode = "write"
                 prompt = "사용자가 메신저에서 권한을 허용했다: %s. 아까 권한이 없어 못 한 일을 이어서 끝내라." % ", ".join(prev["grant"])
+                if prev.get("grant_pick") and len(picks[0]) > 1:
+                    prompt += "\n" + (parse_answer(said, prev.get("ask")) or "")   # 다른 번호도 같이 골랐으면 그 답도 넘긴다
                 C.log("[실행] 권한 허용 ← %s: %s" % (prev.get("id"), ", ".join(prev["grant"])))
             elif decision == "deny":
                 prompt = "사용자가 권한을 허용하지 않았다. 그 일은 하지 말고, 권한 없이 할 수 있는 데까지만 정리해 답하라."
@@ -1399,15 +1419,19 @@ class Runner:
                         elif st in ("done", "error") and not j.get("replied"):
                             numbered(j)
                             j["ask"] = parse_choices(j.get("result") or "")[1] if st == "done" else None
-                            # Claude 가 따로 묻지 않았는데 권한 때문에 막혔으면 '허용하고 이어서 하기' 를 묻는다(grant_ask)
-                            j["grant"] = []
-                            if not j["ask"]:
-                                ask, grant = grant_ask(j)
-                                if grant:
-                                    j["ask"], j["grant"] = ask, grant
+                            # 권한 때문에 막혔으면 '허용하고 이어서 하기' 를 묻는다(grant_ask). Claude 가 먼저 물었으면 그 선택지 끝에
+                            # '🔓 막힌 권한 허용…' 한 줄을 붙인다 — 그 번호를 고르면 권한이 더해진다(게이트웨이와 같게, 2026-10-20)
+                            j["grant"], j["grant_pick"] = [], None
+                            ask, grant = grant_ask(j)
+                            if grant and not j["ask"]:
+                                j["ask"], j["grant"] = ask, grant
+                            elif grant and len(j["ask"]["options"]) < 9:
+                                j["ask"]["options"].append("%s (%s)" % (GRANT_EXTRA, ", ".join(grant)[:120]))
+                                j["grant"], j["grant_pick"] = grant, len(j["ask"]["options"])
                             msg, mid = self.reply_message(cfg, j)
                             put(msg)
-                            self.update_job(j["id"], ask=j["ask"], grant=j["grant"], replied=True, reply_msgid=mid)
+                            self.update_job(j["id"], ask=j["ask"], grant=j["grant"], grant_pick=j["grant_pick"],
+                                            replied=True, reply_msgid=mid)
                             n += 1
                             C.log("[실행] 회신 %s (%s)" % (j["id"], st))
                     except Exception as e:

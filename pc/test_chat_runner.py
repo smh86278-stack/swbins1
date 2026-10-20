@@ -320,10 +320,15 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(calls[1]["prompt"], "내용만 알려줘")
         self.assertNotIn("Write", calls[1]["args"][calls[1]["args"].index("--allowedTools") + 1:])
 
-    def test_claude_question_wins_over_grant(self):
+    def test_claude_question_keeps_grant_line(self):
+        # Claude 가 먼저 물어도 끝에 '🔓 허용' 한 줄 — 그 번호를 골라야 권한이 더해진다(게이트웨이와 같게, 2026-10-20)
         rep = self._denied_reply("#c 메모 만들어 DENYWRITE ASK")
         cfg, _ = chat.load_cfg()
-        self.assertEqual(chat.parse_message(rep.as_bytes(), cfg)["ask"]["options"], ["더 보기", "여기서 멈춤"])
+        opts = chat.parse_message(rep.as_bytes(), cfg)["ask"]["options"]
+        self.assertEqual(opts[:2], ["더 보기", "여기서 멈춤"])
+        self.assertTrue(opts[2].startswith(runner.GRANT_EXTRA))
+        self.assertEqual(runner.answer_picks("1,3 이건", {"options": opts})[0], [1, 3])
+        self.assertIsNone(runner.answer_picks("4", {"options": opts}))
 
     def test_grant_rules(self):
         rules = dict(runner.grant_rules([
