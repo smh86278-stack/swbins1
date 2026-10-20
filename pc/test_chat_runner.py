@@ -340,6 +340,12 @@ class RunnerTest(unittest.TestCase):
         # 규칙으로 못 적는 명령(따옴표)은 'Bash 전체' 를 묻지 않는다(2026-10-19 보안 점검)
         self.assertEqual(list(rules), ["Bash(npm test)", "mcp__browser"])
         self.assertEqual(runner.grant_rules([{"tool_name": "Bash", "tool_input": {"command": "dir&calc"}}]), [])
+        # Jira 쓰기는 '🔓 허용' 으로만(댓글·필드·상태) — 처음 도구 목록엔 없다(2026-10-20)
+        self.assertEqual(runner.grant_rules([{"tool_name": "mcp__jira__jira_update_issue", "tool_input": {"issue_key": "PROJ-1"}},
+                                             {"tool_name": "mcp__jira__jira_delete_issue", "tool_input": {}}]),
+                         [("mcp__jira__jira_update_issue", "Jira 필드 바꾸기 (PROJ-1)")])
+        self.assertFalse(set(runner.JIRA_WRITE) & set(runner.JIRA_TOOLS))
+        self.assertNotIn("--read-only", runner.JIRA_MCP_ARGS)
 
     def test_retry_failed_instruction(self):
         self.turn_on()
@@ -458,7 +464,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(allowed, runner.JIRA_TOOLS)                          # 브라우저를 켜 둬도 Jira 지시엔 안 붙는다
         self.assertIn("Bash(rtk curl:*)", args[args.index("--disallowedTools") + 1:])
         self.assertEqual(call["mcp"]["mcpServers"]["jira"]["env"],
-                         {"JIRA_URL": "https://jira.example.com", "JIRA_PERSONAL_TOKEN": "tok"})
+                         {"JIRA_URL": "https://jira.example.com", "JIRA_PERSONAL_TOKEN": "tok", "UV_SYSTEM_CERTS": "true"})
         self.assertIn("ABC-12", call["prompt"])                               # 작업 폴더에 jira 스킬이 없다 → 풀어 쓴 지시
         self.assertNotIn("/jira", call["prompt"])
         os.makedirs(os.path.join(self.work, ".claude", "skills", "jira"))

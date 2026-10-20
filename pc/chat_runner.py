@@ -73,7 +73,8 @@ JIRA_TOOLS = ["Read", "Write", "Bash", "Glob", "Grep", "Edit", "Skill", "Agent",
 JIRA_DENY = ["Bash(%s%s:*)" % (p, c) for c in ("curl", "wget", "Invoke-WebRequest", "Invoke-RestMethod", "iwr", "irm",
                                                "nc", "ncat", "ssh", "scp", "sftp", "ftp", "telnet") for p in ("", "rtk ")] \
     + ["Bash(rtk proxy:*)"]
-JIRA_MCP_ARGS = ["mcp-atlassian@0.23.1", "--transport", "stdio", "--read-only"]
+# 읽기 전용(--read-only)을 뺐다 — 쓰기 도구는 allowedTools 에 없으면 dontAsk 로 막히고, '🔓 허용'(JIRA_WRITE)으로만 열린다(2026-10-20)
+JIRA_MCP_ARGS = ["mcp-atlassian@0.23.1", "--transport", "stdio"]
 JIRA_NO_SKILL = ("Jira 이슈 %s 를 처리해 줘. mcp__jira__jira_get_issue 로 이슈(설명·댓글)를 읽고 무엇을 해야 하는지 정리한 뒤, "
                  "이 폴더의 코드에서 고칠 곳을 찾아. 고치기 전에 방향을 choices 로 물어봐.")   # 작업 폴더에 jira 스킬이 없을 때
 TOOL_RE = re.compile(r"^[A-Za-z0-9_]+(\([^\"'`\r\n]*\))?$")      # 명령줄에 붙이기 전에 거른다(워커 Test-JobInputs 와 같은 규칙)
@@ -113,8 +114,11 @@ CONFIRM_NO = {"2", "취소", "no", "n", "아니오", "아니요", "x", "stop", "
 # 권한 요청 — claude -p 는 dontAsk 라 허용 목록 밖 도구를 묻지 않고 거부한다(결과의 permission_denials).
 # 그 거부를 선택지 질문으로 바꿔 '허용하고 이어서 하기'를 고르면 그 권한만 더해 같은 세션을 이어 간다(게이트웨이 mail-gateway.py 와 같은 흐름).
 # 상한은 이 실행기가 쓰는 쓰기 도구 + 전용 브라우저 — 여기 없는 도구는 묻지도 않는다.
-GRANT_CEILING = tuple(WRITE_TOOLS) + (BROWSER_TOOL,)
-GRANT_WRITE = {"Edit", "Write", "NotebookEdit", "Bash", "Skill", "WebFetch", "WebSearch", BROWSER_TOOL}   # 고르면 대화가 수정 모드가 된다
+# Jira 쓰기 — 처음엔 어느 작업에도 없고, 막혔을 때 '🔓 허용' 을 골라야 그 대화에서만 열린다(댓글·필드·상태만, 게이트웨이와 같게)
+JIRA_WRITE = {"mcp__jira__jira_add_comment": "Jira 댓글 달기", "mcp__jira__jira_update_issue": "Jira 필드 바꾸기",
+              "mcp__jira__jira_transition_issue": "Jira 상태 바꾸기"}
+GRANT_CEILING = tuple(WRITE_TOOLS) + (BROWSER_TOOL,) + tuple(JIRA_WRITE)
+GRANT_WRITE = {"Edit", "Write", "NotebookEdit", "Bash", "Skill", "WebFetch", "WebSearch", BROWSER_TOOL} | set(JIRA_WRITE)   # 고르면 대화가 수정 모드가 된다
 GRANT_OPTIONS = ["허용하고 이어서 하기", "허용하지 않음"]
 GRANT_EXTRA = "🔓 막힌 권한 허용하고 이어서 하기"   # Claude 가 먼저 물었을 때 그 선택지 끝에 붙이는 한 줄(grant_pick)
 _SAFE_RULE = re.compile(r"^[^\"'`\r\n()&|^%<>;$\\]{1,200}$")   # TOOL_RE 가 받는 괄호 속 글자(따옴표·줄바꿈·괄호 없음,
@@ -147,6 +151,9 @@ def grant_rules(denials):
             path = str(inp.get("file_path") or inp.get("notebook_path") or "")
             rule, desc = name, {"Write": "파일 만들기·덮어쓰기", "Edit": "파일 고치기", "NotebookEdit": "노트북 고치기"}[name] + (
                 " (예: %s)" % path if path else "")
+        elif name in JIRA_WRITE:
+            key = str(inp.get("issue_key") or "")
+            rule, desc = name, JIRA_WRITE[name] + (" (%s)" % key if re.fullmatch(r"[A-Z][A-Z0-9_]*-\d+", key) else "")
         else:
             rule, desc = name, name
         if grant_base(rule) not in GRANT_CEILING or rule in seen:
@@ -709,7 +716,9 @@ class Runner:
         if cfg.get("run_jira") and cfg.get("run_jira_token_enc") and any(t.startswith("mcp__jira__") for t in tools):
             servers["jira"] = {"type": "stdio", "command": "uvx", "args": list(JIRA_MCP_ARGS),
                                "env": {"JIRA_URL": cfg.get("run_jira_url") or "",
-                                       "JIRA_PERSONAL_TOKEN": self.C.unprotect_secret(cfg["run_jira_token_enc"])}}
+                                       "JIRA_PERSONAL_TOKEN": self.C.unprotect_secret(cfg["run_jira_token_enc"]),
+                                       # 회사 TLS 검사 장비가 있으면 uvx 가 패키지를 못 받는다 — OS 인증서 저장소를 쓰게(2026-10-20 실측)
+                                       "UV_SYSTEM_CERTS": "true"}}
         if not servers:
             return ""
         self.C.write_json(base + ".mcp.json", {"mcpServers": servers})
