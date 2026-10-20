@@ -65,7 +65,7 @@
   프로필은 상태 폴더의 `runner/browser/profile` — 설정의 **로그인 창 열기**로 그 프로필 Chrome(없으면 윈도우 Edge)을 `127.0.0.1:9333` 디버깅 포트로 열어
   한 번 로그인해 둡니다(게이트웨이 `browser-login.bat`). 그 창이 떠 있으면 지시는 새로 띄우지 않고 거기 붙습니다(`--cdp-endpoint`).
   켤 때 npx·Chrome 이 없으면 막힙니다. 읽기 지시·Jira 지시에는 붙지 않습니다.
-- **Jira 처리(설정 스위치, 기본 꺼짐)**: 켜면 `#cw /jira 키`(화면의 Jira 처리 시작)를 게이트웨이 jira-mail 과 같은 도구
+- **Jira 처리(설정 스위치, 기본 꺼짐)**: 켜면 수정 허용으로 보낸 `/jira 키`(`#cw /jira 키`)를 게이트웨이 jira-mail 과 같은 도구
   (`mcp__jira__jira_get_issue`·`_search`·`_get_transitions` + 읽기·고치기·Bash)와 거부 목록(curl·wget·ssh 등 밖으로 내보내는 명령, `rtk` 붙은 것까지)으로 돌립니다.
   Jira 주소는 회사 값 `jira_url`(company.json)이 있으면 미리 채워집니다.
   토큰을 넣으면 `uvx mcp-atlassian@0.23.1 --read-only` 를 그 주소(`JIRA_URL`)·토큰(`JIRA_PERSONAL_TOKEN`)으로 붙이고(토큰은 메일 비밀번호처럼 DPAPI·키체인,

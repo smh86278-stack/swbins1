@@ -65,7 +65,8 @@ BROWSER_CDP = "http://127.0.0.1:9333"   # 로그인 창(이 포트로 연다)이
 # 거부 목록은 밖으로 내보내는 명령(앞부분 일치라 python -c 같은 우회까지 막지는 못한다). rtk 훅이 'rtk <명령>' 으로 바꿔 쓰므로 둘 다.
 # 스킬이 curl 로 Jira REST 를 부르면(bo-workspace task-input) 설정 run_jira_allow_net 으로 거부 목록을 뺀다.
 # Skill·Agent — 스킬이 다음 스킬로 이어 가거나(task-input → task-grilling …) 하위 에이전트에 조사를 맡길 수 있게
-JIRA_PROMPT_RE = re.compile(r"^/jira\s+([A-Z][A-Z0-9]+-\d+)\s*$")
+# 지시문 어느 줄이든 '/jira 키' 로 시작하면 — 제목이든 본문이든. 같은 줄·다른 줄의 나머지 말은 덧붙인 요청으로 넘긴다(2026-10-20)
+JIRA_PROMPT_RE = re.compile(r"^[ \t]*/jira[ \t]+([A-Za-z][A-Za-z0-9]+-\d+)\b(.*)$", re.M)
 SKILL_RE = re.compile(r"^[A-Za-z0-9][\w.-]{0,63}$")
 JIRA_TOOLS = ["Read", "Write", "Bash", "Glob", "Grep", "Edit", "Skill", "Agent",
               "mcp__jira__jira_get_issue", "mcp__jira__jira_search", "mcp__jira__jira_get_transitions"]
@@ -297,11 +298,12 @@ def reply_subject(job):
 
 
 def mailto(cfg, job, body):
-    """'한 번에 답장' 링크 — 제목(태그·대화 번호)과 본문이 채워진 메일 작성 화면. 암호 단어를 쓰면 제목 끝에 붙인다."""
+    """'한 번에 답장' 링크 — 제목(태그·대화 번호)과 본문이 채워진 메일 작성 화면. 암호 단어를 쓰면 본문 마지막 줄에 붙인다
+    (제목에 붙이면 스팸으로 빠지기 쉽다)."""
     subject = reply_subject(job)
     word = str(cfg.get("key_word") or "").strip()
     if word:
-        subject += " [k:%s]" % word
+        body = (body or "").rstrip() + "\n\n[k:%s]" % word
     return "mailto:%s?subject=%s&body=%s" % (cfg.get("user") or "", quote(subject), quote(body))
 
 
@@ -1153,9 +1155,12 @@ class Runner:
             elif decision == "deny":
                 prompt = "사용자가 권한을 허용하지 않았다. 그 일은 하지 말고, 권한 없이 할 수 있는 데까지만 정리해 답하라."
         elif mode == "write":                         # 새 쓰기 지시 — 설정에서 켠 것만 더한다(이어서 하기는 처음 도구 그대로)
-            mj = JIRA_PROMPT_RE.match(prompt)
+            mj = JIRA_PROMPT_RE.search(prompt)
             if mj and cfg.get("run_jira"):
-                prompt, workdir, label, tools, denied = self.jira_parts(cfg, mj.group(1), workdir, label)
+                rest = "\n".join(p for p in (prompt[:mj.start()].strip(), mj.group(2).strip(), prompt[mj.end():].strip()) if p)
+                prompt, workdir, label, tools, denied = self.jira_parts(cfg, mj.group(1).upper(), workdir, label)
+                if rest:
+                    prompt += "\n\n" + rest
             elif cfg.get("run_browser"):
                 tools = WRITE_TOOLS + [BROWSER_TOOL]
         with self.lock:

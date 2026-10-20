@@ -376,10 +376,10 @@ class RunnerTest(unittest.TestCase):
 
     # ---------- 전용 브라우저 · Jira (설정에서 켤 때만)
 
-    def run_write(self, subject):
+    def run_write(self, subject, body=""):
         """쓰기 지시 하나를 확인 답까지 해서 돌리고 그 claude 호출을 돌려준다."""
         n = len(self.replies("confirm"))
-        add(self.box, mail(subject)[0])
+        add(self.box, mail(subject, body)[0])
         self.step()
         conf = self.replies("confirm")[n]
         add(self.box, mail("Re: " + subject, "1", reply_to=conf["Message-ID"])[0])
@@ -459,6 +459,10 @@ class RunnerTest(unittest.TestCase):
         os.makedirs(os.path.join(self.work, ".claude", "skills", "jira"))
         open(os.path.join(self.work, ".claude", "skills", "jira", "SKILL.md"), "w").close()
         self.assertEqual(self.run_write("#cw /jira ABC-13")["prompt"], "/jira ABC-13")
+        # 본문에 있어도, 소문자 키여도 — 나머지 말은 덧붙인 요청으로(2026-10-20)
+        call = self.run_write("#cw 이거 봐줘", "/jira abc-15 급함\n테스트도")
+        self.assertEqual(call["prompt"], "/jira ABC-15\n\n이거 봐줘\n급함\n테스트도")
+        self.assertEqual(call["args"][call["args"].index("--allowedTools") + 1:call["args"].index("--disallowedTools")], runner.JIRA_TOOLS)
         self.r.configure({"enabled": True, "jira_token_clear": True})        # 토큰이 없으면 이 PC 의 jira MCP 를 쓴다(붙이지 않음)
         call = self.run_write("#cw /jira ABC-14")
         self.assertNotIn("jira", (call["mcp"] or {}).get("mcpServers", {}))

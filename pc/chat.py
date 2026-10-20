@@ -1032,11 +1032,6 @@ def compose(cfg, data, threads):
         shown = "멈춤" if data.get("stop") else "🔁 다시 실행" if data.get("retry") else ((("☑ " + " ☑ ".join(str(p) for p in sorted(set(picks)))) if picks else "") +
                                                  ("\n" if picks and text else "") + text)
         return subject, body, t.get("reply_to") or "", {"thread": t["no"], "mode": t["mode"], "tag": t["tag"], "text": shown}
-    jira = (data.get("jira") or "").strip()
-    if jira:                                        # Jira 처리 시작
-        k = jira.upper() if re.match(r"^[A-Za-z]", jira) else (cfg.get("jira_prefix") or "") + jira
-        subject = "%s /jira %s" % (tag_write, k)
-        return subject, "", "", {"thread": None, "mode": "write", "tag": tag_write, "text": "Jira %s 처리 시작" % k}
     if not text:
         raise ValueError("보낼 말이 없습니다")
     mode = "write" if data.get("mode") == "write" else "read"
