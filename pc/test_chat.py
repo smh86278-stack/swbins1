@@ -234,9 +234,10 @@ class LocalMarks(unittest.TestCase):
         done_a = {"id": "<b@x>", "thread": 1, "ts": now - 90, "bot": True, "kind": "reply", "status": "done", "mode": "read", "tag": "#c",
                   "text": "끝", "foot": "", "rest": "", "refs": ["<a@x>"], "ask": None}
         waiting = dict(me, id="<c@x>", ts=now - 80, text="아직 안 끝난 일")           # 답이 아직 없다 — 'sent' 라 남는다
-        chat.BOX.msgs = {m["id"]: m for m in (done_q, done_a, waiting)}
+        stale = dict(me, id="<e@x>", ts=now - 7 * 3600, text="어제 보내고 잊은 일")    # 'sent' 라도 6시간 넘었으면 같이 지운다
+        chat.BOX.msgs = {m["id"]: m for m in (done_q, done_a, waiting, stale)}
         chat.BOX.echo = []
-        self.assertEqual(len(chat.BOX.threads()), 2)
+        self.assertEqual(len(chat.BOX.threads()), 3)
         self.assertEqual(chat.clear_threads()["left"], 1)
         self.assertEqual([t["key"] for t in chat.BOX.threads()], ["m:<c@x>"])
         more = dict(me, id="<d@x>", thread=1, ts=time.time() + 5, text="이어서 더 해 줘")   # 지운 대화에 새 글 — 다시 보인다
@@ -244,4 +245,4 @@ class LocalMarks(unittest.TestCase):
         self.assertEqual(sorted(t["key"] for t in chat.BOX.threads()), ["T1", "m:<c@x>"])
         del chat.BOX.msgs[more["id"]]
         chat.clear_threads(undo=True)
-        self.assertEqual(len(chat.BOX.threads()), 2)
+        self.assertEqual(len(chat.BOX.threads()), 3)
