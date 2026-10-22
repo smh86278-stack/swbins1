@@ -86,7 +86,7 @@ function openMail(subject, body, rec) {
   if (gOn() && !viaApp) {                                   // Gmail 로 바로 보낸다. 연결이 끊겼으면 다시 연결하고 돌아와서 보낸다
     // 암호 단어는 제목 대신 본문 마지막 줄로 — 제목의 알 수 없는 영숫자 조각이 회사 스팸 장비 의심을 사는 것 같아서(PC 가 떼어 낸다)
     if (cfg.key) body = (body ? body + '\n\n' : '') + '[k:' + cfg.key + ']';
-    gout.push({ subject, body, files: rec.files || [], reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, at: Date.now() });
+    gout.push({ subject, body, files: rec.files || [], reply: rec.reply || gReplyTo(rec.thread), text: rec.text, mode: rec.mode, thread: rec.thread || null, room: rec.room || null, at: Date.now() });
     store.set('gout', gout); draw(); petCheer();
     if (gLive()) gPoll(); else if (gtok) gAuth(true); else gAuth(false);
     return true;
@@ -376,6 +376,12 @@ function gList() {                                         // 화면에 보일 �
   list.sort((a, b) => a.ts - b.ts);
   const byId = {}; for (const m of list) if (m.id) byId[m.id] = m;
   for (const m of list) if (m.thread) for (const r of m.refs) { const o = byId[r]; if (o && !o.thread) o.thread = m.thread; }
+  // 번호 없이 답장으로 단 말(첫 답 전에 누른 ■ 멈춤 등)은 가리키는 메일의 방으로 — 안 그러면 새 방이 생긴다(2026-10-23)
+  for (const m of list) if (!m.thread) for (const r of m.refs) {
+    const o = byId[r]; if (!o || o === m) continue;
+    if (o.thread) { m.thread = o.thread; delete m.root; break; }
+    m.root = o.root || o.id;
+  }
   for (const m of list) if (m.ack || m.prog) for (const r of m.refs) if (byId[r]) {
     byId[r].got = true;
     if (m.prog) byId[r].progLine = (m.text || '').split('\n')[0];   // 시간순이라 마지막 진행 줄이 남는다
@@ -384,7 +390,7 @@ function gList() {                                         // 화면에 보일 �
 }
 function gWaiting(list) {                                  // 내가 보내고 아직 답이 없는 대화(30분 안) — 'PC 가 일하는 중'
   const last = {};
-  for (const m of list) last[m.thread ? 'T' + m.thread : 'm:' + m.id] = m;
+  for (const m of list) last[roomKey(m)] = m;
   return Object.values(last).filter(m => !m.bot && Date.now() - m.ts < 30 * 60000);
 }
 function gReplyTo(t) {                                     // 이어 말할 때 그 대화의 마지막 봇 메일에 답장으로 단다
@@ -541,11 +547,11 @@ let gseen = store.get('gseen', {});                    // 방마다 마지막으
 let gpin = store.get('gpin', {});                      // 고정한 방 → 고정한 시각(먼저 고정한 것이 위)
 let query = '';                                        // 목록 검색어
 let ghide = store.get('ghide', {});                    // 지운 방 → 지운 시각. 그 뒤에 온 말만 다시 보인다(Gmail·PC 는 그대로)
-const roomKey = m => m.thread ? 'T' + m.thread : 'm:' + (m.id || m.ts);
+const roomKey = m => m.thread ? 'T' + m.thread : 'm:' + (m.root || m.id || m.ts);
 function gRooms(list) {
   const rooms = {}, get = (k, no) => rooms[k] || (rooms[k] = { key: k, no: no || null, msgs: [], out: [] });
   for (const m of list) { const k = roomKey(m); if (m.ts > (ghide[k] || 0)) get(k, m.thread).msgs.push(m); }
-  for (const o of gout) get(o.thread ? 'T' + o.thread : 'o:' + o.at, o.thread).out.push(o);
+  for (const o of gout) get(o.thread ? 'T' + o.thread : o.room || 'o:' + o.at, o.thread).out.push(o);   // room: 번호 전 방에서 보낸 멈춤
   const waiting = new Set(gWaiting(list).map(roomKey));
   const got = new Set(gWaiting(list).filter(m => m.got).map(roomKey));
   for (const r of Object.values(rooms)) {
@@ -648,7 +654,7 @@ function roomStop(r) {                                 // PC 가 하던 일을 �
   if (!mine.length) { toast('PC 가 받은 뒤에 멈출 수 있어요'); return; }
   if (!mine.length || !confirm('PC 가 하던 일을 지금 멈출까요?')) return;
   openMail('Re: ' + TAG.read + (r.no ? ' [T' + r.no + ']' : '') + ' 멈춤', '멈춤',
-    { kind: 'stop', text: '멈춤', mode: r.mode, thread: r.no || '', reply: mine[mine.length - 1].id });
+    { kind: 'stop', text: '멈춤', mode: r.mode, thread: r.no || '', room: r.key, reply: mine[mine.length - 1].id });
 }
 const QUICK = ['계속해', '요약만 해줘', '자세히 설명해줘', '고마워'];   // 방 안 빠른 답 — 누르면 입력칸에 채운다(보내기는 직접)
 function drawQuick(r) {
