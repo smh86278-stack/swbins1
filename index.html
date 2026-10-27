@@ -10,8 +10,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="D&amp;C 메신저">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#f7f4fc" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1a1826" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f1c19" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
@@ -20,27 +20,42 @@
    보내기만 누르면 PC 의 메일 게이트웨이가 받아 일을 시작한다. 답은 메일로 온다(메일 안의 단추로 바로 답장).
    설정에 Google 클라이언트 ID 를 넣고 연결하면 메일 앱 대신 Gmail API 로 바로 보내고, PC 의 회신을 받아 말풍선으로 띄운다.
    이 페이지에는 메일 주소·업무 내용이 들어 있지 않다 — 주소는 처음 한 번 입력하면 이 기기에만 남는다. */
+/* 「종이 노트」(2026-10-27 — 허브·PC 메신저와 같은 규칙): 미색 종이 바탕 + 먹색 글자 + 벽돌색 포인트,
+   칸은 카드 대신 가로줄, 둥근 모서리 4px 이하, 그림자·그라데이션 없음. 색 값 정본은 swbins2 tools\macro-hub\web\theme.css.
+   바탕 테마(<html data-theme>)·강조색(data-accent)은 설정에서 고르고 이 기기에 기억한다(app.js look). */
 :root{color-scheme:light dark;
-  --bg:light-dark(#f7f4fc,#1a1826);--bg2:light-dark(#fde9f3,#2a1f33);--bg3:light-dark(#e6f1ff,#1c2236);
-  --panel:light-dark(#ffffffee,#232033ee);--solid:light-dark(#fff,#252236);--soft:light-dark(#f3effb,#2c2840);
-  --text:light-dark(#2f2b45,#ece8fa);--muted:light-dark(#8781a0,#9a94b3);--line:light-dark(#ebe4f6,#363150);
-  --accent:light-dark(#8a72ee,#b0a0ff);--accent2:light-dark(#ef8fbf,#f2a3c8);--accentsoft:light-dark(#eee9ff,#332c52);
-  --onaccent:light-dark(#fff,#1d1830);--warn:light-dark(#d98a2b,#f2b067);--ok:light-dark(#2fa57d,#5fd3a6);
-  --shadow:0 2px 12px light-dark(rgba(110,90,170,.10),rgba(0,0,0,.35));
+  --bg:light-dark(#f4efe6,#1f1c19);--solid:light-dark(#fffaf2,#27231f);--panel:var(--bg);--soft:light-dark(#ece5d9,#2b2722);
+  --text:light-dark(#2b2723,#ece5da);--muted:light-dark(#6a6157,#b3a998);--line:light-dark(#ddd3c3,#3a342e);
+  --rule:light-dark(#2b2723,#ece5da);--field:light-dark(#8c8276,#8a8074);
+  --accent:light-dark(#9a3f1d,#d9875f);--accentsoft:color-mix(in srgb,var(--accent) 10%,var(--bg));--onaccent:var(--bg);
+  --warn:light-dark(#9a6412,#d9a55a);--ok:light-dark(#3f6b3a,#8fbb86);--bad:light-dark(#b42318,#f08a7a);
+  --serif:'Gowun Batang','AppleMyungjo','Batang',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;
 }
+/* 바탕 테마 — paper(종이 노트)는 위 :root 그대로 */
+:root[data-theme=white]{--bg:light-dark(#fafaf8,#1b1b1d);--solid:light-dark(#ffffff,#232326);--soft:light-dark(#efefec,#28282b);
+  --text:light-dark(#222222,#ececec);--muted:light-dark(#62625f,#a9a9ad);--line:light-dark(#e2e2de,#353538);--rule:var(--text);--field:light-dark(#8a8a86,#7e7e84)}
+:root[data-theme=slate]{--bg:light-dark(#eef1f4,#181c21);--solid:light-dark(#fafbfc,#1f252c);--soft:light-dark(#e2e7ec,#252c34);
+  --text:light-dark(#1e2833,#e3e8ee);--muted:light-dark(#586472,#9ba8b5);--line:light-dark(#d2d9e0,#323b45);--rule:var(--text);--field:light-dark(#7b8795,#748191)}
+:root[data-theme=kraft]{--bg:light-dark(#e9dec9,#221d16);--solid:light-dark(#f5ecdc,#2a241b);--soft:light-dark(#ded1b9,#302920);
+  --text:light-dark(#2e2418,#efe4cf);--muted:light-dark(#6b5c47,#b6a68b);--line:light-dark(#cfbfa3,#3e3527);--rule:var(--text);--field:light-dark(#8a7860,#8b7a60)}
+/* 강조색 — brick(벽돌)은 위 :root 그대로 */
+:root[data-accent=ink]{--accent:light-dark(#2f5283,#8fb3e0)}
+:root[data-accent=pine]{--accent:light-dark(#2f6b4f,#7fc0a0)}
+:root[data-accent=plum]{--accent:light-dark(#7b3a6b,#d494c4)}
+:root[data-accent=ochre]{--accent:light-dark(#7d5a12,#d8b363)}
+:root[data-accent=mono]{--accent:var(--text)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
-body{margin:0;color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",sans-serif;
-  background:radial-gradient(700px 360px at 0% -10%,var(--bg2),transparent 60%),radial-gradient(600px 360px at 100% 0%,var(--bg3),transparent 55%),var(--bg);
-  display:flex;flex-direction:column;min-height:100dvh}
+body{margin:0;color:var(--text);font:16px/1.5 var(--sans);background:var(--bg);display:flex;flex-direction:column;min-height:100dvh}
 button,input,textarea{font:inherit;color:inherit}
 header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
-  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.logo{width:32px;height:32px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;flex:none}
-.logo svg{width:18px;height:18px}
-h1{font-size:17px;margin:0;font-weight:800}
+  background:var(--bg);border-bottom:1px solid var(--line)}
+.logo{width:26px;height:26px;display:grid;place-items:center;flex:none;color:var(--accent)}
+.logo svg{width:20px;height:20px}
+h1{font:700 18px/1.25 var(--serif);margin:0}
 .sub{color:var(--muted);font-size:12px}
-.icon-btn{margin-left:auto;border:1px solid var(--line);background:var(--solid);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:700}
+.icon-btn{margin-left:auto;border:1px solid var(--field);background:transparent;border-radius:3px;padding:4px 10px;font-size:14px;font-weight:600}
 
 /* 보낸 기록 — 말풍선 */
 #log{flex:1;overflow:auto;padding:14px 16px 8px;display:flex;flex-direction:column;gap:10px}
@@ -48,149 +63,156 @@ h1{font-size:17px;margin:0;font-weight:800}
 #log::after{content:"";flex:none;height:0}
 body:has(#petStage:not(.off)) #log::after{height:96px}
 .empty{margin:auto;text-align:center;color:var(--muted);font-size:14px;max-width:300px}
-.empty b{color:var(--text)}
-.day{align-self:center;font-size:11px;color:var(--muted);background:var(--soft);border-radius:99px;padding:2px 10px}
+.empty b{color:var(--text);font-family:var(--serif)}
+.day{align-self:stretch;display:flex;align-items:center;gap:10px;font:12px/1.4 var(--serif);color:var(--muted)}
+.day::before,.day::after{content:"";flex:1;border-top:1px solid var(--line)}
 .tail{align-self:center;font-size:12px;color:var(--muted);text-align:center}
 .tail a{color:var(--accent);font-weight:700;text-decoration:none;margin-left:6px}
 /* Gmail 로 주고받을 때 — PC(봇) 말풍선은 왼쪽 */
 .msg.bot{align-self:flex-start;align-items:flex-start}
-.bubble.bot{background:var(--solid);color:var(--text);border:1px solid var(--line);border-radius:18px 18px 18px 6px}
+.bubble.bot{background:var(--solid);color:var(--text);border:1px solid var(--line)}
 .bubble.wait{opacity:.55}
 .bubble.typing{color:var(--muted);font-size:14px}
 .ask{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:5px;align-items:flex-start;white-space:normal}
-.ask .q{font-weight:800;font-size:14px}
-.opt{border:1px solid var(--line);background:var(--accentsoft);color:var(--accent);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:700;text-align:left}
-.opt.on{background:var(--accent);color:var(--onaccent);border-color:var(--accent)}
-#gbar{display:none;margin:8px 16px 0;padding:8px 12px;border-radius:14px;font-size:13px;align-items:center;gap:8px;
-  background:color-mix(in srgb,var(--warn) 12%,var(--solid));border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line))}
+.ask .q{font-weight:700;font-size:14px;font-family:var(--serif)}
+.opt{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:3px;padding:6px 12px;font-size:14px;font-weight:600;text-align:left}
+.opt.on{background:var(--accentsoft);color:var(--text);border-color:var(--accent)}
+#gbar{display:none;margin:8px 16px 0;padding:8px 12px;border-radius:3px;font-size:13px;align-items:center;gap:8px;
+  background:color-mix(in srgb,var(--warn) 10%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line));border-left-width:3px}
 #gbar.on{display:flex}
 #gbar button{margin-left:auto;flex:none}
-/* 대화방 목록(카톡처럼) */
-.room{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:1px solid var(--line);background:var(--solid);border-radius:16px;
-  padding:10px 12px;box-shadow:var(--shadow);flex:none}
+/* 대화방 목록 — 카드 대신 가로줄 */
+#log:has(> .room){gap:0}
+#log:has(> .room) > .tail{margin-top:10px}
+.room{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;
+  background:transparent;border-radius:0;padding:11px 10px;flex:none}
 .room .tagchip{flex:none;margin-top:3px}
 .rbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .rtop,.rbot{display:flex;gap:6px;align-items:center;min-width:0}
-.rtitle{flex:1;min-width:0;font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rtime{flex:none;font-size:11px;color:var(--muted)}
+.rtitle{flex:1;min-width:0;font:700 15.5px/1.35 var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtime{flex:none;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
 .rlast{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rst{flex:none;font-size:11px;font-weight:800;border-radius:99px;padding:1px 7px;background:var(--soft);color:var(--muted)}
-.rst.ask{background:var(--accentsoft);color:var(--accent)}.rst.err{color:var(--warn)}.rst.busy{color:var(--ok)}
-.dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--accent2)}
-.unread{color:var(--accent2);font-weight:800}
+.rst{flex:none;font-size:11px;font-weight:700;border-radius:2px;padding:0 5px;border:1px solid var(--line);color:var(--muted)}
+.rst.ask{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}.rst.err{color:var(--bad)}.rst.busy{color:var(--ok)}
+.dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.unread{color:var(--accent);font-weight:700}
 .tail.warn{color:var(--warn)}
 .quick{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;scrollbar-width:none}
 .quick .chip{flex:none}
 .typingrow{display:flex;gap:8px;align-items:center}
 /* 목록 편집(여러 방 지우기) */
-.chk{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:900;color:var(--onaccent);margin-top:1px}
-.room.sel{border-color:var(--accent);background:var(--accentsoft)}
+.chk{flex:none;width:20px;height:20px;border-radius:3px;border:1.5px solid var(--field);display:grid;place-items:center;font-size:12px;font-weight:900;color:var(--onaccent);margin-top:2px}
+.room.sel{background:var(--accentsoft);border-left-color:var(--accent)}
 .room.sel .chk{background:var(--accent);border-color:var(--accent)}
-#editBar{display:none;gap:8px;position:sticky;bottom:0;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border-top:1px solid var(--line);padding:10px 12px calc(env(safe-area-inset-bottom) + 10px)}
+#editBar{display:none;gap:8px;position:sticky;bottom:0;background:var(--bg);
+  border-top:2px solid var(--rule);padding:10px 12px calc(env(safe-area-inset-bottom) + 10px)}
 #editBar.on{display:flex}
 #editBar .btn{flex:1}
-#editBar .btn.danger{background:var(--warn);border:0;color:#fff}
+#editBar .btn.danger{background:var(--bad);border-color:var(--bad);color:var(--bg)}
 #editBar .btn:disabled{opacity:.45}
 /* PC 답 보기 좋게(표·목록·코드) · 긴 답 접기 */
 .bubble.md{white-space:normal}
-.md .h{font-weight:800;margin:6px 0 2px}
+.md .h{font-weight:700;margin:6px 0 2px;font-family:var(--serif)}
 .md .li{display:flex;gap:6px}
 .md .bul{flex:none;color:var(--muted)}
 .md .sp{height:6px}
-.md code{font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--soft);border-radius:6px;padding:1px 5px;overflow-wrap:anywhere}
+.md code{font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--soft);border-radius:2px;padding:1px 5px;overflow-wrap:anywhere}
 .md td code{white-space:nowrap;overflow-wrap:normal}      /* 표 안 코드는 가르지 않는다(표는 옆으로 밀린다) */
-.md pre{background:var(--soft);border-radius:10px;padding:8px 10px;overflow-x:auto;margin:6px 0}
+.md pre{background:var(--soft);border-radius:3px;padding:8px 10px;overflow-x:auto;margin:6px 0}
 .md pre code{background:none;padding:0;white-space:pre;word-break:normal}
 .md .tbl{overflow-x:auto;margin:6px 0;max-width:100%}
 .md table{border-collapse:collapse;font-size:13px}
 .md th,.md td{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
 .md th{background:var(--soft);white-space:nowrap}
 .mdbody.fold{max-height:300px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
-.more{border:0;background:none;color:var(--accent);font-weight:800;font-size:13px;padding:6px 0 0}
+.more{border:0;background:none;color:var(--accent);font-weight:700;font-size:13px;padding:6px 0 0}
 /* 방 고정 · 검색 */
 #searchBar{display:none;padding:10px 16px 0}
 #searchBar.on{display:block}
-#searchBar input{border-radius:99px;padding:8px 14px;font-size:16px}
+#searchBar input{border-radius:0;border:0;border-bottom:1px solid var(--field);background:transparent;padding:8px 2px;font-size:16px}
 .pin{flex:none;font-size:12px}
 /* 사진 붙이기 */
-.clip{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--solid);font-size:19px;display:grid;place-items:center}
+.clip{flex:none;width:44px;height:44px;border-radius:3px;border:1px solid var(--field);background:transparent;font-size:19px;display:grid;place-items:center}
 #attPrev{display:flex;gap:8px;margin-bottom:8px;overflow-x:auto;padding-top:6px}
 .thumb{position:relative;flex:none}
-.thumb img{width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block}
+.thumb img{width:56px;height:56px;object-fit:cover;border-radius:3px;border:1px solid var(--line);display:block}
 .thumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--text);color:var(--bg);font-size:11px;line-height:20px;padding:0}
-.back{border:0;background:none;font-size:30px;line-height:1;padding:0 2px 4px 0;color:var(--accent);font-weight:600}
+.back{border:0;background:none;font-size:30px;line-height:1;padding:0 2px 4px 0;color:var(--text);font-weight:400}
 header .ttl{min-width:0;flex:1}
 header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .msg{align-self:flex-end;max-width:85%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
-.bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--onaccent);border-radius:18px 18px 6px 18px;padding:9px 13px;
-  white-space:pre-wrap;word-break:break-word;box-shadow:var(--shadow)}
+.bubble{background:var(--accentsoft);color:var(--text);border-radius:4px;padding:9px 13px;white-space:pre-wrap;word-break:break-word}
 .meta{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:center}
-.tagchip{font-size:10.5px;font-weight:800;border-radius:99px;padding:0 7px;background:var(--accentsoft);color:var(--accent)}
-.tagchip.w{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.tagchip{font-size:10.5px;font-weight:700;border-radius:2px;padding:0 5px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));color:var(--accent)}
+.tagchip.w{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));color:var(--warn)}
 .again{border:0;background:none;color:var(--accent);font-size:11px;font-weight:700;padding:0}
 
 /* 입력부 */
-.composer{position:sticky;bottom:0;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border-top:1px solid var(--line);padding:8px 12px calc(env(safe-area-inset-bottom) + 10px)}
-.tabs{display:flex;gap:4px;background:var(--soft);border:1px solid var(--line);border-radius:99px;padding:3px;margin-bottom:8px}
-.tabs button{flex:1;border:0;background:transparent;border-radius:99px;padding:6px 0;font-size:14px;font-weight:700;color:var(--muted)}
-.tabs button.on{background:var(--solid);color:var(--accent);box-shadow:var(--shadow)}
+.composer{position:sticky;bottom:0;background:var(--bg);border-top:2px solid var(--rule);padding:8px 12px calc(env(safe-area-inset-bottom) + 10px)}
+.tabs{display:flex;gap:16px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.tabs button{border:0;border-bottom:2px solid transparent;background:transparent;border-radius:0;padding:4px 2px 6px;margin-bottom:-1px;font-size:14px;font-weight:600;color:var(--muted)}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent);font-weight:700}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.chip{border:1px solid var(--line);background:var(--solid);border-radius:99px;padding:4px 11px;font-size:13px;font-weight:700;color:var(--muted)}
-.chip.on{background:var(--accentsoft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
-.chip.on.w{background:color-mix(in srgb,var(--warn) 16%,transparent);border-color:color-mix(in srgb,var(--warn) 50%,var(--line));color:var(--warn)}
+.chip{border:1px solid var(--line);background:transparent;border-radius:3px;padding:3px 10px;font-size:13px;font-weight:600;color:var(--muted)}
+.chip.on{background:var(--accentsoft);border-color:var(--accent);color:var(--text)}
+.chip.on.w{background:color-mix(in srgb,var(--warn) 12%,var(--bg));border-color:var(--warn);color:var(--text)}
 .row{display:flex;gap:8px;align-items:flex-end}
-textarea,input[type=text],input[type=email],input[type=number]{width:100%;background:var(--solid);border:1px solid var(--line);border-radius:18px;padding:9px 13px;outline:none;
+textarea,input[type=text],input[type=email],input[type=number],input[type=password]{width:100%;background:var(--solid);border:1px solid var(--line);border-radius:3px;padding:9px 12px;outline:none;
   font-size:16px}  /* 16px 미만이면 iOS 가 확대한다 */
-textarea{resize:none;max-height:140px;min-height:42px}
-textarea:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
-.send{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--onaccent);
-  display:grid;place-items:center;box-shadow:var(--shadow)}
-.send:disabled{opacity:.4}
+textarea{resize:none;max-height:140px;min-height:44px}
+textarea:focus,input:focus{border-color:var(--text)}
+.send{flex:none;width:44px;height:44px;border-radius:3px;border:1px solid var(--rule);background:var(--rule);color:var(--bg);display:grid;place-items:center}
+.send:disabled{opacity:.35}
 .send svg{width:20px;height:20px}
 .pane{display:none}.pane.on{display:block}
 .picks{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
-.pick{border:1px solid var(--line);background:var(--solid);border-radius:14px;padding:9px 0;font-size:16px;font-weight:800;color:var(--muted);display:flex;gap:5px;justify-content:center;align-items:center}
-.pick.on{background:var(--accentsoft);border-color:var(--accent);color:var(--accent)}
-.pick .box{width:16px;height:16px;border-radius:5px;border:2px solid currentColor;display:grid;place-items:center;font-size:11px;line-height:1}
+.pick{border:1px solid var(--line);background:transparent;border-radius:3px;padding:9px 0;font:700 16px/1.2 var(--serif);color:var(--muted);display:flex;gap:5px;justify-content:center;align-items:center}
+.pick.on{background:var(--accentsoft);border-color:var(--accent);color:var(--text)}
+.pick .box{width:16px;height:16px;border-radius:2px;border:1.5px solid currentColor;display:grid;place-items:center;font-size:11px;line-height:1;font-family:var(--sans)}
 .inline{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-.inline label{font-size:13px;color:var(--muted);white-space:nowrap;font-weight:700}
-.prefix{display:flex;align-items:center;background:var(--solid);border:1px solid var(--line);border-radius:18px;padding-left:13px;flex:1}
+.inline label{font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600}
+.prefix{display:flex;align-items:center;background:var(--solid);border:1px solid var(--line);border-radius:3px;padding-left:12px;flex:1}
 .prefix span{color:var(--muted);font-weight:700}
 .prefix input{border:0;box-shadow:none!important;background:transparent;padding-left:2px}
 .hint{font-size:12px;color:var(--muted);margin:6px 2px 0}
-.stopbtn{border:1px solid var(--line);background:var(--solid);border-radius:99px;padding:5px 12px;font-size:13px;font-weight:700;color:var(--muted)}
-.stopbtn.on{border-color:var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.stopbtn{border:1px solid var(--field);background:transparent;border-radius:3px;padding:3px 10px;font-size:13px;font-weight:600;color:var(--muted)}
+.stopbtn.on{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--bg))}
 
 /* 설정 */
-dialog{border:0;border-radius:20px;padding:0;width:min(420px,calc(100vw - 32px));background:var(--solid);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.3)}
-dialog::backdrop{background:rgba(20,15,40,.35)}
+dialog{border:1px solid var(--line);border-top:2px solid var(--rule);border-radius:2px;padding:0;width:min(420px,calc(100vw - 32px));background:var(--solid);color:var(--text)}
+dialog::backdrop{background:rgba(30,25,20,.4)}
 .dlg{padding:18px}
-.dlg h2{margin:0 0 4px;font-size:17px}
+.dlg h2{margin:0 0 4px;font:700 20px/1.3 var(--serif)}
 .dlg p{margin:0 0 12px;color:var(--muted);font-size:13px}
-.field{margin-bottom:12px}
+.field{margin-bottom:14px}
 .field label{display:block;font-size:13px;font-weight:700;margin-bottom:4px}
 .dlg .actions{display:flex;gap:8px;justify-content:flex-end}
-.btn{border:1px solid var(--line);background:var(--solid);border-radius:99px;padding:8px 16px;font-weight:700}
-.btn.pri{background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:var(--onaccent)}
+.btn{border:1px solid var(--field);background:transparent;border-radius:3px;padding:7px 16px;font-weight:600}
+.btn.pri{background:var(--rule);border-color:var(--rule);color:var(--bg)}
+.dlg input[type=checkbox]{accent-color:var(--text)}
+.dlg button[type=button]:not(.btn){border:1px solid var(--field);background:transparent;border-radius:3px;padding:0 12px}
+/* 바탕 테마 · 강조색 고르기 */
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatches button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:transparent;border-radius:3px;padding:5px 10px;font-size:13px;font-weight:600;color:var(--muted)}
+.swatches button.on{border-color:var(--text);color:var(--text);background:var(--bg)}
+.swatches i{width:13px;height:13px;border-radius:2px;border:1px solid var(--line);flex:none}
 #toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 64px);transform:translate(-50%,-10px);opacity:0;background:var(--text);color:var(--bg);
-  padding:8px 14px;border-radius:14px;font-size:14px;transition:.25s;pointer-events:none;max-width:85vw;text-align:center}
+  padding:8px 14px;border-radius:3px;font-size:14px;transition:.25s;pointer-events:none;max-width:85vw;text-align:center}
 #toast.show{opacity:.95;transform:translate(-50%,0)}
 /* 인형 강아지·고양이(D&C 허브와 같은 그림, pet/) — 머리줄 아래. 누르면 쓰다듬기, 보내면 반긴다 */
 .petstage{position:fixed;inset:0;z-index:4;pointer-events:none}
 .petstage.off{display:none}
 .petstage .pet{width:84px;position:absolute;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
-.petstage .pet.dragging{filter:drop-shadow(0 8px 10px rgba(90,60,140,.35));transition:none}
+.petstage .pet.dragging{filter:drop-shadow(0 8px 10px rgba(40,30,20,.3));transition:none}
 .msg .meta .del{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;padding:0 4px;cursor:pointer}
-.field select{width:100%;font:inherit;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.field select{width:100%;font:inherit;padding:9px 10px;border-radius:3px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
 </style>
 <link rel="stylesheet" href="pet/pets.css">
 </head>
 <body>
 <header>
   <button class="back" id="backBtn" aria-label="대화 목록으로" style="display:none">‹</button>
-  <div class="logo" id="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg></div>
+  <div class="logo" id="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg></div>
   <div class="ttl"><h1 id="ttl">D&amp;C 메신저</h1><div class="sub" id="who">메일로 일을 맡깁니다</div></div>
   <button class="icon-btn" id="pinBtn" aria-label="이 대화 고정" style="display:none">고정</button>
   <button class="icon-btn" id="delBtn" aria-label="이 대화 지우기" style="display:none">지우기</button>
@@ -273,6 +295,10 @@ dialog::backdrop{background:rgba(20,15,40,.35)}
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="dogBreed"></select><select id="catBreed"></select></div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-top:8px"><input type="checkbox" id="petShow"> 화면에 보이기</label></div>
+    <div class="field"><label>바탕 (이 기기에만 기억)</label>
+      <div class="swatches" id="lookTheme"></div></div>
+    <div class="field"><label>강조색</label>
+      <div class="swatches" id="lookAccent"></div></div>
     <div class="field"><button type="button" class="btn" id="clearSent" style="width:100%">보낸 기록 모두 지우기 (이 기기에서만)</button></div>
     <div class="actions"><button class="btn" value="cancel" formnovalidate>닫기</button><button class="btn pri" value="ok">저장</button></div>
   </form>

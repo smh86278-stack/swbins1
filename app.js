@@ -19,6 +19,33 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(KEYP + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(KEYP + k, JSON.stringify(v)); } catch (e) {} },
 };
+/* ---- 바탕 테마 · 강조색 — 허브 꾸미기와 같은 이름·색(정본 swbins2 tools\macro-hub\web\theme.css). 견본 칸은 [라이트, 다크] ---- */
+const LOOK_THEMES = { paper: ['종이 노트', '#f4efe6', '#1f1c19'], white: ['흰 종이', '#fafaf8', '#1b1b1d'],
+  slate: ['청회색', '#eef1f4', '#181c21'], kraft: ['크라프트지', '#e9dec9', '#221d16'] };
+const LOOK_ACCENTS = { brick: ['벽돌', '#9a3f1d', '#d9875f'], ink: ['남색', '#2f5283', '#8fb3e0'], pine: ['초록', '#2f6b4f', '#7fc0a0'],
+  plum: ['자주', '#7b3a6b', '#d494c4'], ochre: ['황토', '#7d5a12', '#d8b363'], mono: ['먹', '#2b2723', '#ece5da'] };
+const darkMq = matchMedia('(prefers-color-scheme: dark)');
+function lookGet() {
+  const l = store.get('look', {});
+  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick' };
+}
+function lookApply() {
+  const l = lookGet(), d = darkMq.matches ? 2 : 1, h = document.documentElement;
+  h.dataset.theme = l.theme; h.dataset.accent = l.accent;
+  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = LOOK_THEMES[l.theme][d];   // 아이폰 상태 막대
+  for (const [box, list, key] of [['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
+    const e = $(box); if (!e) continue;
+    e.replaceChildren(...Object.entries(list).map(([id, v]) => {
+      const b = el('button', id === l[key] ? 'on' : ''), i = el('i');
+      b.type = 'button'; i.style.background = v[d]; b.append(i, v[0]);
+      b.addEventListener('click', () => { store.set('look', { ...lookGet(), [key]: id }); lookApply(); });
+      return b;
+    }));
+  }
+}
+darkMq.addEventListener('change', lookApply);
+lookApply();
+
 let cfg = store.get('cfg', { mail: '', folders: [], prefix: '' });
 let sent = store.get('sent', []);
 let mode = 'read', folder = '', picks = new Set(), stop = false, pickN = 4;
