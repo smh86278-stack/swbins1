@@ -55,6 +55,7 @@ from email.message import EmailMessage
 from urllib.parse import parse_qs, urlparse
 
 import chat_runner
+import tokenlocal                                          # 허브 없는 PC 의 화면 펫 × 토큰 사용량(이 PC 기록을 읽기만)
 
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
@@ -81,9 +82,67 @@ def _pet_dir():
 
 
 PET_WEB, PET_SKIN = _pet_dir()
-PET_FILES = {"pets.js": "text/javascript; charset=utf-8", "petwarp.js": "text/javascript; charset=utf-8", "pets.css": "text/css; charset=utf-8"}
+PET_FILES = {"pets.js": "text/javascript; charset=utf-8", "petwarp.js": "text/javascript; charset=utf-8", "pets.css": "text/css; charset=utf-8",
+             "pettok.js": "text/javascript; charset=utf-8"}                    # pettok.js: 토큰 사용량 판정(허브 화면 펫과 같은 파일)
 PET_TYPES = {"webp": "image/webp", "png": "image/png", "json": "application/json; charset=utf-8"}
 HUB_SKIN = "http://127.0.0.1:8610/api/skin"                                    # 이 PC 에 허브가 있으면 고른 품종을 따른다
+HUB_TOKENS = "http://127.0.0.1:8610/api/tokens"                                # Claude Code 토큰 사용량 — 허브가 읽어 둔 것을 서버가 대신 받아 온다
+PET_TOK_TTL = 20                                                               # 초 — 창을 여럿 띄워도 허브에 자주 묻지 않게
+_pet_tok = {"at": 0.0, "v": {"files": 0}}
+_pet_tok_lock = threading.Lock()
+
+
+def _folder_name(s):
+    """세션의 폴더 이름만(동료 펫 이름) — 허브가 준 name, 없으면 cwd 의 마지막 폴더, 그것도 없으면 프로젝트 이름. 전체 경로는 넘기지 않는다."""
+    if s.get("name"):
+        return str(s["name"]).replace("\\", "/").rstrip("/").split("/")[-1]
+    p = str(s.get("cwd") or "").replace("\\", "/").rstrip("/")
+    if p:
+        return p.split("/")[-1]
+    return re.sub(r"^[A-Za-z]--", "", str(s.get("project") or "")) or "세션"
+
+
+def pet_tokens(raw):
+    """허브 /api/tokens(tokenusage.view) 에서 화면 펫(pettok.js)이 쓰는 것만 골라 낸다 — 기록 수·최근 10분 속도·한도 %·켜진 세션
+    (폴더 이름·작업 중인지·토큰). 경로·모델·날짜별 집계는 넘기지 않는다. 못 읽으면 {"files": 0} → 펫 기능이 조용히 꺼진다."""
+    if not isinstance(raw, dict) or not raw.get("files"):
+        return {"files": 0}
+    num = lambda x: x if isinstance(x, (int, float)) and not isinstance(x, bool) else 0      # noqa: E731
+    m10 = ((raw.get("rate") or {}).get("m10")) or {}
+    lim = raw.get("limits") or {}
+    st = lambda s: {"pct": num(s.get("pct"))} if isinstance(s, dict) else None              # noqa: E731
+    sessions = [{"id": str(s.get("id") or "")[:8], "name": _folder_name(s), "busy": bool(s.get("busy")),
+                 "total": num(s.get("total")), "last": num(s.get("last"))}
+                for s in (raw.get("sessions") or []) if isinstance(s, dict) and s.get("id")]
+    return {"files": num(raw.get("files")) or 1,
+            "rate": {"m10": {k: num(m10.get(k)) for k in ("input", "output", "cache_write")}},
+            "limits": {"dayState": st(lim.get("dayState")), "monthState": st(lim.get("monthState"))},
+            "sessions": sessions}
+
+
+def pet_tokens_cached(fetch=None, local=None):
+    """20초 동안은 받아 둔 것을. 허브가 있으면 허브 값, 허브가 없거나(이 메신저 혼자 도는 PC) 기록을 못 주면
+    이 PC 의 Claude Code 기록을 직접 읽기만 해서(tokenlocal — 뒤쪽 스레드, 받아 둔 값을 바로). 그것도 없으면 {"files": 0}(조용히 꺼진다)."""
+    with _pet_tok_lock:
+        if time.time() - _pet_tok["at"] < PET_TOK_TTL:
+            return _pet_tok["v"]
+        try:
+            if fetch:
+                raw = fetch()
+            else:
+                import urllib.request
+                with urllib.request.urlopen(HUB_TOKENS, timeout=5) as r:
+                    raw = json.loads(r.read().decode("utf-8"))
+            v = pet_tokens(raw)
+        except Exception:
+            v = {"files": 0}
+        if not v.get("files"):
+            try:
+                v = pet_tokens((local or tokenlocal.snapshot)())
+            except Exception:
+                v = {"files": 0}
+        _pet_tok.update(at=time.time(), v=v)
+        return v
 
 
 GATEWAY_GUESS = r"C:\swbins2\inbox"                       # 게이트웨이 PC 의 인박스 자리 — 있으면 쓰고, 없어도 된다
@@ -1158,6 +1217,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"breed": (j.get("breed") or {}) if j.get("skin") == "plush" else {}, "petx": j.get("petx")})
             except Exception:
                 return self._send(200, {"breed": {}})
+        if u.path == "/api/tokens":                                                 # 화면 펫 × Claude Code 토큰(읽기 전용, 허브가 없으면 files 0)
+            return self._send(200, pet_tokens_cached())
         if u.path == "/api/state":
             cfg, src = load_cfg()
             run = RUNNER.summary()

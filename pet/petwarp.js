@@ -101,8 +101,14 @@ void main(){
       if (stopped) return;
       let draw;
       try { draw = make(c, img, rig, over && over.naturalWidth ? over : null); c._gl = draw.gl; } catch (e) { return; }
-      const move = MOTION[fx] || MOTION.idle, t0 = performance.now() / 1000 - Math.random() * 7;
-      const loop = () => { if (stopped) return; draw(move(performance.now() / 1000 - t0)); raf = requestAnimationFrame(loop); };
+      // 몸짓 빠르기는 PetWarp.speed(기본 1 — 화면 펫이 토큰 사용 컨디션에 따라 바꾼다). 시간을 쌓아 가서 빠르기가 바뀌어도 튀지 않는다
+      const move = MOTION[fx] || MOTION.idle;
+      let t = Math.random() * 7, prev = performance.now() / 1000;
+      const loop = () => {
+        if (stopped) return;
+        const now = performance.now() / 1000; t += Math.min(0.1, now - prev) * (window.PetWarp.speed || 1); prev = now;
+        draw(move(t)); raf = requestAnimationFrame(loop);
+      };
       loop();
     };
     img.src = url;
@@ -110,5 +116,5 @@ void main(){
     return c;
   }
 
-  window.PetWarp = {ok, make, element, MOTION, PAD};
+  window.PetWarp = {ok, make, element, MOTION, PAD, speed: 1};
 })();

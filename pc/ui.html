@@ -220,6 +220,8 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .lookpop .swatches button:hover{border-color:var(--field);color:var(--text)}
 .lookpop .swatches button.on{border-color:var(--text);color:var(--text);font-weight:700;background:var(--bg)}
 .lookpop .swatches i{width:11px;height:11px;border-radius:2px;border:1px solid var(--line);flex:none}
+.lookpop .lookchk{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin:0 0 5px;cursor:pointer}
+.lookpop .lookchk input{margin:2px 0 0;flex:none}
 @media (max-width:480px){.two.half{grid-template-columns:1fr}}
 /* Jira 새 티켓 감시 — 대화 목록 위 자리비움 단추(켜져 있으면 눈에 띄게) · 설정 칸 */
 .away{margin:0 16px 10px;display:flex;flex-direction:column;gap:4px}
@@ -265,6 +267,23 @@ code{font:12px ui-monospace,Consolas,monospace;background:var(--soft);padding:0 
 .petstage:empty,.petstage.off{display:none}
 .petstage .slot{display:flex;flex-direction:column;align-items:center;gap:2px}
 .petstage select{max-width:96px;width:auto;font-size:11.5px;color:var(--muted);background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:1px 2px;cursor:pointer}
+/* Claude Code 토큰 사용량(허브 web/pettok.js 와 같은 판정) — ① 컨디션: 몸 흔들기 빠르기 + 강아지 머리 위 땀방울(바쁨)·z(지침), 탈진이면 잔다 */
+.petstage{flex-wrap:wrap;position:relative}
+.petstage .art > .tok-deco{position:absolute;pointer-events:none;font-style:normal;line-height:1;z-index:2}
+body.tok-busy .petstage .pet .art{animation-duration:5s}
+body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-duration:24s}
+/* ② 켜진 세션마다 작은 동료 펫 — 왼쪽 목록 아래(강아지·고양이 위 한 줄). 대화·입력칸(오른쪽)은 가리지 않는다 */
+.petstage .buddies{flex:0 0 100%;display:flex;justify-content:center;align-items:flex-end;gap:4px;padding-top:4px}
+.petstage .buddies:empty{display:none}
+.buddy{position:relative;width:50px;flex:none;cursor:pointer}
+.buddy .bart{position:relative}
+.buddy .chip{position:absolute;right:-5px;top:-3px;z-index:2;pointer-events:none;font-size:10px;font-style:normal;line-height:1;background:#fffaf2;border:1px solid #8c8276;border-radius:9px;padding:2px 3px}
+.buddy.hop .skin-media{animation:jump .5s ease-in-out 3!important}
+.buddy-more{align-self:flex-end;margin:0 2px 6px;font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:1px 6px}
+.petbbl{position:absolute;left:50%;bottom:calc(100% + 2px);transform:translate(-50%,4px);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
+  width:max-content;max-width:210px;z-index:6;font-size:12px;line-height:1.35;background:#fffaf2;color:#3a332c;border:1px solid #8c8276;border-radius:10px;padding:4px 9px;word-break:keep-all}
+.petbbl.show{opacity:1;transform:translate(-50%,0)}
+.petstage .slot{position:relative}
 </style>
 </head>
 <body>
@@ -289,16 +308,21 @@ code{font:12px ui-monospace,Consolas,monospace;background:var(--soft);padding:0 
     <div class="lookpop" id="lookBox" hidden>
       <div class="lt">바탕</div><div class="swatches" id="lookTheme"></div>
       <div class="lt">강조색</div><div class="swatches" id="lookAccent"></div>
+      <div class="lt">펫 × Claude Code 토큰 사용량</div>
+      <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
+      <label class="lookchk"><input type="checkbox" id="tokBuddy"> 세션마다 동료 펫 — 기다리면 알려 줘요</label>
     </div>
   </div>
   <div id="list"></div>
   <div class="petstage off" id="petStage" title="강아지는 메일함을 지키고, 고양이는 맡긴 일을 합니다 — 마우스를 올려 보세요">
-    <div class="slot"><div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div><select id="dogBreed" title="강아지 품종"></select></div>
+    <div class="buddies" id="buddies"></div>
+    <div class="slot"><div class="petbbl" id="dogBbl"></div><div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div><select id="dogBreed" title="강아지 품종"></select></div>
     <div class="slot"><div class="pet cat" id="pCat"><div class="art" id="pCatArt"></div></div><select id="catBreed" title="고양이 품종"></select></div>
   </div>
 </aside>
 <script src="/pet/petwarp.js"></script>
 <script src="/pet/pets.js"></script>
+<script src="/pet/pettok.js"></script>
 
 <main>
   <div class="banner" id="banner"></div>
@@ -1006,6 +1030,7 @@ async function petLoad() {                                 // 가끔 다시 맞�
   PetSkin.reset($('#pDogArt')); PetSkin.reset($('#pCatArt'));
   $('#petStage').classList.remove('off');
   petDraw();
+  tokSkinKey++; drawBuddies([]);                            // 품종이 바뀌면 동료 펫도 같은 스킨으로 다시
 }
 function petMoods() {
   const s = state, th = s.threads || [], now = Date.now();
@@ -1014,7 +1039,11 @@ function petMoods() {
   let cat = th.some(t => ['queued', 'running'].includes(t.status) || (t.status === 'sent' && now / 1000 - (t.ts || 0) < 1800)) ? 'work' : 'idle';
   if (petFlash.sad > now) cat = 'sad';
   else if (petFlash.happy > now && cat !== 'work') cat = 'happy';
-  return {dog, bark: petFlash.bark > now, cat};
+  const bark = petFlash.bark > now;
+  // 탈진(오늘 토큰 한도를 다 씀): 평소 모습일 때만 잔다 — 걱정·짖기(새 답)는 그대로 보인다
+  const spent = tok.cond === 'spent' && dog === 'alert' && !bark;
+  $('#pDog').title = spent ? '쿨쿨… 오늘 토큰 한도를 다 썼어요' : '';
+  return {dog: spent ? 'sleep' : dog, bark, cat};
 }
 function petDraw() {
   if (!petSkin) return;
@@ -1024,6 +1053,7 @@ function petDraw() {
   $('#pDog').classList.toggle('petting', petting === 'dog'); $('#pCat').classList.toggle('petting', petting === 'cat');
   PetSkin.render(petSkin, $('#pDog'), $('#pDogArt'), 'dog', pd.mood, pd.bark);
   PetSkin.render(petSkin, $('#pCat'), $('#pCatArt'), 'cat', pc.mood, false);
+  tokDeco(pd.bark ? 'bark' : pd.mood);
 }
 function petWatch(s) {                                     // 새 답·질문이 오면 강아지가 짖고, 일이 끝나면 고양이가 기뻐한다(오류면 시무룩)
   const now = Date.now();
@@ -1043,6 +1073,124 @@ function petWatch(s) {                                     // 새 답·질문이
   setTimeout(petDraw, 3600); setTimeout(petDraw, 6100);
   if (Date.now() - petBreedAt > 30000) petLoad();
 }
+/* ---------- Claude Code 토큰 사용량 × 펫 (허브 화면 펫과 같은 판정 — pettok.js 는 허브 web\ 의 같은 파일) ----------
+   ① 컨디션: 바쁨 = 몸짓 빠르게 + 땀방울 · 지침 = 느리게 + z + 가끔(45분에 한 번) 「좀 쉬어 갈까?」 · 탈진 = 강아지가 잔다
+   ② 동료 펫: 켜진 세션마다 작은 펫(최대 3, 넘치면 +N) — 작업 중이면 끄덕 + 💻, 기다리면 ✋.
+      「작업 중」 → 「대기」로 바뀐 순간 한 번만 통통 뛰며 「〈폴더〉 기다려요」. 누르면 폴더 이름·상태·이번 세션 토큰.
+   숫자는 이 메신저 서버 /api/tokens(허브 8610 /api/tokens 를 서버가 대신 받아 필요한 것만, 허브가 없으면 서버가 이 PC 의 Claude Code 기록을
+   직접 읽기만 — tokenlocal.py, 한도가 없어 지침·탈진은 없다) — 기록이 없으면 조용히 꺼진다.
+   켜고 끄기: 「화면」 → 펫 × Claude Code 토큰 사용량(이 PC 에만 기억). 미리 보기: ?tok=busy|tired|spent · ?buddies=demo */
+const TOK_KEY = 'dnc-pet-tok', TOK_POLL = 45 * 1000, TOK_REST = 45 * 60 * 1000, TOK_LOUD = 9000;
+const TOK_SPEED = {busy: 1.8, tired: 0.55, spent: 0.4};
+const TOK_REST_TEXT = ['좀 쉬어 갈까?', '오늘 많이 했어요. 물 한 잔?', '천천히 해도 돼요'];
+const TOK_DEMO = {files: 1, sessions: [
+  {id: 'demo0001', name: 'my-app', busy: true, total: 21706741, last: 3}, {id: 'demo0002', name: 'api-server', busy: false, total: 35458655, last: 2},
+  {id: 'demo0003', name: 'website', busy: true, total: 820000, last: 1}, {id: 'demo0004', name: 'notes', busy: false, total: 1200, last: 0}]};
+const tokParams = new URLSearchParams(location.search);
+const tok = {mood: true, buddy: true, cond: null, data: {list: [], more: 0}, last: null, rest: 0, els: new Map()};
+let tokSkinKey = 0;
+function tokConf() { let c = {}; try { c = JSON.parse(localStorage.getItem(TOK_KEY) || '{}') || {}; } catch (e) {} return {mood: c.mood !== false, buddy: c.buddy !== false}; }
+function tokConfApply() {
+  const c = tokConf(); tok.mood = c.mood; tok.buddy = c.buddy;
+  $('#tokMood').checked = c.mood; $('#tokBuddy').checked = c.buddy;
+  if (!c.buddy) tok.last = null;
+}
+for (const k of ['mood', 'buddy']) $('#tok' + k[0].toUpperCase() + k.slice(1)).onchange = e => {
+  try { localStorage.setItem(TOK_KEY, JSON.stringify({ ...tokConf(), [k]: e.target.checked })); } catch (err) {}
+  tokConfApply(); pollTokens();
+};
+async function pollTokens() {
+  let v = null;
+  if (window.PetTok && (tok.mood || tok.buddy)) try { v = await api('/api/tokens'); } catch (e) {}
+  applyTok(v);
+}
+function applyTok(v) {
+  const T = window.PetTok;
+  tok.cond = T && tok.mood ? (tokParams.get('tok') || T.condition(v)) : null;
+  for (const c of ['busy', 'tired', 'spent']) document.body.classList.toggle('tok-' + c, tok.cond === c);
+  if (window.PetWarp) PetWarp.speed = TOK_SPEED[tok.cond] || 1;
+  const now = Date.now();
+  if (tok.cond === 'tired' && now - tok.rest > TOK_REST && !document.hidden) {
+    tok.rest = now; petSay($('#dogBbl'), TOK_REST_TEXT[Math.floor(now / TOK_REST) % TOK_REST_TEXT.length], 6000);
+  }
+  const data = !T || !tok.buddy ? {list: [], more: 0, all: []} : T.buddies(tokParams.get('buddies') === 'demo' ? TOK_DEMO : v);
+  const all = data.all || data.list;
+  const waited = tok.last ? T.waited(tok.last, all) : [];      // 처음 본 세션은 알리지 않는다(바뀐 순간만)
+  tok.last = T && tok.buddy ? Object.fromEntries(all.map(b => [b.id, b.state])) : null;
+  tok.data = data;
+  drawBuddies(waited);
+  petDraw();
+}
+function tokDeco(dogMood) {                                  // 강아지 머리 위 — 평소 모습일 때만(걱정·잠·짖기엔 이미 제 장식이 있다)
+  const want = dogMood === 'alert' ? ({busy: 'worried', tired: 'sleep'})[tok.cond] || '' : '';
+  const art = $('#pDogArt'), el = art.querySelector(':scope > .tok-deco');
+  if ((el ? el.dataset.k : '') === want) return;
+  if (el) el.remove();
+  if (!want) return;
+  art.insertAdjacentHTML('beforeend', PetSkin.FX[want].replace('class="fx-deco', 'class="fx-deco tok-deco'));
+  art.lastElementChild.dataset.k = want;
+}
+function buddySpec(seed, fx) {                               // 본 펫과 같은 스킨의 품종 하나(프로젝트마다 고정) — 그 품종 평소 모습
+  if (!petSkin) return null;
+  const p = PetTok.pick(petSkin.breeds, seed);
+  if (p) {
+    const f = petSkin.breeds[p[0]][p[1]];
+    const file = f[p[0] === 'dog' ? 'alert' : 'idle'] || Object.values(f).find(x => typeof x === 'string' && /\.(webp|png|gif|jpe?g)$/i.test(x));
+    if (file) return {file, rig: f.rig, fx};
+  }
+  const base = PetSkin.resolve(petSkin, 'cat', 'idle') || PetSkin.resolve(petSkin, 'dog', 'alert');
+  return base ? Object.assign({}, base, {fx}) : null;
+}
+function drawBuddies(waited) {
+  const box = $('#buddies'), now = Date.now(), keep = new Set();
+  for (const b of tok.data.list) {
+    keep.add(b.id);
+    let it = tok.els.get(b.id);
+    if (!it) {
+      const el = document.createElement('div'); el.className = 'buddy'; el.dataset.id = b.id;
+      el.innerHTML = '<div class="petbbl"></div><div class="bart"></div><i class="chip"></i>';
+      el.onclick = () => { if (it.b) petSay(el.querySelector('.petbbl'), PetTok.info(it.b), 5000); };   // 폴더 이름·상태·이번 세션 토큰
+      it = {el, fx: null, sk: null, loud: 0}; tok.els.set(b.id, it);
+    }
+    it.b = b;
+    it.el.title = b.name;
+    if (waited.includes(b.id)) {                             // 대기로 바뀐 순간 한 번 — 통통 + 말풍선, 잠깐 기뻐하는 몸짓
+      it.loud = now + TOK_LOUD;
+      petSay(it.el.querySelector('.petbbl'), b.name + ' 기다려요', TOK_LOUD);
+      it.el.classList.remove('hop'); void it.el.offsetWidth; it.el.classList.add('hop');
+      setTimeout(() => it.el.classList.remove('hop'), 1600);
+      setTimeout(() => drawBuddies([]), TOK_LOUD + 200);
+    }
+    const fx = b.state === 'work' ? 'work' : it.loud > now ? 'happy' : 'idle';
+    it.el.querySelector('.chip').textContent = b.state === 'work' ? '💻' : '✋';
+    if (it.fx !== fx || it.sk !== tokSkinKey) {
+      const art = it.el.querySelector('.bart'), cur = art.querySelector('.skin-media');
+      if (cur) PetSkin.dispose(cur);
+      const spec = buddySpec(b.seed, fx);
+      if (spec) art.append(PetSkin.element(petSkin, spec));
+      it.fx = fx; it.sk = spec ? tokSkinKey : null;
+    }
+    box.append(it.el);                                       // 순서를 목록대로
+  }
+  for (const [id, it] of tok.els) if (!keep.has(id)) {       // 닫힌 세션 — 동료 펫도 사라진다
+    const cur = it.el.querySelector('.skin-media'); if (cur) PetSkin.dispose(cur);
+    it.el.remove(); tok.els.delete(id);
+  }
+  let more = box.querySelector('.buddy-more');
+  if (tok.data.more) {
+    if (!more) { more = document.createElement('div'); more.className = 'buddy-more'; }
+    more.textContent = '+' + tok.data.more; more.title = '켜진 세션 ' + tok.data.more + '개 더'; box.append(more);
+  } else if (more) more.remove();
+}
+function petSay(bb, text, ms) {
+  if (!bb) return;
+  for (const o of document.querySelectorAll('.petstage .petbbl.show')) if (o !== bb) o.classList.remove('show');   // 좁은 자리 — 말풍선은 한 번에 하나
+  bb.textContent = text; bb.classList.add('show');
+  clearTimeout(bb._t); bb._t = setTimeout(() => bb.classList.remove('show'), ms || 5000);
+}
+tokConfApply();
+setTimeout(pollTokens, 3000); setInterval(pollTokens, TOK_POLL);
+
 $('#dogBreed').onchange = e => petSetPick('dog', e.target.value);
 $('#catBreed').onchange = e => petSetPick('cat', e.target.value);
 for (const k of ['Dog', 'Cat']) {

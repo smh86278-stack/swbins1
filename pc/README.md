@@ -103,6 +103,18 @@
 - 단계를 누르면 **자세히** — 도구에 넘긴 전체 입력(명령 전문, 고친 내용은 -/+ 줄)과 결과 출력(2,000자까지)이 그 자리에 펼쳐집니다. 펼쳐 둔 건 갱신돼도 유지됩니다.
 - 다른 PC 에서는 진행 기록이 없으니 '작업 중' 표시만 보입니다.
 
+## 펫 × Claude Code 토큰 사용량
+
+이 PC 에서 Claude Code 를 쓰면 왼쪽 아래 인형 펫이 **사용량을 따라 컨디션**이 바뀌고(바쁨 = 땀방울·빠르게), **켜진 세션마다 작은 동료 펫**이
+한 줄로 나옵니다(최대 3, 넘치면 +N — 작업 중 💻, 기다리면 ✋, 대기로 바뀐 순간 한 번 「〈폴더〉 기다려요」, 누르면 폴더 이름·상태·세션 토큰).
+「화면」 칸에서 각각 끌 수 있습니다(이 PC 에만 기억). 판정은 `../pet/pettok.js`(D&C 허브 화면 펫과 같은 파일).
+
+- 숫자: 이 PC 에 D&C 허브가 있으면 허브 값을, 없으면 메신저가 **이 PC 의 Claude Code 기록을 직접 읽기만** 합니다(`tokenlocal.py` —
+  `~/.claude/sessions`(켜진 세션)·`~/.claude/projects/**/*.jsonl` 중 최근 1시간 안에 바뀐 것과 켜진 세션 것, 늘어난 부분만, 뒤쪽 스레드에서).
+  허브 없이는 한도 설정이 없어 지침·탈진은 나오지 않습니다.
+- 화면으로는 폴더 이름·작업 중인지·토큰 수만 갑니다 — 전체 경로·대화 내용은 내보내지 않습니다. 기록이 없으면 조용히 꺼집니다.
+- 미리 보기: 주소 끝에 `?tok=busy`(또는 `tired`·`spent`) · `?buddies=demo`.
+
 ## 회사마다 세팅
 
 - 설정 화면(⚙)에서 메일 서버·Jira 접두어·암호 단어를 넣으면 됩니다 — 어느 회사든.
@@ -124,4 +136,6 @@
 python build.py                 → 윈도우 dist\DispatchChat.exe · 맥 dist/DispatchChat.app   (pip install pyinstaller, dist·build 는 git 제외)
 python -m unittest test_chat test_chat_runner
                                 → 진행 상황 풀기·세션 기록 찾기 · 이 PC 에서 직접 실행(가짜 메일함·가짜 claude — 진짜 메일 서버 없이)
+python -m unittest test_pet_tokens
+                                → 펫 × 토큰 사용량(허브 값 거르기 · 허브 없을 때 가짜 Claude Code 기록 읽기 · pettok.js 판정, node 있으면)
 ```
