@@ -311,6 +311,8 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
       <div class="lt">펫 × Claude Code 토큰 사용량</div>
       <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
       <label class="lookchk"><input type="checkbox" id="tokBuddy"> 기다리는 세션만 동료 펫으로 알려 줘요</label>
+      <div class="lt">윈도우 알림</div>
+      <label class="lookchk"><input type="checkbox" id="osNote"> 창을 안 볼 때 질문·실행 확인·작업 끝을 알려 줘요</label>
     </div>
   </div>
   <div id="list"></div>
@@ -762,6 +764,7 @@ async function poll(force) {
   let s; try { s = await api('/api/state'); } catch (e) { $('#dot').className = 'bad'; return; }
   state = s;
   petWatch(s);
+  osNotify(s);
   const run = s.runner || {};
   $('#who').textContent = (s.user || '계정 없음') + (s.source === 'gateway' ? ' · 이 PC 게이트웨이 계정' : run.active ? ' · 이 PC 에서 실행' : '');
   $('#dot').className = s.error ? 'bad' : (s.polled ? 'ok' : '');
@@ -1072,6 +1075,29 @@ function petWatch(s) {                                     // 새 답·질문이
   petDraw();
   setTimeout(petDraw, 3600); setTimeout(petDraw, 6100);
   if (Date.now() - petBreedAt > 30000) petLoad();
+}
+/* ---------- 윈도우 알림 — 창을 안 볼 때(숨김·포커스 없음) 답할 일(질문·실행 확인)·작업 끝·실패가 새로 생기면 하나.
+   같은 대화·상태·시각은 한 번만, 처음 열 때 이미 있던 것은 알리지 않는다. 누르면 그 대화를 연다. 켜고 끄기: 「화면」(이 PC 에 기억) ---------- */
+const NOTE_KEY = 'dnc-os-note', NOTE_ST = {ask: '답할 차례예요', confirm: '실행 전에 확인해 주세요', done: '작업이 끝났어요', error: '작업이 실패했어요'};
+let noteSeen = null;                                       // 대화 key → 마지막으로 본 '상태|시각' (null = 첫 목록 전)
+function noteOn() { try { return localStorage.getItem(NOTE_KEY) !== '0'; } catch (e) { return true; } }
+function noteAsk() { if (noteOn() && window.Notification && Notification.permission === 'default') try { Notification.requestPermission(); } catch (e) {} }
+$('#osNote').checked = noteOn();
+$('#osNote').onchange = e => { try { localStorage.setItem(NOTE_KEY, e.target.checked ? '1' : '0'); } catch (err) {} if (e.target.checked) noteAsk(); };
+document.addEventListener('pointerdown', noteAsk, {once: true});   // 권한은 한 번 누른 뒤에 묻는다(손짓 없이 물으면 조용히 막는 브라우저가 있다)
+function osNotify(s) {
+  const first = noteSeen === null; noteSeen = noteSeen || {};
+  const away = document.hidden || !document.hasFocus();
+  const can = noteOn() && window.Notification && Notification.permission === 'granted';
+  for (const t of s.threads || []) {
+    const sig = t.status + '|' + (t.ts || 0), was = noteSeen[t.key];
+    noteSeen[t.key] = sig;
+    if (first || was === sig || !NOTE_ST[t.status] || !away || !can) continue;
+    try {
+      const n = new Notification('D&C 메신저 · ' + NOTE_ST[t.status], {body: (t.no ? 'T' + t.no + ' ' : '') + t.title + (t.last ? '\n' + t.last : ''), tag: 'dnc-' + t.key});
+      n.onclick = () => { try { window.focus(); } catch (e) {} n.close(); openThread(t.key); };
+    } catch (e) {}                                          // 막힌 곳(권한·안드로이드 크롬 등)은 조용히 넘어간다
+  }
 }
 /* ---------- Claude Code 토큰 사용량 × 펫 (허브 화면 펫과 같은 판정 — pettok.js 는 허브 web\ 의 같은 파일) ----------
    ① 컨디션: 바쁨 = 몸짓 빠르게 + 땀방울 · 지침 = 느리게 + z + 가끔(45분에 한 번) 「좀 쉬어 갈까?」 · 탈진 = 강아지가 잔다
