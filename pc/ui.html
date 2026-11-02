@@ -310,7 +310,7 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
       <div class="lt">강조색</div><div class="swatches" id="lookAccent"></div>
       <div class="lt">펫 × Claude Code 토큰 사용량</div>
       <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
-      <label class="lookchk"><input type="checkbox" id="tokBuddy"> 세션마다 동료 펫 — 기다리면 알려 줘요</label>
+      <label class="lookchk"><input type="checkbox" id="tokBuddy"> 기다리는 세션만 동료 펫으로 알려 줘요</label>
     </div>
   </div>
   <div id="list"></div>
@@ -1075,7 +1075,7 @@ function petWatch(s) {                                     // 새 답·질문이
 }
 /* ---------- Claude Code 토큰 사용량 × 펫 (허브 화면 펫과 같은 판정 — pettok.js 는 허브 web\ 의 같은 파일) ----------
    ① 컨디션: 바쁨 = 몸짓 빠르게 + 땀방울 · 지침 = 느리게 + z + 가끔(45분에 한 번) 「좀 쉬어 갈까?」 · 탈진 = 강아지가 잔다
-   ② 동료 펫: 켜진 세션마다 작은 펫(최대 3, 넘치면 +N) — 작업 중이면 끄덕 + 💻, 기다리면 ✋.
+   ② 동료 펫: 내 답을 기다리는 세션만 작은 펫(최대 3, 넘치면 +N) ✋ — 작업 중인 세션은 숨긴다.
       「작업 중」 → 「대기」로 바뀐 순간 한 번만 통통 뛰며 「〈폴더〉 기다려요」. 누르면 폴더 이름·상태·이번 세션 토큰.
    숫자는 이 메신저 서버 /api/tokens(허브 8610 /api/tokens 를 서버가 대신 받아 필요한 것만, 허브가 없으면 서버가 이 PC 의 Claude Code 기록을
    직접 읽기만 — tokenlocal.py, 한도가 없어 지침·탈진은 없다) — 기록이 없으면 조용히 꺼진다.
@@ -1117,7 +1117,9 @@ function applyTok(v) {
   const all = data.all || data.list;
   const waited = tok.last ? T.waited(tok.last, all) : [];      // 처음 본 세션은 알리지 않는다(바뀐 순간만)
   tok.last = T && tok.buddy ? Object.fromEntries(all.map(b => [b.id, b.state])) : null;
-  tok.data = data;
+  // 메신저에선 내 답을 기다리는 세션만 동료 펫으로(2026-11-03 사용자 「펫이 너무 많이 뜸」) — 작업 중인 세션은 숨긴다
+  const wait = all.filter(b => b.state === 'wait'), shown = wait.slice(0, (T && T.MAX) || 3);
+  tok.data = {list: shown, more: wait.length - shown.length, all};
   drawBuddies(waited);
   petDraw();
 }
