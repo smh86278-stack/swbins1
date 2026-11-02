@@ -592,6 +592,12 @@
     "name": "샴",
     "idle": "cat-siamese.webp",
     "rig": {
+     "acc": {
+      "straw": {
+       "dx": 0,
+       "dy": -6
+      }
+     },
      "neck": [
       0.5,
       0.55
@@ -622,6 +628,12 @@
     "name": "페르시안",
     "idle": "cat-persian.webp",
     "rig": {
+     "acc": {
+      "straw": {
+       "dx": 0,
+       "dy": -5
+      }
+     },
      "neck": [
       0.574,
       0.48
