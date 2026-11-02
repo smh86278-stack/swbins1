@@ -88,6 +88,18 @@ window.PetSkin = {
   /* 품종: skin.json 의 "breeds": {"dog": {"shiba": {"name": "시바", "alert": "dog-shiba.webp", "sleep": ...}}, "cat": {...}}
      고른 품종(없거나 모르는 것이면 첫 번째)의 상태별 파일을 dog/cat 표에 덮어쓴다 — 효과(fx·filter·from)는 표의 것을 그대로 쓴다 */
   breedIds(manifest, kind){ return Object.keys(((manifest && manifest.breeds) || {})[kind] || {}); },
+  /* 품종 고르기 칸 채울 것 — "group" 이 없는 품종은 그대로 <option>, 있는 것은 묶음 이름의 <optgroup> 으로(묶음 순서는 skin.json 에 처음 나오는 순서).
+     group 이 하나도 없는 스킨이면 지금처럼 평평하게. label(b, 이름) 으로 보이는 글을 바꿀 수 있다 */
+  breedOptions(manifest, kind, label){
+    const bs = ((manifest && manifest.breeds) || {})[kind] || {}, flat = [], groups = new Map();
+    for (const b of Object.keys(bs)) {
+      const o = new Option(label ? label(b, bs[b].name || b) : (bs[b].name || b), b), g = bs[b].group;
+      if (!g) { flat.push(o); continue; }
+      if (!groups.has(g)) { const og = document.createElement('optgroup'); og.label = g; groups.set(g, og); }
+      groups.get(g).append(o);
+    }
+    return [...flat, ...groups.values()];
+  },
   applyBreed(m, breed){
     m._breed = {};
     for (const kind of ['dog', 'cat']) {
@@ -218,13 +230,15 @@ window.PetAcc = {
     chuseok: {2026: '09-25', 2027: '09-15', 2028: '10-03', 2029: '09-22', 2030: '09-12', 2031: '10-01', 2032: '09-19'},
   },
   // bubble: 말풍선(쪽지) 켬 · quiet: 조용히 시간(none·lunch·night·both) — 데스크톱 펫(pet.html)이 쓴다
-  // grow: 키우기(간식·레벨) 켬 · lv: 허브 petgrow.view {snacks, level, floor, next, week, prev_week} · unlock: 소품이 풀리는 레벨
-  conf: {season: true, grow: true, bubble: true, quiet: 'none', acc: {dog: 'none', cat: 'none'}, lv: null, unlock: {}},
+  // grow: 키우기(간식·레벨) 켬 · lv: 허브 petgrow.view {snacks, level, floor, next, week, prev_week, src} · unlock: 소품이 풀리는 레벨
+  // snack_ai · snack_prompt: 간식 갈래(AI 커밋 · 좋은 프롬프트) 켬 — 허브 petsnack.py
+  conf: {season: true, grow: true, snack_ai: true, snack_prompt: true, bubble: true, quiet: 'none', acc: {dog: 'none', cat: 'none'}, lv: null, unlock: {}},
   force: {},                                                 // 미리 보기(주소의 ?season= · ?acc= · ?level=)
   set(c){                                                    // 허브 설정을 받는다(빠진 키는 그대로) — 바뀌었으면 true(그리는 쪽은 key 로 알아챈다)
     if (!c) return false;
     const has = k => Object.prototype.hasOwnProperty.call(c, k), cur = this.conf;
     const next = {season: has('season') ? c.season !== false : cur.season, grow: has('grow') ? c.grow !== false : cur.grow,
+      snack_ai: has('snack_ai') ? c.snack_ai !== false : cur.snack_ai, snack_prompt: has('snack_prompt') ? c.snack_prompt !== false : cur.snack_prompt,
       bubble: has('bubble') ? c.bubble !== false : cur.bubble, quiet: has('quiet') ? c.quiet || 'none' : cur.quiet,
       acc: has('acc') ? Object.assign({dog: 'none', cat: 'none'}, c.acc || {}) : cur.acc, lv: c.lv || cur.lv, unlock: c.unlock || cur.unlock};
     const changed = JSON.stringify(next) !== JSON.stringify(cur);
@@ -237,6 +251,11 @@ window.PetAcc = {
     const v = this.conf.lv;
     if (!this.conf.grow || !v) return '';
     return 'Lv.' + this.level() + ' · 간식 ' + v.snacks + '개' + (v.next ? ' (다음까지 ' + (v.next - v.snacks) + ')' : '');
+  },
+  srcText(){                                                 // 간식을 어디서 받았나 — 「자동화 6 · AI 커밋 2 · 좋은 프롬프트 1」(자동화 말고 받은 게 없으면 빈 글)
+    const s = this.conf.lv && this.conf.lv.src;
+    if (!this.conf.grow || !s || !(s.ai || s.prompt)) return '';
+    return [['자동화', s.auto], ['AI 커밋', s.ai], ['좋은 프롬프트', s.prompt]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ');
   },
   unlockedAt(lv){ const e = Object.entries(this.conf.unlock).find(([, n]) => n === lv); return e ? (this.LIST.find(x => x[0] === e[0]) || [])[1] : null; },
   seasonOf(d){                                               // 이 날의 계절 id — 음력 창 > 날짜 창 > 달 기본(위 SEASONS 설명)

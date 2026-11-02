@@ -985,7 +985,7 @@ function petFillSelects(hub) {
     const sel = $('#' + kind + 'Breed'), ids = PetSkin.breedIds(petSkin, kind);
     const hubName = hub[kind] && petSkin.breeds[kind][hub[kind]] ? petSkin.breeds[kind][hub[kind]].name : '';
     sel.replaceChildren(new Option(hubName ? '허브와 같게 (' + hubName + ')' : '허브와 같게', ''),
-      ...ids.map(b => new Option(petSkin.breeds[kind][b].name || b, b)));
+      ...(PetSkin.breedOptions ? PetSkin.breedOptions(petSkin, kind) : ids.map(b => new Option(petSkin.breeds[kind][b].name || b, b))));   // 묶음(group)은 <optgroup> — 옛 pets.js 면 평평하게
     sel.value = ids.includes(pick[kind]) ? pick[kind] : '';
   }
 }
