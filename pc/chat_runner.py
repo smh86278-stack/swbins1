@@ -22,6 +22,8 @@ PC 화면·폰 페이지가 그대로 보여 준다. 게이트웨이(mail-gatewa
 """
 import base64
 import email
+import email.errors
+import email.header
 import email.utils
 import hmac
 import imaplib
@@ -38,7 +40,7 @@ import threading
 import time
 import traceback
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from html import escape as html_escape
 from urllib.parse import quote
@@ -93,6 +95,43 @@ ASK_CLOSE_SILENT_DAYS = 7         # 이보다 오래된 질문은 알리지 않�
 REPLY_TRIES = 3
 IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
 MAX_IMAGES, MAX_IMAGE_BYTES = 5, 10 * 1024 * 1024
+# 사진 말고 Claude 가 읽을 수 있는 문서도 받는다(메신저 「파일」·메일 첨부) — 확장자로만 고르고, 수는 사진과 합쳐 MAX_IMAGES 개
+DOC_EXTS = {".pdf", ".txt", ".csv", ".tsv", ".log", ".md", ".json", ".xml", ".html", ".htm", ".yaml", ".yml", ".sql",
+            ".xlsx", ".xls", ".docx", ".pptx"}
+
+
+def attach_name(part):
+    """첨부의 원래 파일 이름(인코딩 풀어서) — 없으면 ''."""
+    raw = part.get_filename() or ""
+    try:
+        return str(email.header.make_header(email.header.decode_header(raw))).strip()
+    except (ValueError, LookupError, email.errors.HeaderParseError):
+        return str(raw).strip()
+
+
+def attach_ext(part):
+    """저장할 확장자 — 사진은 내용 형식으로, 문서는 파일 이름 확장자로. 받지 않는 것은 None."""
+    ext = IMAGE_TYPES.get(part.get_content_type())
+    if ext:
+        return ext
+    name = attach_name(part)
+    ext = os.path.splitext(name)[1].lower() if name else ""
+    return ext if ext in DOC_EXTS else None             # 이름이 있는 부분만 — 본문(text/plain)은 이름이 없어 걸리지 않는다
+
+
+def attach_path(folder, n, part, ext):
+    """우리가 짓는 파일 이름 — 사진은 photoN, 문서는 fileN_<원래 이름(글자·숫자만 40자)> (보낸 쪽 이름을 경로로 쓰지 않는다)."""
+    if part.get_content_type() in IMAGE_TYPES:
+        return os.path.join(folder, "photo%d%s" % (n, ext))
+    stem = re.sub(r"[^\w\-]+", "_", os.path.splitext(attach_name(part))[0], flags=re.UNICODE).strip("_")[:40]
+    return os.path.join(folder, "file%d%s%s" % (n, ("_" + stem) if stem else "", ext))
+
+
+def attach_note(paths):
+    """지시문 끝에 붙일 첨부 안내 — 사진만이면 옛 문구 그대로."""
+    head = ("첨부 사진 %d장" % len(paths) if all(os.path.basename(p).startswith("photo") for p in paths)
+            else "첨부 파일 %d개" % len(paths))
+    return "\n\n[%s — Read 도구로 열어 보고 지시에 맞게 쓸 것]\n" % head + "\n".join("- " + p for p in paths)
 
 THREAD_RE = re.compile(r"\[T(\d{1,6})\]")
 SUBJECT_KEY_RE = re.compile(r"\s*\[k:([^\]\s]{1,64})\]\s*$")
@@ -372,6 +411,91 @@ def reply_body(job):
     return ask, "\n".join(lines)
 
 
+# ----------------------------------------------------------------- 회신 사본(폰 주소로 알림)
+
+_MASK_MAIL = re.compile(r"[\w.+-]+@([\w-]+\.[\w.-]+)")
+_MASK_NUM = re.compile(r"(?<![\w-])\d[\d-]{7,}\d(?![\w-])")     # 전화·계좌·주민번호 같은 긴 숫자(티켓 번호 PROJ-34232 는 그대로)
+
+
+def mask_copy(text):
+    """회신 사본(메일함 밖 주소)으로 나가는 글에서 메일 주소·긴 숫자를 가린다 — 게이트웨이 mask_phone 과 같은 규칙."""
+    return _MASK_NUM.sub(lambda m: "*" * min(len(m.group(0)), 8), _MASK_MAIL.sub(r"***@\1", text or ""))
+
+
+def copy_summary(text, max_lines=5, max_chars=400):
+    """회신 사본에 넣을 요약 — 결과 앞 몇 줄. 코드 블록·표·인용은 빼고 마크다운 머리 기호를 걷어낸 뒤 가린다(게이트웨이 phone_summary)."""
+    text = re.sub(r"```.*?(```|\Z)", "", text or "", flags=re.S)
+    out = []
+    for line in text.splitlines():
+        s = re.sub(r"^\s*(#+|>)\s*", "", line).strip()
+        if not s or s.startswith("|") or set(s) <= set("-=*_ "):
+            continue
+        out.append(s)
+        if len(out) >= max_lines:
+            break
+    s = mask_copy("\n".join(out))
+    return s if len(s) <= max_chars else s[:max_chars].rstrip() + "…"
+
+
+def copy_to(cfg):
+    """회신 사본을 받을 주소(설정 run_copy_to) — 비었거나 내 주소와 같으면 ''."""
+    to = str(cfg.get("run_copy_to") or "").strip()
+    return to if "@" in to and to.lower() != str(cfg.get("user") or "").strip().lower() else ""
+
+
+def copy_wanted(cfg, job):
+    """이 일의 회신·확인을 사본 주소로도 보낼지 — 폰·메일 앱에서 온 지시만(PC 메신저에서 보낸 일은 PC 앞에 있으니 안 보낸다)."""
+    return bool(copy_to(cfg)) and job.get("client") != "chat" and cfg.get("send_mode", "smtp") != "append" \
+        and bool(cfg.get("smtp_host"))
+
+
+def copy_warn(cfg):
+    """사본 주소를 넣었는데 보낼 수 없는 까닭(설정 화면에 보인다), 없으면 ''."""
+    to = str(cfg.get("run_copy_to") or "").strip()
+    if not to:
+        return ""
+    if not copy_to(cfg):
+        return "회신 사본 주소가 내 메일 주소와 같아 보내지 않습니다 — 폰에서 보는 다른 주소(iCloud·Gmail 등)를 넣으세요."
+    if cfg.get("send_mode", "smtp") == "append" or not cfg.get("smtp_host"):
+        return "보내는 방법이 '받은편지함에 써 넣기'(또는 SMTP 서버 없음)라 회신 사본을 보낼 수 없습니다 — 계정 칸에서 SMTP 로 바꾸세요."
+    return ""
+
+
+def copy_message(cfg, job, kind):
+    """회신 사본 — 결과 전문은 넣지 않고 끝남·실패·질문·확인 대기만(run_copy_detail 이면 앞 몇 줄 요약을 가려서).
+    사본 주소에서 답장하면 실행되지 않으니(내 주소의 지시만 받는다) 답은 메일함·폰 페이지·메신저에서 하라고 적는다."""
+    msg = EmailMessage()
+    msg["Subject"] = reply_subject(job)
+    msg["From"] = cfg["user"]
+    msg["To"] = copy_to(cfg)
+    msg["Date"] = email.utils.formatdate(localtime=True)
+    msg["Message-ID"] = email.utils.make_msgid(domain=cfg["user"].split("@", 1)[-1] if "@" in cfg["user"] else None)
+    msg["X-Dispatch"] = "bot"
+    msg["X-Dispatch-Kind"] = "copy"
+    detail = bool(cfg.get("run_copy_detail"))
+    folder = os.path.basename(str(job.get("workdir") or "").rstrip("\\/")) or "?"
+    if kind == "confirm":
+        lines = ["수정 허용 지시가 실행 전 확인을 기다립니다(%d분 안에 답이 없으면 취소)." % CONFIRM_TTL_MIN]
+        if detail:
+            lines += ["", "지시: " + copy_summary(job.get("prompt") or "", 3, 200)]
+    else:
+        ask = job.get("ask")                               # send_out 이 회신 전에 정한 질문(권한 질문 포함)
+        done = job.get("status") == "done"
+        lines = ["일이 끝났습니다." if done else "일이 실패로 끝났습니다."]
+        summary = copy_summary(parse_choices(job.get("result") or "")[0] if done else str(job.get("error") or "")) if detail else ""
+        if summary:
+            lines += ["", summary, "", "— 앞부분 요약입니다. 전문은 메일함·PC 메신저에서."]
+        else:
+            lines.append("결과는 내 메일함에만 넣었습니다 — 메일함·PC 메신저에서 보세요.")
+        if ask:
+            lines += ["", "질문이 있습니다(선택지 %d개)%s" % (len(ask.get("options") or []),
+                                                        ": " + mask_copy(ask.get("question") or "") if detail else "")]
+    lines += ["", "답은 내 메일함·폰 페이지·PC 메신저에서 하세요 — 이 주소로 답장하면 실행되지 않습니다.",
+              "", "--", "%s작업 폴더 %s · 이 PC 에서 실행 · 회신 사본" % (("[T%s] · " % job["thread"]) if job.get("thread") else "", folder)]
+    msg.set_content("\n".join(lines))
+    return msg
+
+
 # ----------------------------------------------------------------- 프로세스 묶음(자식까지 끊기)
 
 if IS_WIN:
@@ -577,7 +701,9 @@ class Runner:
                 "jira": bool(cfg.get("run_jira")), "jira_url": cfg.get("run_jira_url") or "",
                 "jira_dir": cfg.get("run_jira_dir") or "", "has_jira_token": bool(cfg.get("run_jira_token_enc")),
                 "jira_skill": cfg.get("run_jira_skill") or "", "jira_allow_net": bool(cfg.get("run_jira_allow_net")),
-                "cost": cost_limit(cfg), "spent": spent_today(self.jobs_dir)}
+                "cost": cost_limit(cfg), "spent": spent_today(self.jobs_dir),
+                "copy_to": str(cfg.get("run_copy_to") or ""), "copy_detail": bool(cfg.get("run_copy_detail")),
+                "copy_warn": copy_warn(cfg)}
 
     def configure(self, data):
         """설정 화면의 스위치·작업 폴더. 켜는 순간을 run_since 로 남긴다 — 그 전에 온 메일은 실행하지 않는다."""
@@ -615,7 +741,14 @@ class Runner:
         return self.info()
 
     def configure_extras(self, own, data):
-        """브라우저·Jira 스위치와 Jira 값, 하루 비용 한도. 켤 때 필요한 것이 없으면 이유와 함께 막는다."""
+        """브라우저·Jira 스위치와 Jira 값, 하루 비용 한도, 회신 사본 주소. 켤 때 필요한 것이 없으면 이유와 함께 막는다."""
+        if "copy_to" in data:
+            to = str(data.get("copy_to") or "").strip()
+            if to and not re.fullmatch(r"[^@\s<>,;\"']+@[^@\s<>,;\"']+\.[^@\s<>,;\"']+", to):
+                raise ValueError("회신 사본 주소는 메일 주소 하나로 넣어 주세요(예: me@icloud.com): %s" % to)
+            own["run_copy_to"] = to
+        if "copy_detail" in data:
+            own["run_copy_detail"] = bool(data.get("copy_detail"))
         if "cost" in data:
             raw = str(data.get("cost") or "").strip()
             try:
@@ -927,14 +1060,14 @@ class Runner:
             return "", []
         folder, paths = os.path.join(self.root, "attachments", key), []
         for part in msg.walk():
-            ext = IMAGE_TYPES.get(part.get_content_type())
+            ext = attach_ext(part)
             if not ext or len(paths) >= MAX_IMAGES:
                 continue
             data = part.get_payload(decode=True) or b""
             if not data or len(data) > MAX_IMAGE_BYTES:
                 continue
             os.makedirs(folder, exist_ok=True)
-            path = os.path.join(folder, "photo%d%s" % (len(paths) + 1, ext))
+            path = attach_path(folder, len(paths) + 1, part, ext)
             with open(path, "wb") as f:
                 f.write(data)
             paths.append(path)
@@ -1201,7 +1334,7 @@ class Runner:
         jid = datetime.now().strftime("%Y%m%d-%H%M%S") + "-%04x" % random.randrange(0x10000)
         attach_dir, photos = self.save_images(msg, jid)
         if photos:
-            prompt += "\n\n[첨부 사진 %d장 — Read 도구로 열어 보고 지시에 맞게 쓸 것]\n" % len(photos) + "\n".join("- " + p for p in photos)
+            prompt += attach_note(photos)
         job = {"id": jid, "created_at": now_text(), "prompt": prompt, "workdir": workdir, "workdir_label": label,
                "status": "queued", "started_at": None, "finished_at": None, "result": None, "error": None,
                "denials": [], "cost_usd": None, "duration_ms": None, "source": "mail", "runner": "chat",
@@ -1425,6 +1558,7 @@ class Runner:
                             put(msg)
                             self.update_job(j["id"], confirm_sent=True, confirm_msgid=mid)
                             n += 1
+                            self.send_copy(cfg, pw, j, "confirm")
                         elif st in ("done", "error") and not j.get("replied"):
                             numbered(j)
                             j["ask"] = parse_choices(j.get("result") or "")[1] if st == "done" else None
@@ -1443,6 +1577,7 @@ class Runner:
                                             replied=True, reply_msgid=mid)
                             n += 1
                             C.log("[실행] 회신 %s (%s)" % (j["id"], st))
+                            self.send_copy(cfg, pw, j, "reply")
                     except Exception as e:
                         tries = int(j.get("send_tries") or 0) + 1
                         C.log("[실행] 메일함에 넣기 실패 %s (%d번째) — %s" % (j["id"], tries, e))
@@ -1481,6 +1616,19 @@ class Runner:
             except Exception:
                 pass
         return n
+
+    def send_copy(self, cfg, pw, job, kind):
+        """회신·확인을 사본 주소(run_copy_to)로도 SMTP 로 한 통 — 폰·메일 앱 지시만. 실패해도 다시 안 보낸다(메일함엔 이미 들어갔다)."""
+        C = self.C
+        if not copy_wanted(cfg, job):
+            return False
+        try:
+            C.smtp_send(cfg, pw if pw is not None else C.password(cfg), copy_message(cfg, job, kind))
+            C.log("[실행] 회신 사본 %s (%s) → %s" % (job["id"], kind, copy_to(cfg)))
+            return True
+        except Exception as e:
+            C.log("[실행] 회신 사본 실패 %s — %s" % (job["id"], e))
+            return False
 
     @staticmethod
     def _age(job):
@@ -1786,6 +1934,85 @@ def spent_today(jobs_dir, audit_path="", sender="", now=None):
     except (OSError, TypeError):
         pass
     return round(total, 4)
+
+
+def cost_report(jobs_dirs, audit_path="", now=None, days=14):
+    """비용 내역 — 작업 파일들 + (게이트웨이면) 지시 실행 기록의 cost_usd 를 날짜·대화별로. 같은 id 는 한 번만(작업 파일 먼저).
+    {"today", "month", "days": [{"day", "usd", "n"}] (오래된 것부터), "d30": 최근 30일 합, "threads": 최근 30일 대화별 상위 8,
+     "recent": 비용 있는 최근 15건, "nocost": 최근 30일 비용 없이 끝난 건수(취소·시작 전 멈춤 등)}"""
+    now = now or datetime.now()
+    rows = {}
+
+    def add(jid, created, cost, thread, prompt, status, secs, jira):
+        if not jid or jid in rows:
+            return
+        rows[jid] = {"id": jid, "created": str(created or ""), "usd": float(cost) if isinstance(cost, (int, float)) else None,
+                     "thread": thread if isinstance(thread, int) else None, "prompt": " ".join(str(prompt or "").split())[:80],
+                     "status": status or "", "secs": secs, "jira": jira or ""}
+    for jd in [d for d in jobs_dirs if d]:
+        try:
+            names = [n for n in os.listdir(jd) if n.endswith(".json")]
+        except OSError:
+            continue
+        for n in names:
+            try:
+                with open(os.path.join(jd, n), encoding="utf-8-sig") as f:
+                    j = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if isinstance(j, dict):
+                ms = j.get("duration_ms")
+                add(j.get("id"), j.get("created_at"), j.get("cost_usd"), j.get("thread"), j.get("prompt"), j.get("status"),
+                    round(ms / 1000.0, 1) if isinstance(ms, (int, float)) else None, j.get("jira_key"))
+    try:
+        with open(audit_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(r, dict):
+                    add(r.get("id"), r.get("created"), r.get("cost_usd"), r.get("thread"), r.get("prompt"), r.get("status"),
+                        r.get("duration_s"), r.get("jira_key"))
+    except (OSError, TypeError):
+        pass
+    today, month = now.strftime("%Y-%m-%d"), now.strftime("%Y-%m")
+    since = (now - timedelta(days=29)).strftime("%Y-%m-%d")
+    span = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days - 1, -1, -1)]
+    by_day = {d: {"day": d, "usd": 0.0, "n": 0} for d in span}
+    threads, out = {}, {"today": 0.0, "month": 0.0, "d30": 0.0, "nocost": 0}
+    for r in rows.values():
+        day = r["created"][:10]
+        if r["usd"] is None:
+            if day >= since and r["status"] in ("done", "error", "canceled"):
+                out["nocost"] += 1
+            continue
+        if day in by_day:
+            by_day[day]["usd"] += r["usd"]
+            by_day[day]["n"] += 1
+        if day == today:
+            out["today"] += r["usd"]
+        if day[:7] == month:
+            out["month"] += r["usd"]
+        if day >= since:
+            out["d30"] += r["usd"]
+            k = r["thread"] if r["thread"] is not None else (r["jira"] or "")
+            t = threads.setdefault(k, {"thread": r["thread"], "jira": r["jira"], "usd": 0.0, "n": 0, "title": "", "first": "~"})
+            t["usd"] += r["usd"]
+            t["n"] += 1
+            if r["created"] < t["first"]:                 # 대화 첫 지시를 제목 삼아
+                t["first"], t["title"] = r["created"], r["prompt"]
+    for d in by_day.values():
+        d["usd"] = round(d["usd"], 4)
+    top = sorted(threads.values(), key=lambda t: -t["usd"])[:8]
+    for t in top:
+        t.pop("first")
+        t["usd"] = round(t["usd"], 4)
+    recent = sorted((r for r in rows.values() if r["usd"] is not None), key=lambda r: r["created"], reverse=True)[:15]
+    out.update(today=round(out["today"], 4), month=round(out["month"], 4), d30=round(out["d30"], 4), days=list(by_day.values()), threads=top,
+               recent=[dict({k: r[k] for k in ("created", "thread", "prompt", "status", "secs", "jira")}, usd=round(r["usd"], 4))
+                       for r in recent])
+    return out
 
 
 def cost_limit(cfg, key="daily_cost_usd"):

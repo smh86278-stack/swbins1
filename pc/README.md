@@ -75,7 +75,11 @@
   (플러그인 스킬은 찾지 못합니다). 스킬이 다음 스킬로 이어 가고 하위 에이전트를 쓸 수 있게 `Skill`·`Agent` 도 허용합니다.
   **curl·ssh 허용**을 켜면 거부 목록을 빼고 돌립니다 — 스킬이 curl 로 Jira REST 를 부를 때. 예: bo-workspace 는 Jira 작업 폴더 = bo-workspace,
   Jira 스킬 = `task-input`(티켓을 `.claude/claude.env` 의 `JIRA_PAT` 로 REST 조회), curl·ssh 허용 켬, 토큰 칸은 비움.
-- **빠진 것(게이트웨이·워커 대비)**: 다른 주소의 암호 단어 발신자(`keyed_senders`)·Gmail 따로 읽기·스팸함 보기·폰 주소로 회신 사본 · 작업 일시정지 깃발·알림 큐 · 회신을 SMTP 로 보내기(늘 메일함에 써 넣기).
+- **회신 사본(⚙ 칸, 기본 비움)**: 설정 `run_copy_to` 에 주소(iCloud·Gmail 등)를 넣으면 폰·메일 앱에서 온 지시(`client` 가 chat 이 아닌 것)의
+  회신과 수정 허용 확인 대기를 그 주소로 SMTP 한 통씩(`X-Dispatch-Kind: copy`) 보냅니다. 결과 전문은 싣지 않고 끝남·실패·질문 수만 —
+  `run_copy_detail` 이면 앞 5줄 요약(메일 주소·긴 숫자 가림, 게이트웨이 `company_phone_detail: summary` 와 같은 규칙). 사본 주소에서 답장하면
+  실행되지 않습니다(내 주소의 지시만). 보내는 방법이 append 이거나 SMTP 서버가 없으면 보내지 않고 ⚙ 에 이유. 실패해도 다시 보내지 않습니다.
+- **빠진 것(게이트웨이·워커 대비)**: 다른 주소의 암호 단어 발신자(`keyed_senders`)·Gmail 따로 읽기·스팸함 보기 · 작업 일시정지 깃발·알림 큐 · 회신 자체를 SMTP 로 보내기(늘 메일함에 써 넣기).
 - 상태 파일: 윈도우 `%LOCALAPPDATA%\DispatchChat\runner\`, 맥 `~/Library/Application Support/DispatchChat/runner/`. 대화 규칙은 이 폴더의 `chat-protocol.md`(exe 에 같이 묶임).
 
 ## Jira 새 티켓 감시 · 자리비움 (설정 스위치, 기본 꺼짐)
@@ -136,6 +140,6 @@
 python build.py                 → 윈도우 dist\DispatchChat.exe · 맥 dist/DispatchChat.app   (pip install pyinstaller, dist·build 는 git 제외)
 python -m unittest test_chat test_chat_runner
                                 → 진행 상황 풀기·세션 기록 찾기 · 이 PC 에서 직접 실행(가짜 메일함·가짜 claude — 진짜 메일 서버 없이)
-python -m unittest test_pet_tokens
+python -m unittest test_chat_pet_tokens
                                 → 펫 × 토큰 사용량(허브 값 거르기 · 허브 없을 때 가짜 Claude Code 기록 읽기 · pettok.js 판정, node 있으면)
 ```

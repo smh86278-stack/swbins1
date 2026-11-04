@@ -58,6 +58,20 @@ class Progress(unittest.TestCase):
         long = "가" * 2500
         self.assertTrue(chat.result_text([{"type": "text", "text": long}]).endswith("… (500자 더)"))
 
+    def test_search_threads(self):
+        """대화 찾기 — 제목·번호·봇 답 본문 어디든, 낱말은 모두 맞아야."""
+        a = {"id": "<a@x>", "thread": 12, "ts": 1.0, "bot": False, "mode": "read", "tag": "#c", "text": "로그 봐 줘", "rest": "", "refs": []}
+        b = {"id": "<b@x>", "thread": 12, "ts": 2.0, "bot": True, "mode": "read", "tag": "#c", "text": "Timeout 원인은 DB", "rest": "", "refs": ["<a@x>"]}
+        c = {"id": "<c@x>", "thread": 13, "ts": 3.0, "bot": False, "mode": "read", "tag": "#c", "text": "메일 정리", "rest": "", "refs": []}
+        ts = chat.build_threads([a, b, c])
+        self.assertEqual(chat.search_threads(ts, "timeout db"), ["T12"])
+        self.assertEqual(chat.search_threads(ts, "T13"), ["T13"])
+        self.assertEqual(chat.search_threads(ts, "로그 메일"), [])
+        self.assertEqual(sorted(chat.search_threads(ts, " ")), ["T12", "T13"])
+        f = chat.find_by_msgid(ts, "<a@x>")                         # 허브 「말로 부탁하기」 진행 칸 — 보낸 메일로 대화를 찾는다
+        self.assertEqual((f["key"], f["status"], f["last"]), ("T12", "done", "Timeout 원인은 DB"))
+        self.assertIsNone(chat.find_by_msgid(ts, "<none@x>"))
+
     def test_first_instruction_follows_its_job(self):
         """게이트웨이는 번호를 회신할 때 붙인다 — 번호가 없는 동안에도 접수된 작업(mail_msgid)으로 '작업 중' 과 작업 id 가 붙어야 진행 카드가 뜬다."""
         m = {"id": "<m1@x>", "thread": None, "ts": 1.0, "bot": False, "mode": "read", "tag": "#c", "text": "일 해 줘", "rest": "", "refs": []}
@@ -246,3 +260,34 @@ class LocalMarks(unittest.TestCase):
         del chat.BOX.msgs[more["id"]]
         chat.clear_threads(undo=True)
         self.assertEqual(len(chat.BOX.threads()), 3)
+
+
+class SendFiles(unittest.TestCase):
+    """메신저 「파일」 — 고른 파일을 지시 메일에 붙이고, 본문·화면에 이름을 남긴다. 받는 쪽이 버릴 형식·큰 것은 미리 막는다."""
+
+    def test_send_attaches(self):
+        import base64
+        from unittest import mock
+        sent = []
+        cfg = {"user": "me@example.com", "send_mode": "smtp", "tags": ["#c"], "write_tags": ["#cw"]}
+        old_echo = chat.BOX.echo
+        self.addCleanup(setattr, chat.BOX, "echo", old_echo)
+        chat.BOX.echo = []
+        b64 = lambda b: base64.b64encode(b).decode()
+        with mock.patch.object(chat, "load_cfg", lambda: (cfg, "own")), mock.patch.object(chat, "password", lambda c: "pw"), \
+                mock.patch.object(chat, "smtp_send", lambda c, pw, msg: sent.append(msg)), \
+                mock.patch.object(chat, "instruction_word", lambda c, s: ""), mock.patch.object(chat.threading, "Timer", mock.MagicMock()):
+            chat.send({"text": "이 표 정리해줘", "files": [{"name": "C:\\temp\\11월 주문.xlsx", "data": b64(b"PK\x03\x04")},
+                                                         {"name": "shot.png", "data": b64(b"\x89PNG")}]})
+            for bad, why in (([{"name": "run.exe", "data": b64(b"MZ")}], "형식"),
+                             ([{"name": "a.txt", "data": "%%%"}], "읽지 못했"),
+                             ([{"name": "a.txt", "data": b64(b"x")}] * 6, "개까지")):
+                with self.assertRaises(ValueError) as e:
+                    chat.send({"text": "x", "files": bad})
+                self.assertIn(why, str(e.exception))
+        (msg,) = sent
+        atts = [(p.get_filename(), p.get_content_type(), p.get_payload(decode=True)) for p in msg.iter_attachments()]
+        self.assertEqual(atts[0][0], "11월 주문.xlsx")                     # 경로는 떼고 이름만
+        self.assertEqual(atts[1], ("shot.png", "image/png", b"\x89PNG"))
+        self.assertIn("📎 11월 주문.xlsx, shot.png", msg.get_body(("plain",)).get_content())
+        self.assertIn("📎 11월 주문.xlsx", chat.BOX.echo[-1]["text"])

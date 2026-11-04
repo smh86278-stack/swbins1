@@ -37,6 +37,7 @@ import email.utils
 import http.server
 import imaplib
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -84,6 +85,7 @@ def _pet_dir():
 PET_WEB, PET_SKIN = _pet_dir()
 PET_FILES = {"pets.js": "text/javascript; charset=utf-8", "petwarp.js": "text/javascript; charset=utf-8", "pets.css": "text/css; charset=utf-8",
              "pettok.js": "text/javascript; charset=utf-8"}                    # pettok.js: 토큰 사용량 판정(허브 화면 펫과 같은 파일)
+PET_SKINS = ("plush", "toon")                                                      # 메신저가 그릴 수 있는 스킨
 PET_TYPES = {"webp": "image/webp", "png": "image/png", "json": "application/json; charset=utf-8"}
 HUB_SKIN = "http://127.0.0.1:8610/api/skin"                                    # 이 PC 에 허브가 있으면 고른 품종을 따른다
 HUB_TOKENS = "http://127.0.0.1:8610/api/tokens"                                # Claude Code 토큰 사용량 — 허브가 읽어 둔 것을 서버가 대신 받아 온다
@@ -673,6 +675,20 @@ def build_threads(msgs, jobs=None, by_mid=None):
     return out
 
 
+def search_threads(threads, q):
+    """대화 찾기 — 낱말을 모두 담은 대화의 key(제목·번호·주고받은 말 어디든, 대소문자 무시)."""
+    words = (q or "").lower().split()
+    if not words:
+        return [t["key"] for t in threads]
+    out = []
+    for t in threads:
+        hay = " ".join([t.get("title") or "", "t%s" % t["no"] if t.get("no") else ""] +
+                       [m.get("text") or "" for m in t.get("msgs") or []]).lower()
+        if all(w in hay for w in words):
+            out.append(t["key"])
+    return out
+
+
 def jobs_dir():
     """진행 상황을 읽을 작업 폴더 — 게이트웨이 PC 면 그 inbox/jobs, '이 PC 에서 직접 실행' 이 켜져 있으면 그 작업 폴더, 아니면 ""."""
     if JOBS_DIR:
@@ -1127,9 +1143,42 @@ def instruction_word(cfg, src):
     return str(gw.get("company_word") or "").strip() or ks.get(me, "")
 
 
+SEND_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"} | chat_runner.DOC_EXTS   # 받는 쪽(attach_ext)이 저장하는 것만
+SEND_TOTAL = 20 * 1024 * 1024                       # 메일 하나에 — 회사 메일 서버 한도(보통 20~25MB) 밑으로
+
+
+def clean_files(files):
+    """메신저 「파일」로 고른 첨부 [{"name", "data"(base64)}] → [(이름, 바이트)]. 받는 쪽이 버릴 형식·너무 큰 것은 여기서 막는다."""
+    if not files:
+        return []
+    if not isinstance(files, list) or len(files) > chat_runner.MAX_IMAGES:
+        raise ValueError("파일은 한 번에 %d개까지 붙일 수 있습니다" % chat_runner.MAX_IMAGES)
+    out, total = [], 0
+    for f in files:
+        name = os.path.basename(str((f or {}).get("name") or "").replace("\\", "/")).strip()[:100]
+        if os.path.splitext(name)[1].lower() not in SEND_EXTS:
+            raise ValueError("붙일 수 없는 형식입니다: %s — 사진·pdf·문서·표(xlsx·csv)·텍스트만" % (name or "(이름 없음)"))
+        try:
+            raw = base64.b64decode(str(f.get("data") or ""), validate=True)
+        except ValueError:
+            raise ValueError("파일을 읽지 못했습니다: %s" % name)
+        if not raw or len(raw) > chat_runner.MAX_IMAGE_BYTES:
+            raise ValueError("파일 하나는 %dMB 까지입니다: %s" % (chat_runner.MAX_IMAGE_BYTES // 1048576, name))
+        total += len(raw)
+        out.append((name, raw))
+    if total > SEND_TOTAL:
+        raise ValueError("파일을 합쳐 %dMB 까지 보낼 수 있습니다" % (SEND_TOTAL // 1048576))
+    return out
+
+
 def send(data):
     cfg, _ = load_cfg()
+    files = clean_files(data.get("files"))
     subject, body, reply_to, shown = compose(cfg, data, BOX.threads())
+    if files:                                      # 본문에도 이름을 남겨 대화 화면·기록에 보이게 — 파일은 게이트웨이가 저장해 경로를 지시문에 붙인다
+        line = "📎 " + ", ".join(n for n, _ in files)
+        body = ((body or "").rstrip() + "\n\n" + line).strip()
+        shown = dict(shown, text=((shown.get("text") or "").rstrip() + "\n" + line).strip())
     msg = EmailMessage()
     msg["Subject"], msg["From"], msg["To"] = subject, cfg["user"], cfg["user"]
     msg["Date"] = email.utils.formatdate(localtime=True)
@@ -1142,6 +1191,11 @@ def send(data):
     if key:                                        # 게이트웨이는 본문 마지막 줄 [k:단어] 가 맞아야 받는다(화면에서는 뗀다)
         body = (body or "").rstrip() + "\n\n[k:%s]" % key
     msg.set_content(body or " ")
+    for name, raw in files:
+        ext = os.path.splitext(name)[1].lower()      # 사진은 받는 쪽이 내용 형식으로 알아보니 정확히(윈도우 레지스트리에 webp 가 없을 수 있다)
+        ctype = ("image/jpeg" if ext in (".jpg", ".jpeg") else "image/" + ext[1:] if ext in SEND_EXTS - chat_runner.DOC_EXTS
+                 else mimetypes.guess_type(name)[0] or "application/octet-stream")
+        msg.add_attachment(raw, maintype=ctype.split("/")[0], subtype=ctype.split("/")[1], filename=name)
     pw = password(cfg)
     if cfg.get("send_mode") == "append":
         m = imap_connect(cfg, pw)
@@ -1158,7 +1212,15 @@ def send(data):
     log("보냄 %s" % subject[:80])
     threading.Timer(3, BOX.wake.set).start()       # 게이트웨이가 받아 회신하면 곧 보이게
     threading.Timer(4, RUNNER.wake.set).start()    # 이 PC 에서 직접 실행 중이면 곧 받아 간다
-    return {"ok": True, "subject": subject}
+    return {"ok": True, "subject": subject, "id": mid}
+
+
+def find_by_msgid(threads, mid):
+    """보낸 메일 Message-ID 가 든 대화의 요약 — 허브 「말로 부탁하기」 진행 칸. 번호를 받아 key 가 T## 로 바뀌어도 따라간다."""
+    for t in threads:
+        if any(m.get("id") == mid for m in t.get("msgs") or []):
+            return {k: t.get(k) for k in ("key", "no", "title", "status", "ts", "last", "last_bot", "progress")}
+    return None
 
 
 # ----------------------------------------------------------------- 화면 서버
@@ -1202,19 +1264,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 with open(p, "rb") as f:
                     return self._send(200, f.read(), PET_FILES[u.path[5:]])
             return self._send(404, {"error": "no pet"})
-        m = re.fullmatch(r"/skin/plush/([\w\-]+\.(webp|png|json))", u.path)     # 펫 그림(인형 스킨만)
+        m = re.fullmatch(r"/skin/(plush|toon)/([\w\-]+\.(webp|png|json))", u.path)   # 펫 그림(인형·만화 스킨)
         if m:
-            p = os.path.join(PET_WEB, PET_SKIN, "plush", m.group(1))
+            p = os.path.join(PET_WEB, PET_SKIN, m.group(1), m.group(2))
             if os.path.isfile(p):
                 with open(p, "rb") as f:
-                    return self._send(200, f.read(), PET_TYPES[m.group(2)])
+                    return self._send(200, f.read(), PET_TYPES[m.group(3)])
             return self._send(404, {"error": "no pet"})
         if u.path == "/api/pet":                                                    # 고른 품종·소품 — 허브가 없으면 기본(첫 번째 품종·계절 소품)
             try:
                 import urllib.request
                 with urllib.request.urlopen(HUB_SKIN, timeout=0.6) as r:
                     j = json.loads(r.read().decode("utf-8"))
-                return self._send(200, {"breed": (j.get("breed") or {}) if j.get("skin") == "plush" else {}, "petx": j.get("petx")})
+                skin = j.get("skin") if j.get("skin") in PET_SKINS else "plush"           # 허브가 고른 스킨(인형·만화), 그 밖이면 인형
+                return self._send(200, {"skin": skin, "breed": (j.get("breed") or {}) if j.get("skin") in PET_SKINS else {}, "petx": j.get("petx")})
             except Exception:
                 return self._send(200, {"breed": {}})
         if u.path == "/api/tokens":                                                 # 화면 펫 × Claude Code 토큰(읽기 전용, 허브가 없으면 files 0)
@@ -1237,6 +1300,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not t:
                 return self._send(404, {"error": "없는 대화"})
             return self._send(200, t)
+        if u.path == "/api/by-msgid":                                               # 보낸 메일 하나의 대화 요약(없으면 thread null)
+            mid = (parse_qs(u.query).get("id") or [""])[0]
+            return self._send(200, {"thread": find_by_msgid(BOX.threads(), mid) if mid else None})
+        if u.path == "/api/search":                                              # 대화 찾기 — 맞는 대화 key 목록
+            q = (parse_qs(u.query).get("q") or [""])[0]
+            return self._send(200, {"keys": search_threads(BOX.threads(), q)})
+        if u.path == "/api/costs":                                                  # 비용 내역 — 이 PC 작업 기록(게이트웨이·직접 실행)에서만
+            dirs = sorted({d for d in (JOBS_DIR, RUNNER.jobs_dir) if d and os.path.isdir(d)})
+            audit = os.path.join(INBOX, "job-audit.jsonl") if INBOX else ""
+            if not dirs and not os.path.isfile(audit):
+                return self._send(200, {"local": False})
+            rep = chat_runner.cost_report(dirs, audit)
+            gw = read_json_quiet(GATEWAY_CFG) if GATEWAY_CFG else None
+            rep.update(local=True, limit=chat_runner.cost_limit(gw if isinstance(gw, dict) else load_cfg()[0]))
+            return self._send(200, rep)
         if u.path == "/api/progress":                                               # 일하는 중인 대화의 실시간 진행(게이트웨이 PC 만)
             job_id = (parse_qs(u.query).get("job") or [""])[0]
             return self._send(200, {"progress": job_progress(job_id), "local": bool(jobs_dir())})

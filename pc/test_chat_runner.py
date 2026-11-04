@@ -703,6 +703,52 @@ class RunnerTest(unittest.TestCase):
         t = chat.build_threads(msgs)[0]
         self.assertEqual((len(t["msgs"]), t["status"], t["progress"]), (1, "running", "진행 중 · 5분째"))
 
+    def test_reply_copy_to_phone_address(self):
+        """회신 사본(run_copy_to) — 폰·메일 앱 지시의 회신·확인 대기를 그 주소로 SMTP 한 통씩. PC 메신저 지시·append 모드는 안 보냄.
+        결과 전문은 안 싣고, run_copy_detail 이면 앞 몇 줄 요약(메일 주소·긴 숫자 가림). 실패해도 회신은 그대로."""
+        sent = []
+        self.addCleanup(setattr, chat, "smtp_send", chat.smtp_send)
+        chat.smtp_send = lambda cfg, pw, msg: sent.append(msg)
+        self.turn_on(smtp_host="smtp.example.com")
+        with self.assertRaises(ValueError):
+            self.r.configure({"enabled": True, "copy_to": "그냥 글자"})
+        info = self.r.configure({"enabled": True, "copy_to": "me@icloud.test"})
+        self.assertEqual((info["copy_to"], info["copy_warn"]), ("me@icloud.test", ""))
+        base = {"source": "mail", "workdir": self.work, "prompt": "일", "acked": True, "status": "done",
+                "result": "비밀 결과 첫 줄\n담당 kim@corp.test 010-1234-5678", "mail_subject": "#c 일"}
+        self.r.write_job(dict(base, id="j-phone", mail_msgid="<p@x>"))
+        self.r.write_job(dict(base, id="j-chat", mail_msgid="<c@x>", client="chat"))
+        self.r.write_job(dict(base, id="j-wait", mail_msgid="<w@x>", status="awaiting_confirm", mode="write",
+                              confirm_sent=False, result=""))
+        cfg, _ = chat.load_cfg()
+        self.r.send_out(cfg)
+        self.assertEqual(len(self.replies("reply")), 2)                    # 메일함 회신은 그대로 둘 다
+        self.assertEqual(sorted(m["X-Dispatch-Kind"] for m in sent), ["copy", "copy"])   # 폰 회신 + 확인 대기, 메신저 건은 빼고
+        self.assertTrue(all(m["To"] == "me@icloud.test" for m in sent))
+        body = "\n".join(m.get_content() for m in sent)
+        self.assertIn("일이 끝났습니다", body)
+        self.assertIn("확인을 기다립니다", body)
+        self.assertNotIn("비밀 결과", body)                                  # 전문은 안 보냄
+        # 요약 켜면 앞 몇 줄 — 가려서
+        sent.clear()
+        self.r.configure({"enabled": True, "copy_detail": True})
+        self.r.write_job(dict(base, id="j-phone2", mail_msgid="<p2@x>"))
+        self.r.send_out(chat.load_cfg()[0])
+        text = sent[0].get_content()
+        self.assertIn("비밀 결과 첫 줄", text)
+        self.assertIn("***@corp.test", text)
+        self.assertNotIn("1234-5678", text)
+        # 받은편지함 써 넣기 모드면 보내지 않고 경고
+        sent.clear()
+        self.turn_on(send_mode="append")
+        self.assertIn("SMTP", self.r.info()["copy_warn"])
+        self.r.write_job(dict(base, id="j-phone3", mail_msgid="<p3@x>"))
+        self.r.send_out(chat.load_cfg()[0])
+        self.assertEqual(sent, [])
+        # 내 주소와 같으면 안 보냄
+        self.turn_on(send_mode="smtp", run_copy_to=ME)
+        self.assertIn("같아", self.r.info()["copy_warn"])
+
     def test_progress_ask_answers_right_away(self):
         """돌고 있는 폰·메일 앱 지시에 '진행?' — 새 작업 없이 진행 한 줄을 바로(3분 기다리지 않는다). 시작 전이면 앞에 몇 개.
         PC 메신저(client=chat)의 '진행?' 은 평소대로 이어 말하기, '멈춤' 은 그대로 멈춤."""
@@ -785,6 +831,37 @@ class RunnerTest(unittest.TestCase):
             runner.parse_dirs("그냥 폴더")
         with self.assertRaises(ValueError):
             runner.parse_dirs("x=%s" % os.path.join(self.tmp, "없음"))
+
+
+class CostReportTest(unittest.TestCase):
+    """비용 내역 — 작업 파일 + 지시 실행 기록을 id 하나에 한 번만, 날짜·대화별로 센다."""
+
+    def test_report(self):
+        from datetime import datetime
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        jobs = os.path.join(tmp, "jobs")
+        os.makedirs(jobs)
+        for j in ({"id": "a", "created_at": "2026-11-04 09:00:00", "cost_usd": 0.5, "thread": 7, "prompt": "첫 일", "status": "done", "duration_ms": 4000},
+                  {"id": "b", "created_at": "2026-11-03 10:00:00", "cost_usd": 0.25, "thread": 7, "prompt": "이어서", "status": "done"},
+                  {"id": "c", "created_at": "2026-11-04 08:00:00", "cost_usd": None, "thread": 8, "status": "canceled"}):
+            with open(os.path.join(jobs, j["id"] + ".json"), "w", encoding="utf-8") as f:
+                json.dump(j, f)
+        audit = os.path.join(tmp, "job-audit.jsonl")
+        with open(audit, "w", encoding="utf-8") as f:
+            for r in ({"id": "a", "created": "2026-11-04 09:00:00", "cost_usd": 9},          # 작업 파일에도 있는 것 — 두 번 세지 않는다
+                      {"id": "d", "created": "2026-10-20 10:00:00", "cost_usd": 1.0, "thread": 3, "prompt": "지난달", "status": "done"},
+                      {"id": "e", "created": "2026-09-01 10:00:00", "cost_usd": 5.0, "thread": 1}):   # 30일 밖
+                f.write(json.dumps(r) + "\n")
+            f.write("깨진 줄\n")
+        r = runner.cost_report([jobs, ""], audit, now=datetime(2026, 11, 4, 12, 0), days=14)
+        self.assertEqual((r["today"], r["month"], r["d30"], r["nocost"]), (0.5, 0.75, 1.75, 1))
+        self.assertEqual(len(r["days"]), 14)
+        self.assertEqual(r["days"][-1], {"day": "2026-11-04", "usd": 0.5, "n": 1})
+        self.assertEqual([(t["thread"], t["usd"], t["n"], t["title"]) for t in r["threads"]], [(3, 1.0, 1, "지난달"), (7, 0.75, 2, "이어서")])
+        self.assertEqual([x["created"][:10] for x in r["recent"]], ["2026-11-04", "2026-11-03", "2026-10-20", "2026-09-01"])
+        self.assertEqual(r["recent"][0]["secs"], 4.0)
+        self.assertEqual(runner.cost_report([os.path.join(tmp, "없음")], "", now=datetime(2026, 11, 4))["recent"], [])
 
 
 if __name__ == "__main__":

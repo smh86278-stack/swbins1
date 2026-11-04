@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""화면 펫 × Claude Code 토큰 사용량 시험 — 메일 서버·허브 없이 돈다.  python -m unittest test_pet_tokens   (이 폴더에서)
+"""화면 펫 × Claude Code 토큰 사용량 시험 — 메일 서버·허브 없이 돈다.  python -m unittest test_chat_pet_tokens   (이 폴더에서)
 
 - chat.pet_tokens: 허브 /api/tokens 값에서 필요한 것만(폴더 이름만, 경로는 빼고) 넘기는지
 - chat.pet_tokens_cached: 허브가 없으면 이 PC 기록(tokenlocal)으로, 그것도 없으면 조용히 꺼지는지(files 0)
@@ -23,7 +23,7 @@ sys.path.insert(0, HERE)
 import chat  # noqa: E402
 import tokenlocal  # noqa: E402
 
-PETTOK = os.path.join(HERE, "..", "pet", "pettok.js")
+PETTOK = os.path.join(chat.PET_WEB, "pettok.js")        # 메신저가 내주는 그 파일(swbins1 은 ../pet, swbins2 는 허브 web\)
 NODE = shutil.which("node")
 
 HUB_VIEW = {  # 허브 view() 모양(필요 없는 칸까지 섞어서)

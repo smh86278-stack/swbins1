@@ -58,6 +58,8 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .filters button.on{color:var(--text);border-bottom-color:var(--accent);font-weight:700}
 #list{flex:1;overflow:auto;padding:0 0 12px}
 #list>.hint{padding:10px 16px}
+.findbar{padding:6px 10px;border-bottom:1px solid var(--line)}
+.findbar input{width:100%;box-sizing:border-box;font-size:12.5px;padding:5px 8px}
 .item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;background:transparent;border-radius:0;padding:9px 16px 9px 13px;margin:0}
 .item:hover{background:var(--soft)}
 .item.sel{background:var(--solid);border-left-color:var(--accent)}
@@ -84,6 +86,10 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .item .fire{flex:none;font-size:11px;font-weight:700;color:var(--bad)}
 #urgBtn.on{color:var(--bad);border-color:var(--bad)}
 .snipwrap{position:relative}
+.filechips{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 0}.filechips:empty{display:none}
+.filechips span{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:3px;padding:1px 4px 1px 8px;font-size:12px;color:var(--muted);max-width:260px}
+.filechips span b{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filechips span button{border:0;background:none;padding:0 3px;color:var(--muted);cursor:pointer}
 .snip{position:absolute;bottom:calc(100% + 6px);right:0;width:min(420px,80vw);max-height:300px;overflow:auto;background:var(--solid);border:1px solid var(--field);border-radius:4px;padding:4px 0;z-index:20;display:none}
 .snip.open{display:block}
 .snip .it{display:flex;gap:6px;align-items:flex-start;padding:6px 12px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -206,6 +212,7 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 #runWhy.ok{display:block;color:var(--ok);background:color-mix(in srgb,var(--ok) 7%,transparent)}
 #runDirs{min-height:56px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
 #runErr{color:var(--bad);font-size:12.5px;min-height:16px}
+#runCopyWarn{font-size:12px;border-left:3px solid;padding:4px 9px;margin:4px 0 8px;color:var(--warn);background:color-mix(in srgb,var(--warn) 7%,transparent)}
 .run h4{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);font:700 14.5px/1.3 var(--serif);display:flex;align-items:center;gap:8px}
 .two.half{grid-template-columns:1fr 1fr}
 .run .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:-2px 0 10px;cursor:pointer}
@@ -222,6 +229,24 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .lookpop .swatches i{width:11px;height:11px;border-radius:2px;border:1px solid var(--line);flex:none}
 .lookpop .lookchk{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin:0 0 5px;cursor:pointer}
 .lookpop .lookchk input{margin:2px 0 0;flex:none}
+/* 비용 내역 — 화면 칸과 같은 자리·모양 */
+.costpop{max-height:70vh;overflow:auto;font-size:12.5px}
+.costpop .sum{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 4px}
+.costpop .sum b{font:700 15px/1.2 var(--sans);display:block}
+.costpop .sum span{color:var(--muted);font-size:11.5px}
+.costpop .lt:not(:first-child){margin-top:12px}
+.costpop .cnote{color:var(--muted);font-size:11.5px;margin:0 0 10px}
+.costpop .bars{display:flex;align-items:flex-end;gap:3px;height:56px;margin:0 0 2px;border-bottom:1px solid var(--line)}
+.costpop .bars i{flex:1;background:var(--text);opacity:.75;min-height:1px;border-radius:2px 2px 0 0}
+.costpop .bars i.z{opacity:.15}
+.costpop .bars i.td{background:var(--accent,var(--text));opacity:1}
+.costpop .axis{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:0 0 10px}
+.costpop .crow{display:flex;gap:6px;align-items:baseline;width:100%;margin:0;padding:3px 2px;border:0;border-bottom:1px dashed var(--line);background:none;text-align:left;font:inherit;color:inherit}
+.costpop button.crow{cursor:pointer}
+.costpop button.crow:hover{background:var(--bg)}
+.costpop .crow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.costpop .crow .m{color:var(--muted);flex:none;font-size:11.5px}
+.costpop .crow .u{flex:none;font-variant-numeric:tabular-nums;font-weight:700}
 @media (max-width:480px){.two.half{grid-template-columns:1fr}}
 /* Jira 새 티켓 감시 — 대화 목록 위 자리비움 단추(켜져 있으면 눈에 띄게) · 설정 칸 */
 .away{margin:0 16px 10px;display:flex;flex-direction:column;gap:4px}
@@ -299,10 +324,11 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     <div class="awaynote" id="awayNote" hidden><span id="awayNoteTx"></span><button id="awayNoteX" title="알림 지우기">✕</button></div>
   </div>
   <div class="filters" id="filters">
-    <button data-f="all" class="on">전체</button><button data-f="wait">답할 것</button><button data-f="busy">진행 중</button><button data-f="urgent" title="급건 표시한 대화만">급건</button>
+    <button data-f="all" class="on">전체</button><button data-f="wait">답할 것</button><button data-f="busy">진행 중</button><button data-f="urgent" title="급건 표시한 대화만">급건</button><button data-f="error" title="오류로 끝난 대화만">오류</button>
     <button class="iconbtn" id="refreshBtn" style="margin-left:auto" title="메일함 다시 읽기">↻</button>
     <button class="iconbtn" id="clearBtn" title="대화 전체 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다(일하는 중인 대화는 남김)">비우기</button>
     <button class="iconbtn" id="lookBtn" title="바탕·강조색 고르기 — 이 PC 에만 기억">화면</button>
+    <button class="iconbtn" id="costBtn" title="비용 내역 — 맡긴 일에 든 Claude 비용(오늘·날짜별·대화별)">비용</button>
     <button class="iconbtn" id="setBtn" title="메일 계정">설정</button>
     <!-- 화면 — 바탕 테마·강조색(누르면 바로 바뀐다, 라이트·다크는 시스템 설정을 따른다) -->
     <div class="lookpop" id="lookBox" hidden>
@@ -314,7 +340,9 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
       <div class="lt">윈도우 알림</div>
       <label class="lookchk"><input type="checkbox" id="osNote"> 창을 안 볼 때 질문·실행 확인·작업 끝을 알려 줘요</label>
     </div>
+    <div class="lookpop costpop" id="costBox" hidden></div>
   </div>
+  <div class="findbar"><input id="findQ" type="search" placeholder="대화 찾기 — 제목·번호(T12)·주고받은 말" autocomplete="off"></div>
   <div id="list"></div>
   <div class="petstage off" id="petStage" title="강아지는 메일함을 지키고, 고양이는 맡긴 일을 합니다 — 마우스를 올려 보세요">
     <div class="buddies" id="buddies"></div>
@@ -341,9 +369,11 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
       </div>
       <div class="inrow">
         <textarea id="newText" rows="3" placeholder="할 일을 적으세요 — 첫 줄이 제목이 됩니다 (Ctrl+Enter 로 보내기)"></textarea>
+        <button class="ghost filebtn" data-for="newText" title="이 PC 파일 붙이기 — 사진·pdf·문서·표(xlsx·csv)·텍스트, 5개·하나 10MB 까지">파일</button>
         <span class="snipwrap"><button class="ghost snipbtn" data-for="newText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">답 모음</button><div class="snip"></div></span>
         <button class="send" id="newSend" disabled>보내기</button>
       </div>
+      <div class="filechips" id="newTextFiles"></div>
       <div class="hint" id="newHint">읽기: 조회·분석만 · 수정 허용: 파일 수정·명령 실행까지(PC 가 실행 전에 확인 메일을 한 번 보냅니다)</div>
     </div>
   </div>
@@ -359,10 +389,12 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     <div class="composer">
       <div class="inrow">
         <textarea id="sayText" rows="1" placeholder="이어서 말하기 (Ctrl+Enter 로 보내기)"></textarea>
+        <button class="ghost filebtn" data-for="sayText" title="이 PC 파일 붙이기 — 사진·pdf·문서·표(xlsx·csv)·텍스트, 5개·하나 10MB 까지">파일</button>
         <span class="snipwrap"><button class="ghost snipbtn" data-for="sayText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">답 모음</button><div class="snip"></div></span>
         <button class="ghost" id="stopBtn" title="하던 일을 정리하고 멈추게 합니다">멈춤</button>
         <button class="send" id="saySend" disabled>보내기</button>
       </div>
+      <div class="filechips" id="sayTextFiles"></div>
     </div>
   </div>
 </main>
@@ -411,6 +443,9 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
       <div class="field"><label>Jira 스킬 이름</label><input id="runJiraSkill" type="text" placeholder="jira (예: task-input)"></div></div>
     <label class="chk"><input type="checkbox" id="runJiraNet"> curl·ssh 허용 — 스킬이 curl 로 Jira REST 를 부를 때(예: bo-workspace task-input)</label>
     <div class="field"><label>하루 비용 한도 ($ — 비우거나 0 이면 없음. 닿으면 새 지시는 실행하지 않고 이유만 답합니다)</label><input id="runCost" type="text" inputmode="decimal" placeholder="예: 5"></div>
+    <div class="field"><label>회신 사본 받을 주소 (비우면 안 보냄 — 폰·메일 앱에서 보낸 지시가 끝나거나 확인을 기다리면 이 주소로 알림 한 통. 결과 전문은 안 보냅니다)</label><input id="runCopyTo" type="text" inputmode="email" autocomplete="off" placeholder="예: me@icloud.com"></div>
+    <label class="chk"><input type="checkbox" id="runCopyDetail"> 사본에 결과 앞 몇 줄 요약 넣기 (메일 주소·긴 숫자는 가림 — 회사 일이면 끄세요)</label>
+    <div id="runCopyWarn" style="display:none"></div>
     <div id="runErr"></div>
     <div class="acts" style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="ghost" id="runLogin">로그인 창 열기</button><button type="button" class="ghost" id="runSave">저장</button></div>
   </div>
@@ -436,7 +471,8 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
 <div id="toast"></div>
 
 <script>
-const TOKEN = '__TOKEN__';
+const TOKEN = '__TOKEN__';                            // 이 줄 모양 그대로 — 허브 「말로 부탁하기」가 이 줄로 토큰을 읽는다
+let apiTok = TOKEN;                                    // 메신저를 다시 띄우면 바뀐다 — api() 가 403 이면 새로 받아 한 번 더
 const $ = s => document.querySelector(s);
 const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 const pad = n => String(n).padStart(2, '0');
@@ -444,10 +480,13 @@ const STATUS = { ask: '답할 차례', confirm: '실행 확인', sent: '보냄',
 let state = { threads: [] }, sel = null, cur = null, filter = 'all', newMode = 'read', folder = '', lastVer = -1, curTs = 0, busy = false;
 
 function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 3200); }
-async function api(path, body) {
-  const opt = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN }, body: JSON.stringify(body) };
+async function api(path, body, again) {
+  const opt = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Token': apiTok }, body: JSON.stringify(body) };
   const r = await fetch(path, opt); let j = {}; try { j = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(j.error || ('오류 ' + r.status)); return j;
+  if (r.status === 403 && j.error === 'forbidden' && body !== undefined && !again) {   // 다시 띄운 메신저 — 새 토큰을 받아 한 번 더
+    try { const m = /const TOKEN = '([^']+)'/.exec(await (await fetch('/', { cache: 'no-store' })).text()); if (m) { apiTok = m[1]; return api(path, body, true); } } catch (e) {}
+  }
+  if (!r.ok) throw new Error(r.status === 403 && j.error === 'forbidden' ? '메신저가 다시 켜졌습니다 — 화면을 새로 고쳐 주세요(F5)' : j.error || ('오류 ' + r.status)); return j;   // 다시 띄우면 접속 토큰이 바뀐다
 }
 function when(ts) {
   const d = new Date(ts * 1000), now = new Date();
@@ -456,11 +495,19 @@ function when(ts) {
 function badge(st) { return el('span', 'badge b-' + st, STATUS[st] || st); }
 
 /* ---------- 목록 ---------- */
+let findKeys = null;                                  // 대화 찾기 — 맞는 대화 key(Set), 찾는 중이 아니면 null
+async function runFind() {
+  const q = $('#findQ').value.trim();
+  if (!q) { findKeys = null; drawList(); return; }
+  try { const j = await api('/api/search?q=' + encodeURIComponent(q)); if ($('#findQ').value.trim() === q) { findKeys = new Set(j.keys || []); drawList(); } } catch (e) { toast(e.message); }
+}
+$('#findQ').oninput = () => { clearTimeout(runFind.t); runFind.t = setTimeout(runFind, 250); };
 function drawList() {
   const box = $('#list'); box.replaceChildren();
-  const show = state.threads.filter(t => filter === 'all' || (filter === 'urgent' ? t.urgent : filter === 'wait' ? ['ask', 'confirm'].includes(t.status) : ['sent', 'queued', 'running'].includes(t.status)))
+  const show = state.threads.filter(t => filter === 'all' || (filter === 'urgent' ? t.urgent : filter === 'error' ? t.status === 'error' : filter === 'wait' ? ['ask', 'confirm'].includes(t.status) : ['sent', 'queued', 'running'].includes(t.status)))
+    .filter(t => !findKeys || findKeys.has(t.key))
     .sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));        // 🔥 급건은 맨 위(그 안에서는 최근 순 그대로)
-  if (!show.length) { box.append(el('div', 'hint', state.threads.length ? '해당하는 대화가 없습니다' : '최근 대화가 없습니다 — 새 대화로 시작하세요')); return; }
+  if (!show.length) { box.append(el('div', 'hint', findKeys ? '찾는 대화가 없습니다' : state.threads.length ? '해당하는 대화가 없습니다' : '최근 대화가 없습니다 — 새 대화로 시작하세요')); return; }
   for (const t of show) {
     const b = el('button', 'item' + (t.key === sel ? ' sel' : '') + (t.urgent ? ' urgent' : ''));
     const top = el('div', 'top');
@@ -580,11 +627,44 @@ async function sendSay(extra) {
   if (busy || !cur) return;
   const body = Object.assign({ key: cur.key, text: '' }, extra);
   busy = true; refreshBtns();
-  try { await api('/api/send', body); $('#sayText').value = ''; grow($('#sayText')); toast('보냈습니다'); await poll(true); }
+  try { await api('/api/send', body); $('#sayText').value = ''; grow($('#sayText')); if (body.files) fileClear('sayText'); toast('보냈습니다'); await poll(true); }
   catch (e) { toast(e.message); }
   finally { busy = false; refreshBtns(); }
 }
-$('#saySend').onclick = () => sendSay({ text: $('#sayText').value.trim() });
+$('#saySend').onclick = async () => { let files; try { files = await fileData('sayText'); } catch (e) { return toast(e.message); } sendSay(Object.assign({ text: $('#sayText').value.trim() }, files)); };
+/* ---------- 파일 붙이기 — 고른 파일을 base64 로 보내면 메신저가 지시 메일에 붙이고, 게이트웨이(직접 실행)가 저장해 경로를 지시문에 넣는다 ---------- */
+const FILE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'csv', 'tsv', 'log', 'md', 'json', 'xml', 'html', 'htm', 'yaml', 'yml', 'sql', 'xlsx', 'xls', 'docx', 'pptx'];
+const FILE_MAX = 5, FILE_BYTES = 10 * 1048576, FILE_TOTAL = 20 * 1048576, pend = { newText: [], sayText: [] };
+function fileDraw(id) {
+  const box = $('#' + id + 'Files'); box.replaceChildren();
+  pend[id].forEach((f, i) => { const c = el('span'); c.title = f.name + ' · ' + Math.max(1, Math.round(f.size / 1024)) + 'KB'; const x = el('button', '', '✕'); x.type = 'button'; x.title = '빼기';
+    x.onclick = () => { pend[id].splice(i, 1); fileDraw(id); }; c.append(el('b', '', '📎 ' + f.name), x); box.append(c); });
+}
+function fileClear(id) { pend[id] = []; fileDraw(id); }
+function fileAdd(id, list) {
+  for (const f of list) {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (!FILE_EXTS.includes(ext)) { toast('붙일 수 없는 형식이에요: ' + f.name + ' — 사진·pdf·문서·표·텍스트만'); continue; }
+    if (f.size > FILE_BYTES) { toast('파일 하나는 10MB 까지예요: ' + f.name); continue; }
+    if (pend[id].length >= FILE_MAX) { toast('파일은 ' + FILE_MAX + '개까지예요'); break; }
+    if (pend[id].reduce((n, x) => n + x.size, 0) + f.size > FILE_TOTAL) { toast('합쳐 20MB 까지예요'); break; }
+    pend[id].push(f);
+  }
+  fileDraw(id);
+}
+async function fileData(id) {   // {files: [{name, data}]} — 고른 게 없으면 {}
+  if (!pend[id].length) return {};
+  const read = f => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok({ name: f.name, data: String(r.result).split(',')[1] || '' }); r.onerror = () => bad(new Error('파일을 읽지 못했어요: ' + f.name)); r.readAsDataURL(f); });
+  return { files: await Promise.all(pend[id].map(read)) };
+}
+for (const b of document.querySelectorAll('.filebtn')) {
+  const inp = el('input'); inp.type = 'file'; inp.multiple = true; inp.hidden = true; inp.accept = FILE_EXTS.map(e => '.' + e).join(',');
+  inp.onchange = () => { fileAdd(b.dataset.for, inp.files); inp.value = ''; };
+  b.after(inp); b.onclick = () => inp.click();
+  const t = $('#' + b.dataset.for);   // 끌어 놓기 — 글 칸에 파일을 떨어뜨려도 붙는다
+  t.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  t.addEventListener('drop', e => { if (e.dataTransfer.files.length) { e.preventDefault(); fileAdd(b.dataset.for, e.dataTransfer.files); } });
+}
 $('#urgBtn').onclick = async () => {                      // 🔥 급건 표시 — 이 PC 목록에서만
   if (!cur) return;
   const on = !cur.urgent;
@@ -663,7 +743,8 @@ async function sendNew(body, after) {
   catch (e) { toast(e.message); }
   finally { busy = false; refreshBtns(); }
 }
-$('#newSend').onclick = () => sendNew({ text: $('#newText').value.trim(), mode: newMode, folder }, () => { $('#newText').value = ''; });
+$('#newSend').onclick = async () => { let files; try { files = await fileData('newText'); } catch (e) { return toast(e.message); }
+  sendNew(Object.assign({ text: $('#newText').value.trim(), mode: newMode, folder }, files), () => { $('#newText').value = ''; fileClear('newText'); }); };
 
 /* ---------- 공통 ---------- */
 function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 180) + 'px'; }
@@ -780,6 +861,7 @@ async function poll(force) {
   drawAway(s.jira_watch || {});
   if (!$('#folderChips').childElementCount || force) drawFolders();
   drawList();
+  if (findKeys) runFind();                          // 찾는 중 새 말이 오면 맞는 대화를 다시 찾는다
   if (sel) {
     const t = s.threads.find(x => x.key === sel);
     if (!t) {                                  // 보낸 첫 지시가 번호를 받아 T 대화로 바뀌었다 — 같은 대화로 따라간다
@@ -824,6 +906,8 @@ function drawRunner(r) {
   $('#runJiraUrl').value = r.jira_url || ''; $('#runJiraDir').value = r.jira_dir || ''; $('#runJiraTok').value = '';
   $('#runJiraSkill').value = r.jira_skill || ''; $('#runJiraNet').checked = !!r.jira_allow_net;
   $('#runCost').value = r.cost ? r.cost : ''; $('#runCost').title = '오늘 쓴 비용 $' + Number(r.spent || 0).toFixed(2);
+  $('#runCopyTo').value = r.copy_to || ''; $('#runCopyDetail').checked = !!r.copy_detail;
+  $('#runCopyWarn').textContent = r.copy_warn || ''; $('#runCopyWarn').style.display = r.copy_warn ? '' : 'none';
   $('#runJiraTok').placeholder = r.has_jira_token ? '저장됨 — 바꿀 때만 입력' : '비우면 이 PC 의 jira MCP';
   let msg = '', cls = '';
   if (r.blocked) { msg = r.blocked; cls = 'warn'; }
@@ -842,7 +926,8 @@ async function saveRunner(enabled, done) {
     const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value,
       browser: $('#runBrowser').checked, jira: $('#runJira').checked, jira_url: $('#runJiraUrl').value,
       jira_token: $('#runJiraTok').value, jira_dir: $('#runJiraDir').value,
-      jira_skill: $('#runJiraSkill').value, jira_allow_net: $('#runJiraNet').checked, cost: $('#runCost').value });
+      jira_skill: $('#runJiraSkill').value, jira_allow_net: $('#runJiraNet').checked, cost: $('#runCost').value,
+      copy_to: $('#runCopyTo').value, copy_detail: $('#runCopyDetail').checked });
     drawRunner(r); toast(done || '저장했습니다'); poll(true);
   } catch (e) { $('#runErr').textContent = e.message; loadRunner(); }
 }
@@ -993,11 +1078,44 @@ function lookApply() {
 }
 darkMq.addEventListener('change', lookApply);
 lookApply();
-function lookShow(on) { $('#lookBox').hidden = !on; $('#lookBtn').classList.toggle('lookon', on); }
+function lookShow(on) { $('#lookBox').hidden = !on; $('#lookBtn').classList.toggle('lookon', on); if (on) costShow(false); }
 $('#lookBtn').onclick = e => { e.stopPropagation(); lookShow($('#lookBox').hidden); };
 $('#lookBox').onclick = e => e.stopPropagation();                 // 고르는 동안은 열어 둔다
-document.addEventListener('click', () => lookShow(false));
-document.addEventListener('keydown', e => { if (e.key === 'Escape') lookShow(false); });
+document.addEventListener('click', () => { lookShow(false); costShow(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { lookShow(false); costShow(false); } });
+
+/* ---------- 비용 내역 — 이 PC 작업 기록(게이트웨이·직접 실행)의 cost_usd. 구독 로그인이면 실제 청구가 아니라 API 요금 환산 ---------- */
+const usd = v => '$' + Number(v || 0).toFixed(2);
+function costShow(on) { $('#costBox').hidden = !on; $('#costBtn').classList.toggle('lookon', on); if (on) { $('#lookBox').hidden = true; $('#lookBtn').classList.remove('lookon'); costLoad(); } }
+$('#costBtn').onclick = e => { e.stopPropagation(); costShow($('#costBox').hidden); };
+$('#costBox').onclick = e => e.stopPropagation();
+function costThread(no) { return no != null ? state.threads.find(t => t.no === no) : null; }
+async function costLoad() {
+  const box = $('#costBox');
+  if (!box.childElementCount) box.append(el('div', 'cnote', '읽는 중…'));
+  let r; try { r = await api('/api/costs'); } catch (e) { box.replaceChildren(el('div', 'cnote', e.message)); return; }
+  box.replaceChildren();
+  if (!r.local) { box.append(el('div', 'lt', '비용 내역'), el('div', 'cnote', '이 PC 에는 작업 기록이 없어요 — 게이트웨이 PC 이거나 「이 PC 에서 직접 실행」을 켠 PC 에서만 보여요.')); return; }
+  const sum = el('div', 'sum');
+  for (const [v, l] of [[r.today, '오늘' + (r.limit ? ' / 한도 ' + usd(r.limit) : '')], [r.month, '이번 달'], [r.d30, '최근 30일']]) { const d = el('div'); d.append(el('b', '', usd(v)), el('span', '', l)); sum.append(d); }
+  box.append(el('div', 'lt', '비용 내역'), sum,
+    el('div', 'cnote', 'Claude 구독(로그인)으로 돌리면 실제 청구가 아니라 API 요금으로 환산한 값이에요.' + (r.nocost ? ' 최근 30일 비용이 안 남은 일 ' + r.nocost + '건(취소·멈춤·확인만 한 일 등)은 빠져 있어요.' : '')));
+  const max = Math.max(...r.days.map(d => d.usd), 0.0001), bars = el('div', 'bars'), today = r.days.length ? r.days[r.days.length - 1].day : '';
+  for (const d of r.days) { const i = el('i', d.usd ? (d.day === today ? 'td' : '') : 'z'); i.style.height = (d.usd ? Math.max(4, d.usd / max * 100) : 2) + '%'; i.title = d.day.slice(5).replace('-', '/') + ' · ' + usd(d.usd) + ' · ' + d.n + '건'; bars.append(i); }
+  const ax = el('div', 'axis'); ax.append(el('span', '', r.days.length ? r.days[0].day.slice(5).replace('-', '/') : ''), el('span', '', '최근 ' + r.days.length + '일 (막대에 마우스)'), el('span', '', '오늘'));
+  box.append(bars, ax);
+  const row = (no, title, meta, v) => {
+    const t = costThread(no), b = el(t ? 'button' : 'div', 'crow');
+    b.append(el('span', 'm', no != null ? 'T' + no : '—'), el('span', 't', title || '(제목 없음)'), el('span', 'm', meta), el('span', 'u', usd(v)));
+    if (t) { b.type = 'button'; b.title = '이 대화 열기'; b.onclick = () => { costShow(false); openThread(t.key); }; }
+    return b;
+  };
+  if (r.threads.length) { box.append(el('div', 'lt', '대화별 (최근 30일)')); for (const t of r.threads) box.append(row(t.thread, (costThread(t.thread) || {}).title || (t.jira ? t.jira + ' ' : '') + t.title, t.n + '건', t.usd)); }
+  if (r.recent.length) {
+    box.append(el('div', 'lt', '최근 맡긴 일'));
+    for (const x of r.recent) box.append(row(x.thread, (x.jira ? x.jira + ' ' : '') + x.prompt, x.created.slice(5, 16).replace('-', '/') + (x.secs != null ? ' · ' + Math.round(x.secs) + '초' : '') + (x.status === 'error' ? ' · 오류' : ''), x.usd));
+  } else box.append(el('div', 'cnote', '아직 비용이 기록된 일이 없어요.'));
+}
 
 const PET_PICK = 'dnc-pet-breed';
 function petPick() { try { return JSON.parse(localStorage.getItem(PET_PICK) || '{}'); } catch (e) { return {}; } }
@@ -1019,14 +1137,14 @@ function petFillSelects(hub) {
 async function petLoad() {                                 // 가끔 다시 맞춘다(허브에서 품종을 바꿨을 수 있다)
   if (!window.PetSkin) return;
   petBreedAt = Date.now();
-  let hub = {}, petx = null;
-  try { const j = await api('/api/pet'); hub = j.breed || {}; petx = j.petx; } catch (e) {}
+  let hub = {}, petx = null, skin = 'plush';
+  try { const j = await api('/api/pet'); hub = j.breed || {}; petx = j.petx; skin = j.skin || 'plush'; } catch (e) {}
   if (window.PetAcc && PetAcc.set(petx)) petDraw();         // 소품·계절은 허브를 따른다(허브가 없으면 계절 자동)
   const breed = Object.assign({}, hub, petPick());
-  const key = JSON.stringify(breed);
+  const key = skin + JSON.stringify(breed);                 // 허브에서 스킨(인형·만화)을 바꿔도 다시
   if (petSkin) petFillSelects(hub);
   if (petSkin && petSkin._key === key) return;
-  const m = await PetSkin.load('plush', breed);
+  const m = await PetSkin.load(skin, breed) || (skin !== 'plush' ? await PetSkin.load('plush', breed) : null);
   if (!m) return;
   m._key = key; petSkin = m;
   petFillSelects(hub);
