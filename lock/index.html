@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 잠긴 페이지(gh-pages). 진짜 화면은 payload.json 안에 키로 암호화돼 있고 unlock.js 가 이 기기에서 풀어 그린다.
+     풀린 화면의 app.js 는 blob: 주소로 붙으므로 script-src 에 blob: 이 있다. 나머지는 원래 index.html 의 정책과 같다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://gmail.googleapis.com https://www.googleapis.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>🔒</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font:16px/1.5 system-ui,sans-serif;background:#f4efe6;color:#2a2622}
+@media (prefers-color-scheme: dark){body{background:#1f1c19;color:#eee6da}}
+form{display:none;gap:8px;flex-direction:column;width:min(280px,calc(100vw - 32px))}
+form.on{display:flex}
+input,button{font:inherit;padding:10px 12px;border-radius:6px;border:1px solid #8886}
+button{cursor:pointer}
+#msg{min-height:1.5em;font-size:14px;opacity:.7}
+</style>
+</head>
+<body>
+<form id="f" autocomplete="off">
+  <input id="k" type="password" placeholder="키" autocapitalize="off" spellcheck="false" aria-label="키">
+  <button>열기</button>
+  <div id="msg"></div>
+</form>
+<script src="unlock.js"></script>
+</body>
+</html>
