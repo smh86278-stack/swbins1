@@ -1,0 +1,731 @@
+{
+ "name": "인형 (AI 생성)",
+ "acc_img_note": "인형 질감 소품 그림 acc-<id>.webp 의 크기·원점(소품 단위 폭 w, 그림 안 원점 ax·ay 0~1) — web/pets.js PetAcc.loadImgs. 없는 소품(목도리·안경·베레모·선글라스)은 SVG",
+ "acc_img": {
+  "ribbon": {"w": 28, "ay": 0.5},
+  "bowtie": {"w": 22, "ay": 0.5},
+  "crown": {"w": 26, "ay": 0.9},
+  "pumpkin": {"w": 30, "ay": 0.88},
+  "witch": {"w": 36, "ay": 0.88},
+  "santa": {"w": 30, "ay": 0.8},
+  "blossom": {"w": 26, "ay": 0.5},
+  "pouch": {"w": 26, "ay": 0.05},
+  "saekdong": {"w": 28, "ay": 0.5},
+  "seollal": {"parts": ["pouch", "saekdong"]},
+  "heart": {"w": 20, "ay": 0.5},
+  "sprout": {"w": 18, "ay": 0.95},
+  "umbrella": {"w": 36, "ay": 0.5},
+  "balloon": {"w": 24, "ay": 0.55},
+  "carnation": {"w": 16, "ay": 0.4},
+  "raincap": {"w": 32, "ay": 0.85},
+  "straw": {"w": 36, "ay": 0.75},
+  "songpyeon": {"w": 26, "ay": 0.5},
+  "dragonfly": {"w": 24, "ay": 0.5},
+  "maple": {"w": 22, "ay": 0.55},
+  "beanie": {"w": 30, "ay": 0.88},
+  "pepero": {"w": 22, "ay": 0.5, "rot": -20}
+ },
+ "breeds": {
+  "dog": {
+   "shiba": {
+    "name": "시바",
+    "alert": "dog-shiba.webp",
+    "sleep": "dog-shiba-sleep.webp",
+    "worried": "dog-shiba-worried.webp",
+    "bark": "dog-shiba-bark.webp",
+    "rig": {
+     "neck": [
+      0.559,
+      0.506
+     ],
+     "pawL": [
+      0.401,
+      0.93
+     ],
+     "pawR": [
+      0.716,
+      0.93
+     ],
+     "crown": 0.078,
+     "eyes": [
+      0.454,
+      0.297,
+      0.664,
+      0.294
+     ],
+     "head": 0.516,
+     "chin": [
+      0.482,
+      0.338
+     ]
+    }
+   },
+   "corgi": {
+    "name": "웰시코기",
+    "alert": "dog-corgi.webp",
+    "sleep": "dog-corgi-sleep.webp",
+    "rig": {
+     "neck": [
+      0.551,
+      0.48
+     ],
+     "pawL": [
+      0.406,
+      0.93
+     ],
+     "pawR": [
+      0.697,
+      0.93
+     ],
+     "crown": 0.103,
+     "eyes": [
+      0.455,
+      0.273,
+      0.648,
+      0.268
+     ],
+     "head": 0.522,
+     "chin": [
+      0.387,
+      0.353
+     ]
+    }
+   },
+   "pomeranian": {
+    "name": "포메라니안",
+    "alert": "dog-pomeranian.webp",
+    "sleep": "dog-pomeranian-sleep.webp",
+    "rig": {
+     "neck": [
+      0.503,
+      0.48
+     ],
+     "pawL": [
+      0.377,
+      0.93
+     ],
+     "pawR": [
+      0.63,
+      0.93
+     ],
+     "crown": 0.041,
+     "eyes": [
+      0.419,
+      0.282,
+      0.588,
+      0.281
+     ],
+     "head": 0.489,
+     "chin": [
+      0.442,
+      0.388
+     ]
+    }
+   },
+   "maltese": {
+    "name": "말티즈",
+    "alert": "dog-maltese.webp",
+    "sleep": "dog-maltese-sleep.webp",
+    "rig": {
+     "neck": [
+      0.531,
+      0.518
+     ],
+     "pawL": [
+      0.383,
+      0.93
+     ],
+     "pawR": [
+      0.679,
+      0.93
+     ],
+     "crown": 0.016,
+     "eyes": [
+      0.433,
+      0.324,
+      0.63,
+      0.317
+     ],
+     "head": 0.571,
+     "chin": [
+      0.508,
+      0.453
+     ]
+    }
+   },
+   "poodle": {
+    "name": "토이푸들",
+    "alert": "dog-poodle.webp",
+    "rig": {
+     "neck": [
+      0.495,
+      0.516
+     ],
+     "pawL": [
+      0.338,
+      0.93
+     ],
+     "pawR": [
+      0.652,
+      0.93
+     ],
+     "crown": 0.006,
+     "eyes": [
+      0.391,
+      0.309,
+      0.6,
+      0.304
+     ],
+     "head": 0.58,
+     "chin": [
+      0.532,
+      0.335
+     ]
+    }
+   },
+   "bichon": {
+    "name": "비숑",
+    "alert": "dog-bichon.webp",
+    "sleep": "dog-bichon-sleep.webp",
+    "rig": {
+     "neck": [
+      0.503,
+      0.533
+     ],
+     "pawL": [
+      0.345,
+      0.93
+     ],
+     "pawR": [
+      0.66,
+      0.93
+     ],
+     "crown": 0.006,
+     "eyes": [
+      0.397,
+      0.329,
+      0.608,
+      0.316
+     ],
+     "head": 0.58,
+     "chin": [
+      0.559,
+      0.378
+     ]
+    }
+   },
+   "golden": {
+    "name": "골든리트리버",
+    "alert": "dog-golden.webp",
+    "sleep": "dog-golden-sleep.webp",
+    "rig": {
+     "neck": [
+      0.547,
+      0.48
+     ],
+     "pawL": [
+      0.396,
+      0.93
+     ],
+     "pawR": [
+      0.698,
+      0.93
+     ],
+     "crown": 0,
+     "eyes": [
+      0.447,
+      0.275,
+      0.648,
+      0.268
+     ],
+     "head": 0.58,
+     "chin": [
+      0.522,
+      0.395
+     ]
+    }
+   },
+   "husky": {
+    "name": "허스키",
+    "alert": "dog-husky.webp",
+    "sleep": "dog-husky-sleep.webp",
+    "rig": {
+     "neck": [
+      0.498,
+      0.502
+     ],
+     "pawL": [
+      0.352,
+      0.93
+     ],
+     "pawR": [
+      0.644,
+      0.93
+     ],
+     "crown": 0.103,
+     "eyes": [
+      0.401,
+      0.318,
+      0.595,
+      0.296
+     ],
+     "head": 0.513,
+     "chin": [
+      0.524,
+      0.311
+     ]
+    }
+   },
+   "jindo": {
+    "name": "진돗개",
+    "alert": "dog-jindo.webp",
+    "sleep": "dog-jindo-sleep.webp",
+    "rig": {
+     "neck": [
+      0.578,
+      0.52
+     ],
+     "pawL": [
+      0.431,
+      0.93
+     ],
+     "pawR": [
+      0.725,
+      0.93
+     ],
+     "crown": 0.056,
+     "eyes": [
+      0.48,
+      0.328,
+      0.676,
+      0.319
+     ],
+     "head": 0.569,
+     "chin": [
+      0.521,
+      0.452
+     ]
+    }
+   },
+   "dachshund": {
+    "name": "닥스훈트",
+    "alert": "dog-dachshund.webp",
+    "rig": {
+     "neck": [
+      0.515,
+      0.48
+     ],
+     "pawL": [
+      0.341,
+      0.93
+     ],
+     "pawR": [
+      0.69,
+      0.93
+     ],
+     "crown": 0,
+     "eyes": [
+      0.399,
+      0.215,
+      0.632,
+      0.212
+     ],
+     "head": 0.58,
+     "chin": [
+      0.448,
+      0.372
+     ],
+     "acc": {
+      "pumpkin": {
+       "dx": 0,
+       "dy": -2,
+       "s": 1
+      },
+      "beret": {
+       "dx": 0,
+       "dy": -1.5,
+       "s": 1
+      }
+     }
+    }
+   },
+   "panda": {
+    "name": "판다",
+    "alert": "panda.webp",
+    "rig": {
+     "neck": [
+      0.514,
+      0.518
+     ],
+     "pawL": [
+      0.319,
+      0.93
+     ],
+     "pawR": [
+      0.709,
+      0.93
+     ],
+     "crown": 0.025,
+     "eyes": [
+      0.4,
+      0.275,
+      0.64,
+      0.27
+     ],
+     "head": 0.538,
+     "chin": [
+      0.477,
+      0.384
+     ]
+    }
+   }
+  },
+  "cat": {
+   "cream": {
+    "name": "크림",
+    "idle": "cat-cream.webp",
+    "rig": {
+     "neck": [
+      0.512,
+      0.56
+     ],
+     "pawL": [
+      0.323,
+      0.93
+     ],
+     "pawR": [
+      0.701,
+      0.93
+     ],
+     "crown": 0.034,
+     "eyes": [
+      0.386,
+      0.382,
+      0.638,
+      0.377
+     ],
+     "head": 0.58,
+     "chin": [
+      0.641,
+      0.403
+     ],
+     "acc": {
+      "beret": {
+       "dx": 0,
+       "dy": 1,
+       "s": 0.85
+      },
+      "santa": {
+       "dx": 0,
+       "dy": 1,
+       "s": 0.85
+      },
+      "witch": {
+       "dx": 0,
+       "dy": 0,
+       "s": 0.9
+      },
+      "pumpkin": {
+       "dx": 0,
+       "dy": 0,
+       "s": 0.88
+      },
+      "crown": {
+       "dx": 0,
+       "dy": 0,
+       "s": 0.9
+      }
+     }
+    }
+   },
+   "cheese": {
+    "name": "치즈태비",
+    "idle": "cat-cheese.webp",
+    "rig": {
+     "neck": [
+      0.553,
+      0.48
+     ],
+     "pawL": [
+      0.421,
+      0.93
+     ],
+     "pawR": [
+      0.684,
+      0.93
+     ],
+     "crown": 0.097,
+     "eyes": [
+      0.465,
+      0.281,
+      0.64,
+      0.284
+     ],
+     "head": 0.488,
+     "chin": [
+      0.463,
+      0.28
+     ]
+    }
+   },
+   "mackerel": {
+    "name": "고등어태비",
+    "idle": "cat-mackerel.webp",
+    "rig": {
+     "neck": [
+      0.504,
+      0.545
+     ],
+     "pawL": [
+      0.331,
+      0.93
+     ],
+     "pawR": [
+      0.677,
+      0.93
+     ],
+     "crown": 0.094,
+     "eyes": [
+      0.388,
+      0.317,
+      0.619,
+      0.311
+     ],
+     "head": 0.575,
+     "chin": [
+      0.527,
+      0.369
+     ]
+    }
+   },
+   "tuxedo": {
+    "name": "턱시도",
+    "idle": "cat-tuxedo.webp",
+    "rig": {
+     "neck": [
+      0.48,
+      0.52
+     ],
+     "pawL": [
+      0.33,
+      0.93
+     ],
+     "pawR": [
+      0.63,
+      0.93
+     ],
+     "crown": 0.066,
+     "eyes": [
+      0.345,
+      0.28,
+      0.545,
+      0.28
+     ],
+     "head": 0.516,
+     "chin": [
+      0.48,
+      0.32
+     ]
+    }
+   },
+   "calico": {
+    "name": "삼색이",
+    "idle": "cat-calico.webp",
+    "rig": {
+     "neck": [
+      0.52,
+      0.53
+     ],
+     "pawL": [
+      0.37,
+      0.93
+     ],
+     "pawR": [
+      0.67,
+      0.93
+     ],
+     "crown": 0.109,
+     "eyes": [
+      0.42,
+      0.308,
+      0.59,
+      0.308
+     ],
+     "head": 0.493,
+     "chin": [
+      0.48,
+      0.34
+     ]
+    }
+   },
+   "russianblue": {
+    "name": "러시안블루",
+    "idle": "cat-russianblue.webp",
+    "rig": {
+     "neck": [
+      0.498,
+      0.56
+     ],
+     "pawL": [
+      0.325,
+      0.93
+     ],
+     "pawR": [
+      0.672,
+      0.93
+     ],
+     "crown": 0.091,
+     "eyes": [
+      0.383,
+      0.334,
+      0.614,
+      0.324
+     ],
+     "head": 0.58,
+     "chin": [
+      0.523,
+      0.37
+     ]
+    }
+   },
+   "siamese": {
+    "name": "샴",
+    "idle": "cat-siamese.webp",
+    "rig": {
+     "acc": {
+      "straw": {
+       "dx": 0,
+       "dy": -6
+      }
+     },
+     "neck": [
+      0.5,
+      0.55
+     ],
+     "pawL": [
+      0.35,
+      0.93
+     ],
+     "pawR": [
+      0.65,
+      0.93
+     ],
+     "crown": 0.091,
+     "eyes": [
+      0.385,
+      0.323,
+      0.595,
+      0.323
+     ],
+     "head": 0.506,
+     "chin": [
+      0.484,
+      0.336
+     ]
+    }
+   },
+   "persian": {
+    "name": "페르시안",
+    "idle": "cat-persian.webp",
+    "rig": {
+     "acc": {
+      "straw": {
+       "dx": 0,
+       "dy": -5
+      }
+     },
+     "neck": [
+      0.574,
+      0.48
+     ],
+     "pawL": [
+      0.443,
+      0.93
+     ],
+     "pawR": [
+      0.705,
+      0.93
+     ],
+     "crown": 0.053,
+     "eyes": [
+      0.487,
+      0.307,
+      0.661,
+      0.298
+     ],
+     "head": 0.506,
+     "chin": [
+      0.468,
+      0.402
+     ]
+    }
+   },
+   "panda": {
+    "name": "판다",
+    "idle": "panda.webp",
+    "rig": {
+     "neck": [
+      0.514,
+      0.518
+     ],
+     "pawL": [
+      0.319,
+      0.93
+     ],
+     "pawR": [
+      0.709,
+      0.93
+     ],
+     "crown": 0.025,
+     "eyes": [
+      0.4,
+      0.275,
+      0.64,
+      0.27
+     ],
+     "head": 0.538,
+     "chin": [
+      0.477,
+      0.384
+     ]
+    }
+   }
+  }
+ },
+ "dog": {
+  "alert": {
+   "fx": "idle"
+  },
+  "sleep": {
+   "from": "alert",
+   "fx": "sleep",
+   "filter": "brightness(.9) saturate(.88)"
+  },
+  "worried": {
+   "from": "alert",
+   "fx": "worried"
+  },
+  "bark": {
+   "from": "alert",
+   "fx": "bark"
+  }
+ },
+ "cat": {
+  "idle": {
+   "fx": "idle"
+  },
+  "work": {
+   "from": "idle",
+   "fx": "work"
+  },
+  "happy": {
+   "from": "idle",
+   "fx": "happy"
+  },
+  "sad": {
+   "from": "idle",
+   "fx": "sad",
+   "filter": "saturate(.7) brightness(.93)"
+  }
+ }
+}
