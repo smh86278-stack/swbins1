@@ -829,8 +829,9 @@ async function petLoad() {
   PetSkin.reset($('#pDogArt')); PetSkin.reset($('#pCatArt'));
   $('#petStage').classList.toggle('off', petHidden());
   for (const kind of ['dog', 'cat']) {
-    const sel = $('#' + kind + 'Breed'), ids = PetSkin.breedIds(m, kind);
-    sel.replaceChildren(...ids.map(b => new Option((kind === 'dog' ? '🐶 ' : '🐱 ') + (m.breeds[kind][b].name || b), b)));
+    const sel = $('#' + kind + 'Breed'), ids = PetSkin.breedIds(m, kind), em = kind === 'dog' ? '🐶 ' : '🐱 ';
+    sel.replaceChildren(...(PetSkin.breedOptions ? PetSkin.breedOptions(m, kind, (b, n) => em + n)   // 맹수·공룡·드래곤 묶음은 <optgroup>
+      : ids.map(b => new Option(em + (m.breeds[kind][b].name || b), b))));
     sel.value = m._breed[kind];
   }
   petDraw();
