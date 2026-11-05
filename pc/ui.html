@@ -1213,7 +1213,12 @@ function osNotify(s) {
     if (first || was === sig || !NOTE_ST[t.status] || !away || !can) continue;
     try {
       const n = new Notification('D&C 메신저 · ' + NOTE_ST[t.status], {body: (t.no ? 'T' + t.no + ' ' : '') + t.title + (t.last ? '\n' + t.last : ''), tag: 'dnc-' + t.key});
-      n.onclick = () => { try { window.focus(); } catch (e) {} n.close(); openThread(t.key); };
+      n.onclick = () => {
+        try { window.focus(); } catch (e) {}
+        // D&C 창 안 탭이면 창을 앞으로·메신저 탭으로 — 껍데기(shell main.js)가 이 주소를 받아 처리하고 새 창은 안 연다
+        if (/Electron/.test(navigator.userAgent)) try { window.open(location.origin + '/#dnc-front'); } catch (e) {}
+        n.close(); openThread(t.key);
+      };
     } catch (e) {}                                          // 막힌 곳(권한·안드로이드 크롬 등)은 조용히 넘어간다
   }
 }
