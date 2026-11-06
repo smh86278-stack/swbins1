@@ -43,6 +43,12 @@ def reset():
         _owner.clear()
         _snap.update(at=0.0, v=None)
         _worker = None
+    global _p_worker
+    with _p_lock:
+        _p_files.clear()
+        _p_owner.clear()
+        _p_snap.update(at=0.0, v=None)
+        _p_worker = None
 
 
 def _ts(s):
@@ -255,6 +261,162 @@ def view(budget=BUDGET):
             "rate": {"m10": {"input": rate[0] / per_min, "output": rate[1] / per_min, "cache_write": rate[2] / per_min}},
             "limits": {"dayState": None, "monthState": None},
             "sessions": sessions}
+
+
+# ---------------------------------------------------------------- 프로젝트별(이번 달 · 전체) — 허브 없는 PC 의 「비용」 칸
+# 위 펫용 읽기와 따로 논다: 남아 있는 기록 파일 전부를 늘어난 만큼만 이어 읽고, 응답마다 [날짜, 입력, 출력, 캐시 쓰기, 캐시 읽기] 만 기억한다.
+P_TTL = 300                     # 초 — 이보다 오래된 값이면 뒤에서 다시 읽는다
+_p_lock = threading.Lock()
+_p_run = threading.Lock()
+_p_files = {}                   # rel → {'size','mtime','off','proj','recs': {key: [날짜, i, o, cw, cr]}}
+_p_owner = {}
+_p_snap = {"at": 0.0, "v": None}
+_p_worker = None
+
+
+def _p_line(fr, raw, rel):
+    if b'"usage"' not in raw or b'"assistant"' not in raw:
+        return
+    try:
+        o = json.loads(raw)
+    except ValueError:
+        return
+    if not isinstance(o, dict) or o.get("type") != "assistant":
+        return
+    m = o.get("message") or {}
+    us = m.get("usage") if isinstance(m, dict) else None
+    if not isinstance(us, dict) or str(m.get("model") or "").startswith("<"):
+        return
+    try:
+        u = [int(us.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")]
+    except (TypeError, ValueError):
+        return
+    ts = _ts(o.get("timestamp"))
+    if not any(u) or ts is None:
+        return
+    key = "%s|%s" % (m.get("id") or "", o.get("requestId") or "")
+    if key == "|":
+        key = "u|%s" % o.get("uuid")
+    if _p_owner.setdefault(key, rel) != rel:
+        return
+    fr["recs"][key] = [time.strftime("%Y-%m-%d", time.localtime(ts))] + u     # 같은 응답의 다음 줄이면 덮어쓴다(마지막 값)
+    if o.get("cwd"):
+        fr["cwd"] = str(o["cwd"])
+
+
+def _p_drop(rel):
+    fr = _p_files.pop(rel, None)
+    for k in (fr or {}).get("recs", ()):
+        if _p_owner.get(k) == rel:
+            del _p_owner[k]
+
+
+def project_refresh(budget=BUDGET):
+    """늘어난 부분만 읽는다. 시간이 다 되면 True(남은 일 있음)."""
+    t0 = time.time()
+    with _p_lock:
+        if not os.path.isdir(ROOT):
+            for rel in list(_p_files):
+                _p_drop(rel)
+            return False
+        want = {}
+        for dp, _dn, fn in os.walk(ROOT):
+            for n in fn:
+                if n.endswith(".jsonl"):
+                    p = os.path.join(dp, n)
+                    try:
+                        st = os.stat(p)
+                    except OSError:
+                        continue
+                    rel = os.path.relpath(p, ROOT)
+                    want[rel] = (p, st.st_size, st.st_mtime, rel.split(os.sep)[0])
+        for rel in [r for r in _p_files if r not in want]:
+            _p_drop(rel)
+        for rel, (p, size, mt, proj) in sorted(want.items(), key=lambda x: -x[1][2]):
+            fr = _p_files.get(rel)
+            if fr and fr["size"] == size and fr["mtime"] == mt:
+                continue
+            if time.time() - t0 > budget:
+                return True
+            if fr is None or size < fr["off"]:
+                _p_drop(rel)
+                fr = _p_files[rel] = {"size": 0, "mtime": 0, "off": 0, "proj": proj, "cwd": "", "recs": {}}
+            try:
+                while fr["off"] < size:
+                    if time.time() - t0 > budget:
+                        return True
+                    with open(p, "rb") as f:
+                        f.seek(fr["off"])
+                        buf = f.read(min(size - fr["off"], CHUNK))
+                    end = buf.rfind(b"\n")
+                    if end < 0:
+                        if len(buf) >= CHUNK:
+                            fr["off"] += len(buf)
+                            continue
+                        break
+                    for raw in buf[:end].split(b"\n"):
+                        _p_line(fr, raw, rel)
+                    fr["off"] += end + 1
+            except OSError:
+                continue
+            fr["size"], fr["mtime"] = size, mt
+    return False
+
+
+def project_view():
+    """{'projects': 이번 달, 'projectsAll': 전체, 'projectsAllFrom': 'YYYY-MM-DD'} — 허브 /api/tokens 의 같은 이름 칸과 같은 모양(이름은 폴더 이름만)."""
+    month = time.strftime("%Y-%m")
+    per, per_all, cwd, first = {}, {}, {}, None
+    with _p_lock:
+        for fr in _p_files.values():
+            p = fr["proj"]
+            if fr["cwd"] and (p not in cwd or len(fr["cwd"]) < len(cwd[p])):
+                cwd[p] = fr["cwd"]
+            for r in fr["recs"].values():
+                first = r[0] if first is None or r[0] < first else first
+                for tgt in ((per_all, per) if r[0][:7] == month else (per_all,)):
+                    a = tgt.setdefault(p, [0, 0, 0, 0])
+                    for k in range(4):
+                        a[k] += r[1 + k]
+
+    def plist(pp):
+        out = [{"project": p, "name": folder_name(cwd.get(p)) or p, "input": u[0], "output": u[1], "cache_write": u[2],
+                "cache_read": u[3], "total": sum(u), "used": sum(u)} for p, u in pp.items() if any(u)]
+        return sorted(out, key=lambda x: -x["used"])
+    return {"projects": plist(per), "projectsAll": plist(per_all), "projectsAllFrom": first}
+
+
+def _p_work():
+    global _p_worker
+    try:
+        with _p_run:
+            while project_refresh():
+                time.sleep(0.2)
+            v = project_view()
+            with _p_lock:
+                _p_snap.update(at=time.time(), v=v)
+    except Exception:
+        with _p_lock:
+            _p_snap.update(at=time.time(), v=_p_snap["v"])
+    finally:
+        _p_worker = None
+
+
+def project_snapshot(wait=FIRST_WAIT):
+    """받아 둔 값을 바로 — 오래됐으면 뒤에서 다시 읽는다. 처음 읽는 중이면 None(화면은 「읽는 중」)."""
+    global _p_worker
+    with _p_lock:
+        v, at = _p_snap["v"], _p_snap["at"]
+        start = time.time() - at >= P_TTL and _p_worker is None
+        if start:
+            _p_worker = w = threading.Thread(target=_p_work, name="token-projects", daemon=True)
+    if start:
+        w.start()
+        if v is None and wait:
+            w.join(wait)
+            with _p_lock:
+                v = _p_snap["v"]
+    return v
 
 
 def _work():

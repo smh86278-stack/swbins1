@@ -122,6 +122,42 @@ def pet_tokens(raw):
             "sessions": sessions}
 
 
+def token_projects(raw):
+    """허브 /api/tokens 의 프로젝트별(이번 달·전체)에서 화면에 쓸 것만 — 폴더 이름과 네 가지 토큰 수. 경로는 넘기지 않는다."""
+    if not isinstance(raw, dict):
+        return None
+    num = lambda x: x if isinstance(x, (int, float)) and not isinstance(x, bool) else 0      # noqa: E731
+    keys = ("input", "output", "cache_write", "cache_read", "total")
+
+    def plist(pp):
+        return [dict({k: num(p.get(k)) for k in keys}, name=_folder_name(p)) for p in (pp or []) if isinstance(p, dict)]
+    if "projects" not in raw:
+        return None
+    return {"projects": plist(raw.get("projects")), "projectsAll": plist(raw.get("projectsAll")),
+            "from": str(raw.get("projectsAllFrom") or "") or None}
+
+
+def token_projects_now(fetch=None, local=None):
+    """허브가 있으면 허브 값, 없으면 이 PC 기록을 메신저가 직접(tokenlocal — 처음엔 읽는 중이라 scanning)."""
+    try:
+        if fetch:
+            raw = fetch()
+        else:
+            import urllib.request
+            with urllib.request.urlopen(HUB_TOKENS, timeout=5) as r:
+                raw = json.loads(r.read().decode("utf-8"))
+        v = token_projects(raw)
+        if v is not None:
+            return dict(v, source="hub")
+    except Exception:
+        pass
+    try:
+        v = token_projects((local or tokenlocal.project_snapshot)())
+    except Exception:
+        v = None
+    return dict(v, source="local") if v is not None else {"scanning": True}
+
+
 def pet_tokens_cached(fetch=None, local=None):
     """20초 동안은 받아 둔 것을. 허브가 있으면 허브 값, 허브가 없거나(이 메신저 혼자 도는 PC) 기록을 못 주면
     이 PC 의 Claude Code 기록을 직접 읽기만 해서(tokenlocal — 뒤쪽 스레드, 받아 둔 값을 바로). 그것도 없으면 {"files": 0}(조용히 꺼진다)."""
@@ -1280,6 +1316,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"skin": skin, "breed": (j.get("breed") or {}) if j.get("skin") in PET_SKINS else {}, "petx": j.get("petx")})
             except Exception:
                 return self._send(200, {"breed": {}})
+        if u.path == "/api/tokens/projects":                                        # 「비용」 칸 — Claude Code 토큰 프로젝트별(이번 달·전체, 읽기 전용)
+            return self._send(200, token_projects_now())
         if u.path == "/api/tokens":                                                 # 화면 펫 × Claude Code 토큰(읽기 전용, 허브가 없으면 files 0)
             return self._send(200, pet_tokens_cached())
         if u.path == "/api/state":

@@ -247,6 +247,11 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .costpop .crow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .costpop .crow .m{color:var(--muted);flex:none;font-size:11.5px}
 .costpop .crow .u{flex:none;font-variant-numeric:tabular-nums;font-weight:700}
+.costpop .tphead{display:flex;align-items:center;gap:8px;margin-top:12px}
+.costpop .tphead .lt{flex:1;min-width:0;margin:0}
+.costpop .tphead select{flex:none;width:auto;font:inherit;font-size:11.5px;padding:1px 4px}
+.costpop .tprow{border-bottom:0;padding-bottom:0}
+.costpop .tpsub{color:var(--muted);font-size:11px;padding:0 2px 4px;border-bottom:1px dashed var(--line);margin-bottom:2px}
 @media (max-width:480px){.two.half{grid-template-columns:1fr}}
 /* Jira 새 티켓 감시 — 대화 목록 위 자리비움 단추(켜져 있으면 눈에 띄게) · 설정 칸 */
 .away{margin:0 16px 10px;display:flex;flex-direction:column;gap:4px}
@@ -1095,7 +1100,7 @@ async function costLoad() {
   if (!box.childElementCount) box.append(el('div', 'cnote', '읽는 중…'));
   let r; try { r = await api('/api/costs'); } catch (e) { box.replaceChildren(el('div', 'cnote', e.message)); return; }
   box.replaceChildren();
-  if (!r.local) { box.append(el('div', 'lt', '비용 내역'), el('div', 'cnote', '이 PC 에는 작업 기록이 없어요 — 게이트웨이 PC 이거나 「이 PC 에서 직접 실행」을 켠 PC 에서만 보여요.')); return; }
+  if (!r.local) { box.append(el('div', 'lt', '비용 내역'), el('div', 'cnote', '이 PC 에는 작업 기록이 없어요 — 게이트웨이 PC 이거나 「이 PC 에서 직접 실행」을 켠 PC 에서만 보여요.')); tokProjLoad(box.appendChild(el('div', 'tokproj'))); return; }
   const sum = el('div', 'sum');
   for (const [v, l] of [[r.today, '오늘' + (r.limit ? ' / 한도 ' + usd(r.limit) : '')], [r.month, '이번 달'], [r.d30, '최근 30일']]) { const d = el('div'); d.append(el('b', '', usd(v)), el('span', '', l)); sum.append(d); }
   box.append(el('div', 'lt', '비용 내역'), sum,
@@ -1104,6 +1109,7 @@ async function costLoad() {
   for (const d of r.days) { const i = el('i', d.usd ? (d.day === today ? 'td' : '') : 'z'); i.style.height = (d.usd ? Math.max(4, d.usd / max * 100) : 2) + '%'; i.title = d.day.slice(5).replace('-', '/') + ' · ' + usd(d.usd) + ' · ' + d.n + '건'; bars.append(i); }
   const ax = el('div', 'axis'); ax.append(el('span', '', r.days.length ? r.days[0].day.slice(5).replace('-', '/') : ''), el('span', '', '최근 ' + r.days.length + '일 (막대에 마우스)'), el('span', '', '오늘'));
   box.append(bars, ax);
+  tokProjLoad(box.appendChild(el('div', 'tokproj')));             // 대화별 목록이 길어도 보이게 막대 바로 아래
   const row = (no, title, meta, v) => {
     const t = costThread(no), b = el(t ? 'button' : 'div', 'crow');
     b.append(el('span', 'm', no != null ? 'T' + no : '—'), el('span', 't', title || '(제목 없음)'), el('span', 'm', meta), el('span', 'u', usd(v)));
@@ -1115,6 +1121,37 @@ async function costLoad() {
     box.append(el('div', 'lt', '최근 맡긴 일'));
     for (const x of r.recent) box.append(row(x.thread, (x.jira ? x.jira + ' ' : '') + x.prompt, x.created.slice(5, 16).replace('-', '/') + (x.secs != null ? ' · ' + Math.round(x.secs) + '초' : '') + (x.status === 'error' ? ' · 오류' : ''), x.usd));
   } else box.append(el('div', 'cnote', '아직 비용이 기록된 일이 없어요.'));
+}
+
+/* ---------- Claude Code 토큰 · 프로젝트별 — 이 PC 의 모든 Claude Code 기록(맡긴 일만이 아니라 직접 쓴 세션까지).
+   허브가 있으면 허브 값, 없으면 메신저 서버가 기록을 직접 읽는다(처음엔 몇 초 걸린다). 합계 대부분은 캐시 읽기라 네 가지를 나눠 보인다 */
+let tokProjScope = 'month';
+const bigN = n => n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(Math.round(n || 0));
+async function tokProjLoad(wrap, tries = 0) {
+  let r; try { r = await api('/api/tokens/projects'); } catch (e) { wrap.replaceChildren(); return; }
+  if (!wrap.isConnected) return;
+  wrap.replaceChildren();
+  const head = el('div', 'tphead'), sel = el('select');
+  for (const [k, t] of [['month', '이번 달'], ['all', '전체 기간']]) { const o = el('option', '', t); o.value = k; sel.append(o); }
+  sel.value = tokProjScope;
+  sel.onchange = () => { tokProjScope = sel.value; tokProjLoad(wrap); };
+  head.append(el('div', 'lt', '토큰 · 프로젝트별' + (tokProjScope === 'all' && r.from ? ' (' + r.from.slice(5).replace('-', '/') + ' 부터)' : '')), sel);
+  wrap.append(head);
+  if (r.scanning) {
+    wrap.append(el('div', 'cnote', '이 PC 의 Claude Code 기록을 읽는 중이에요…'));
+    if (tries < 15) setTimeout(() => { if (wrap.isConnected) tokProjLoad(wrap, tries + 1); }, 4000);
+    return;
+  }
+  const pl = (tokProjScope === 'all' ? r.projectsAll : r.projects) || [];
+  if (!pl.length) { wrap.append(el('div', 'cnote', '기록이 없어요.')); return; }
+  const sum = pl.reduce((a, p) => a + p.total, 0) || 1;
+  for (const p of pl) {
+    const b = el('div', 'crow tprow');
+    b.append(el('span', 't', p.name), el('span', 'm', Math.round(p.total * 100 / sum) + '%'), el('span', 'u', bigN(p.total)));
+    const d = el('div', 'tpsub', '캐시 읽기 ' + bigN(p.cache_read) + ' · 캐시 쓰기 ' + bigN(p.cache_write) + ' · 입력 ' + bigN(p.input) + ' · 출력 ' + bigN(p.output));
+    wrap.append(b, d);
+  }
+  wrap.append(el('div', 'cnote', '합계의 대부분은 캐시 읽기예요 — 대화가 길수록 요청마다 앞 대화를 다시 읽어서 커져요. 출력이 모델이 실제로 쓴 양이에요.'));
 }
 
 const PET_PICK = 'dnc-pet-breed';

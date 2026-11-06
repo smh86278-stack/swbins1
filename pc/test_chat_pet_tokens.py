@@ -58,6 +58,25 @@ class PetTokensFilter(unittest.TestCase):
             self.assertEqual(chat.pet_tokens(raw), {"files": 0})
 
 
+class TokenProjectsFilter(unittest.TestCase):
+    """허브 값에서 프로젝트별만 — 경로(project·cwd) 는 빼고 폴더 이름과 숫자만. 허브가 없고 아직 읽는 중이면 scanning."""
+
+    def test_hub(self):
+        raw = {"projects": [{"project": "C--secret-path-app", "name": "app", "cwd": "C:\secret\path\app", "input": 1, "output": 2,
+                             "cache_write": 3, "cache_read": 4, "total": 10, "used": 10}],
+               "projectsAll": [], "projectsAllFrom": "2026-10-06", "sessions": []}
+        v = chat.token_projects_now(fetch=lambda: raw)
+        self.assertEqual(v["source"], "hub")
+        self.assertEqual(v["from"], "2026-10-06")
+        self.assertEqual(v["projects"], [{"input": 1, "output": 2, "cache_write": 3, "cache_read": 4, "total": 10, "name": "app"}])
+        self.assertNotIn("secret", json.dumps(v))
+
+    def test_scanning(self):
+        boom = lambda: (_ for _ in ()).throw(OSError())                                  # noqa: E731
+        self.assertEqual(chat.token_projects_now(fetch=boom, local=lambda: None), {"scanning": True})
+        self.assertEqual(chat.token_projects_now(fetch=lambda: {"files": 3}, local=lambda: None), {"scanning": True})   # 옛 허브(프로젝트 칸 없음)
+
+
 class Cached(unittest.TestCase):
     def setUp(self):
         self.old = dict(chat._pet_tok)
@@ -143,6 +162,23 @@ class LocalRecords(unittest.TestCase):
         tokenlocal.ROOT, tokenlocal.LIVE_DIR = self.old
         tokenlocal.reset()
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_projects(self):
+        """프로젝트별 — 오래된·꺼진 기록까지 전부, 같은 응답은 한 번(마지막 줄 값), synthetic 빼고, 이름은 폴더 이름만."""
+        self.assertFalse(tokenlocal.project_refresh())
+        v = tokenlocal.project_view()
+        allp = {p["project"]: p for p in v["projectsAll"]}
+        app = allp["C--work-my-app"]
+        self.assertEqual((app["input"], app["output"], app["cache_write"], app["cache_read"]), (1149, 1089, 5, 7))
+        self.assertEqual(app["name"], "my-app")
+        self.assertEqual(allp["C--old"]["total"], 10)
+        self.assertEqual(v["projectsAll"][0]["project"], "C--work-my-app")              # 많이 쓴 순
+        self.assertEqual(v["projectsAllFrom"], time.strftime("%Y-%m-%d", time.localtime(time.time() - 90000)))
+        # 화면으로 넘길 때는 폴더 이름과 숫자만
+        out = chat.token_projects_now(fetch=lambda: (_ for _ in ()).throw(OSError()), local=tokenlocal.project_view)
+        self.assertEqual(out["source"], "local")
+        self.assertNotIn("project", out["projectsAll"][0])
+        self.assertEqual(out["projectsAll"][0]["name"], "my-app")
 
     def test_view(self):
         v = tokenlocal.view()
