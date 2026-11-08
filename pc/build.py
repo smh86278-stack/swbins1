@@ -40,6 +40,9 @@ def main():
            "--add-data", os.path.join(HERE, "bash-guard.js") + os.pathsep + ".",      # 읽기 지시의 위험한 git 옵션 막는 훅(node)
            *[x for f in ("pets.js", "petwarp.js", "pets.css", "pettok.js") for x in ("--add-data", os.path.join(PET, f) + os.pathsep + "pet")],
            "--add-data", os.path.join(PET, PET_SKIN, "plush") + os.pathsep + os.path.join("pet", "skin", "plush"),   # 인형 강아지·고양이
+           # 만화 — swbins1 의 pet\skin\toon 만(직접 만든 그림만 골라 둔 공개본). swbins2 의 skins\toon 에는 남의 저작물 캐릭터 그림이 있어 묶지 않는다
+           *(["--add-data", os.path.join(PET, "skin", "toon") + os.pathsep + os.path.join("pet", "skin", "toon")]
+             if PET_SKIN == "skin" and os.path.isfile(os.path.join(PET, "skin", "toon", "skin.json")) else []),
            *(["--add-data", COMPANY + os.pathsep + "."] if os.path.isfile(COMPANY) else []),
            "--distpath", os.path.join(HERE, "dist"), "--workpath", WORK, "--specpath", WORK,
            os.path.join(HERE, "chat.py")]

@@ -810,7 +810,9 @@ if (gOn()) gPoll();
 if (!cfg.mail) setTimeout(openSettings, 300);
 
 /* ---- 인형 강아지·고양이 ---- */
-const PET_PICK = 'dnc-pet-breed', PET_OFF = 'dnc-pet-off';
+const PET_PICK = 'dnc-pet-breed', PET_OFF = 'dnc-pet-off', PET_SKIN_PICK = 'dnc-pet-skin';
+const PET_SKIN_NAMES = { plush: '인형', toon: '만화' };          // 모습 — pet/skin/<id> (만화는 직접 만든 그림만 골라 넣었다)
+function petSkinPick() { try { const s = localStorage.getItem(PET_SKIN_PICK); return PET_SKIN_NAMES[s] ? s : 'plush'; } catch (e) { return 'plush'; } }
 function petHidden() { try { return localStorage.getItem(PET_OFF) === '1'; } catch (e) { return false; } }
 $('#petShow').checked = !petHidden();
 $('#petShow').addEventListener('change', e => {
@@ -823,8 +825,11 @@ function petPick() { try { return JSON.parse(localStorage.getItem(PET_PICK) || '
 async function petLoad() {
   if (!window.PetSkin || !window.fetch) return;
   PetSkin.BASE = 'pet/';
-  const m = await PetSkin.load('plush', petPick());
+  const skin = petSkinPick();
+  const m = await PetSkin.load(skin, petPick()) || (skin !== 'plush' ? await PetSkin.load('plush', petPick()) : null);   // 만화를 못 읽으면 인형으로
   if (!m) return;
+  const ss = $('#petSkinSel');
+  if (ss) { ss.replaceChildren(...Object.entries(PET_SKIN_NAMES).map(([id, n]) => new Option(n, id))); ss.value = m._id; }
   petSkin = m;
   PetSkin.reset($('#pDogArt')); PetSkin.reset($('#pCatArt'));
   $('#petStage').classList.toggle('off', petHidden());
@@ -907,6 +912,10 @@ $('#clearSent').addEventListener('click', () => {
 for (const kind of ['dog', 'cat']) $('#' + kind + 'Breed').addEventListener('change', e => {
   const p = petPick(); p[kind] = e.target.value;
   try { localStorage.setItem(PET_PICK, JSON.stringify(p)); } catch (err) {}
+  petLoad();
+});
+$('#petSkinSel').addEventListener('change', e => {
+  try { localStorage.setItem(PET_SKIN_PICK, e.target.value); } catch (err) {}
   petLoad();
 });
 petLoad();

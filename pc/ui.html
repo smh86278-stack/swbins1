@@ -314,6 +314,7 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
   width:max-content;max-width:210px;z-index:6;font-size:12px;line-height:1.35;background:#fffaf2;color:#3a332c;border:1px solid #8c8276;border-radius:10px;padding:4px 9px;word-break:keep-all}
 .petbbl.show{opacity:1;transform:translate(-50%,0)}
 .petstage .slot{position:relative}
+.petstage select.skinsel{align-self:flex-end;max-width:84px;margin-bottom:1px}   /* 모습(인형·만화) — 품종 고르기 옆 */
 </style>
 </head>
 <body>
@@ -353,6 +354,7 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     <div class="buddies" id="buddies"></div>
     <div class="slot"><div class="petbbl" id="dogBbl"></div><div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div><select id="dogBreed" title="강아지 품종"></select></div>
     <div class="slot"><div class="pet cat" id="pCat"><div class="art" id="pCatArt"></div></div><select id="catBreed" title="고양이 품종"></select></div>
+    <select id="petSkinSel" class="skinsel" title="모습 — 인형 · 만화 (이 PC 에만 기억)"></select>
   </div>
 </aside>
 <script src="/pet/petwarp.js"></script>
@@ -1171,11 +1173,22 @@ function petFillSelects(hub) {
     sel.value = ids.includes(pick[kind]) ? pick[kind] : '';
   }
 }
+/* 모습(스킨) — 인형·만화. 이 PC 에서 고르면 그걸, 안 골랐으면 허브가 고른 것(허브가 없으면 인형) */
+const PET_SKIN_PICK = 'dnc-pet-skin', PET_SKIN_NAMES = {plush: '인형', toon: '만화'};
+function petSkinPick() { try { const s = localStorage.getItem(PET_SKIN_PICK); return PET_SKIN_NAMES[s] ? s : ''; } catch (e) { return ''; } }
+function petFillSkinSel(hubSkin) {
+  const sel = $('#petSkinSel'); if (!sel) return;
+  sel.replaceChildren(...(hubSkin ? [new Option('허브와 같게 (' + (PET_SKIN_NAMES[hubSkin] || hubSkin) + ')', '')] : []),
+    ...Object.entries(PET_SKIN_NAMES).map(([id, n]) => new Option(n, id)));
+  sel.value = petSkinPick() || (hubSkin ? '' : 'plush');
+}
 async function petLoad() {                                 // 가끔 다시 맞춘다(허브에서 품종을 바꿨을 수 있다)
   if (!window.PetSkin) return;
   petBreedAt = Date.now();
-  let hub = {}, petx = null, skin = 'plush';
-  try { const j = await api('/api/pet'); hub = j.breed || {}; petx = j.petx; skin = j.skin || 'plush'; } catch (e) {}
+  let hub = {}, petx = null, hubSkin = '';
+  try { const j = await api('/api/pet'); hub = j.breed || {}; petx = j.petx; hubSkin = j.skin || ''; } catch (e) {}
+  const skin = petSkinPick() || hubSkin || 'plush';
+  petFillSkinSel(hubSkin);
   if (window.PetAcc && PetAcc.set(petx)) petDraw();         // 소품·계절은 허브를 따른다(허브가 없으면 계절 자동)
   const breed = Object.assign({}, hub, petPick());
   const key = skin + JSON.stringify(breed);                 // 허브에서 스킨(인형·만화)을 바꿔도 다시
@@ -1381,6 +1394,7 @@ setTimeout(pollTokens, 3000); setInterval(pollTokens, TOK_POLL);
 
 $('#dogBreed').onchange = e => petSetPick('dog', e.target.value);
 $('#catBreed').onchange = e => petSetPick('cat', e.target.value);
+$('#petSkinSel').onchange = e => { try { if (e.target.value) localStorage.setItem(PET_SKIN_PICK, e.target.value); else localStorage.removeItem(PET_SKIN_PICK); } catch (err) {} petLoad(); };
 for (const k of ['Dog', 'Cat']) {
   $('#p' + k).addEventListener('mouseenter', () => { petting = k.toLowerCase(); petDraw(); });
   $('#p' + k).addEventListener('mouseleave', () => { petting = null; petDraw(); });

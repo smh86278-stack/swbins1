@@ -1,4 +1,4 @@
-# pet — 인형 강아지·고양이 (D&C 허브 것을 그대로 복사)
+# pet — 인형·만화 강아지·고양이 (D&C 허브 것을 그대로 복사)
 
 원본은 개인 저장소 `C:\swbins2\tools\macro-hub\web\` 의 `pets.js`·`petwarp.js`·`pets.css`·`pettok.js` 와 `skins\plush\`.
 `pettok.js`(펫 × Claude Code 토큰 사용량 판정)는 PC 메신저만 쓴다 — 폰 페이지는 PC 기록에 닿을 길이 없어 넣지 않는다.
@@ -13,5 +13,11 @@ cp C:/swbins2/tools/macro-hub/web/skins/plush/{dog-*.webp,cat-*.webp,acc-*.webp,
 **`*.webp`·`skin.json` 을 통째로 복사하지 말 것.** 원본에는 남의 저작물 캐릭터(맹수·공룡·드래곤이 아닌 `group` 묶음) 그림·항목이
 있는데 저작권 때문에 이 공개 저장소엔 넣지 않는다. `wild-*.webp` 는 직접 만든 맹수·공룡·드래곤 34종만 골라 복사하고,
 skin.json 은 원본 줄 그대로에서 진짜 캐릭터 품종 블록만 빼서 넣는다(묶음 없는 품종 + 맹수·공룡·드래곤).
+
+만화 스킨 `skin/toon/` 도 같은 규칙이다(원본 `skins\toon\`, 그림은 SDXL 로 만든 것 — `skin/toon/LICENSE.txt`).
+`dog-*.webp`·`cat-*.webp`·`panda.webp`·`LICENSE.txt` 와 맹수·공룡·드래곤 `wild-*.webp` 34종(plush 와 같은 이름)만 복사하고,
+skin.json 은 `group` 이 맹수·공룡·드래곤이 아닌 묶음 품종을 빼고 넣는다(`json.dumps(…, ensure_ascii=False, indent=1)` 이면 원본 줄 모양 그대로).
+폰은 설정의 모습 고르기(인형·만화, 이 기기에만 기억), PC 메신저(`pc/`)는 펫 옆 고르기(허브가 있으면 「허브와 같게」가 기본)로 바꾼다.
+`pc/build.py` 는 이 `skin/toon/` 이 있을 때만 exe 에 같이 묶는다.
 
 폰 페이지는 GitHub Pages 하위 경로라 `PetSkin.BASE = 'pet/'` 로 그림 경로를 바꿔 쓴다.
