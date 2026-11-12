@@ -46,13 +46,13 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .logo svg{width:18px;height:18px}
 .brand h1{font:700 19px/1.2 var(--serif);margin:0}
 .brand .sub{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px}
-#dot{width:7px;height:7px;border-radius:50%;background:var(--field);margin-left:auto;flex:none}
+#dot{width:7px;height:7px;border-radius:50%;background:var(--field);flex:none}
 #dot.ok{background:var(--ok)}#dot.bad{background:var(--bad)}
 .iconbtn{border:1px solid transparent;background:transparent;border-radius:3px;padding:2px 7px;font-size:12px;color:var(--muted)}
 .iconbtn:hover{color:var(--text);border-color:var(--field)}
-/* 새 대화 — 테두리 단추. 꽉 찬 먹색은 한 화면에 하나(보내기)만 — 왼쪽 위 검은 덩어리가 시선을 다 가져가던 것 */
-.newbtn{margin:0 16px 8px;border:1px solid var(--text);border-radius:3px;padding:7px 8px;font-weight:700;color:var(--text);background:transparent}
-.newbtn:hover{background:var(--solid)}
+/* 새 대화 — 이름 줄 오른쪽 작은 단추(2026-11-13: 목록 위를 가로지르던 큰 테두리 단추를 줄임). 꽉 찬 먹색은 한 화면에 하나(보내기)만 */
+.newbtn{margin-left:auto;flex:none;border:1px solid var(--field);border-radius:3px;padding:2px 9px;font-size:12px;font-weight:700;color:var(--text);background:transparent}
+.newbtn:hover{border-color:var(--text);background:var(--solid)}
 /* 목록 머리 — 위 줄은 도구(다시 읽기·비우기·화면·비용·설정, 오른쪽 흐린 글자), 굵은 선 아래 줄은 거르기 탭.
    한 줄에 다 넣으면 320px 칸을 넘어 대화 쪽으로 삐져나왔다(2026-11-10) */
 .filters{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line)}
@@ -65,6 +65,10 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 #list>.hint{padding:10px 16px}
 .findbar{padding:4px 10px 6px}                                  /* 찾기 칸 밑줄이 곧 구분선 — 칸 아래 선을 또 그으면 두 줄이 겹쳐 보였다 */
 .findbar input{width:100%;box-sizing:border-box;font-size:12px;padding:5px 6px}
+.findbar{position:relative}.findbar kbd{position:absolute;right:14px;top:50%;translate:0 -50%;pointer-events:none}
+.findbar input:focus+kbd,.findbar input:not(:placeholder-shown)+kbd{display:none}
+/* 명조 제목 — 이 PC 글꼴(바탕)로 떨어지면 글자 사이가 벌어져 보여 살짝 좁힌다 */
+.brand h1,.head h2{letter-spacing:-.02em}
 .item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;background:transparent;border-radius:0;padding:9px 16px 9px 13px;margin:0}
 .item:hover{background:var(--soft)}
 .item.sel{background:var(--solid);border-left-color:var(--accent)}
@@ -185,12 +189,16 @@ input:focus,select:focus{border-bottom-color:var(--accent)}
 .ghost:hover:not(:disabled){border-color:var(--text)}
 .ghost:disabled{opacity:.45;cursor:default}
 .hint{font-size:12px;color:var(--muted);margin-top:6px}
+kbd{font:500 11px/1 var(--sans);color:var(--muted);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:2px 5px}
+.keys{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap}
 
-/* 새 대화 */
-.welcome{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:24px}
-.newcard{width:min(640px,100%);background:transparent;border:0;border-top:2px solid var(--rule);border-radius:0;padding:14px 0 0}
-.newcard h2{margin:0 0 6px;font:700 26px/1.3 var(--serif);display:flex;align-items:center;gap:8px}
-.newcard p{margin:0 0 14px;color:var(--muted)}
+/* 새 대화 — 대화 화면과 같은 틀(머리 줄 · 빈 대화 · 아래 입력부). 가운데 큰 제목 + 설명 문단 카드는 걷었다(2026-11-13) */
+.welcome{flex:1;min-height:0;display:flex;flex-direction:column}
+.welcome .empty{flex:1;overflow:auto;padding:16px 20px;color:var(--muted);font-size:13px}
+.welcome .composer .chips{margin-bottom:8px}
+.newfoot{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:var(--muted)}
+.newfoot .hint{margin:0}
+.newfoot .hint.wr{color:var(--warn)}
 .banner{margin:10px 20px 0;padding:6px 10px;border-left:3px solid var(--bad);border-radius:0;background:color-mix(in srgb,var(--bad) 7%,transparent);color:var(--bad);font-size:12px;display:none}
 
 dialog{border:1px solid var(--field);border-radius:4px;padding:0;width:min(460px,calc(100vw - 40px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg);color:var(--text)}
@@ -291,13 +299,13 @@ code{font:12px ui-monospace,Consolas,monospace;background:var(--soft);padding:0 
 @media (max-width:760px){body{grid-template-columns:minmax(0,1fr)}aside,main{min-width:0}aside{display:none}body.list aside{display:flex}body.list main{display:none}
   #backBtn{display:inline-grid!important}.narrowonly{display:inline-grid!important}
   .head{padding:10px 14px 8px}#msgs{padding:14px}.composer{padding:10px 14px 12px}
-  .newcard h2{font-size:22px}.welcome{padding:16px 14px;align-items:flex-start}}
+  .welcome .empty{padding:14px}.keys,.findbar kbd{display:none}}
 </style>
 <link rel="stylesheet" href="/pet/pets.css">
 <style>
 /* 인형 강아지·고양이(D&C 허브와 같은 그림) — 왼쪽 목록 아래. 강아지는 메일함을 지키고, 고양이는 맡긴 일을 한다 */
 .petstage{flex:none;display:flex;justify-content:center;align-items:flex-end;gap:4px;padding:2px 10px 10px;border-top:1px solid var(--line)}
-.petstage .pet{width:92px;position:relative}
+.petstage .pet{width:64px;position:relative}
 .petstage .pet .art{cursor:pointer}
 .petstage:empty,.petstage.off{display:none}
 .petstage .slot{display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -320,6 +328,8 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
 .petbbl.show{opacity:1;transform:translate(-50%,0)}
 .petstage .slot{position:relative}
 .petstage select.skinsel{align-self:flex-end;max-width:84px;margin-bottom:1px}   /* 모습(인형·만화) — 품종 고르기 옆 */
+/* 품종·모습 고르기는 펫 자리에 마우스를 올렸을 때만(터치 화면은 늘) — 펫 아래 잘린 고르기 칸 셋이 늘 떠 있던 것 */
+@media (hover:hover){.petstage select{opacity:0;transition:opacity .15s}.petstage:hover select,.petstage:focus-within select{opacity:1}}
 </style>
 </head>
 <body>
@@ -327,9 +337,9 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
   <div class="brand">
     <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg></div>
     <div style="min-width:0"><h1>D&amp;C 메신저</h1><div class="sub" id="who">메일함을 읽는 중…</div></div>
+    <button class="newbtn" id="newBtn" title="새 대화 (Alt+N)">새 대화</button>
     <span id="dot" title="메일함 연결"></span>
   </div>
-  <button class="newbtn" id="newBtn">새 대화</button>
   <div class="away" id="awayBar" hidden>
     <button class="awaybtn" id="awayBtn"><span class="tx" id="awayTxt">자리비움 꺼짐</span><span class="tr"></span></button>
     <div class="awaynote" id="awayNote" hidden><span id="awayNoteTx"></span><button id="awayNoteX" title="알림 지우기">✕</button></div>
@@ -355,7 +365,7 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     </div>
     <div class="lookpop costpop" id="costBox" hidden></div>
   </div>
-  <div class="findbar"><input id="findQ" type="search" placeholder="대화 찾기 — 제목·번호(T12)·주고받은 말" autocomplete="off"></div>
+  <div class="findbar"><input id="findQ" type="search" placeholder="대화 찾기" title="제목·번호(T12)·주고받은 말 — 어디서든 / 를 누르면 여기로" autocomplete="off"><kbd>/</kbd></div>
   <div id="list"></div>
   <div class="petstage off" id="petStage" title="강아지는 메일함을 지키고, 고양이는 맡긴 일을 합니다 — 마우스를 올려 보세요">
     <div class="buddies" id="buddies"></div>
@@ -370,25 +380,28 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
 
 <main>
   <div class="banner" id="banner"></div>
-  <!-- 새 대화 -->
+  <!-- 새 대화 — 대화 화면과 같은 자리에 입력부 -->
   <div class="welcome" id="newPane">
-    <div class="newcard">
-      <h2><button class="iconbtn narrowonly" id="newBack" title="대화 목록">←</button> 새 일 맡기기</h2>
-      <p id="newNote">보내면 메일로 PC 게이트웨이에 전달되고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&amp;C 메신저 폰 페이지와 같은 대화입니다.</p>
+    <div class="head">
+      <button class="iconbtn narrowonly" id="newBack" title="대화 목록">←</button>
+      <h2>새 대화</h2>
+    </div>
+    <div class="empty"><span id="newNote" title="폰 메일·D&amp;C 메신저 폰 페이지와 같은 대화입니다">PC 게이트웨이에 메일로 맡깁니다. 답은 여기에 대화로 옵니다.</span></div>
+    <div class="composer">
       <div class="chips" id="newChips">
-        <button class="chip on" data-mode="read">읽기</button>
-        <button class="chip wr" data-mode="write">수정 허용</button>
+        <button class="chip on" data-mode="read" title="조회·분석만">읽기</button>
+        <button class="chip wr" data-mode="write" title="파일 수정·명령 실행까지 — PC 가 실행 전에 확인 메일을 한 번 보냅니다">수정 허용</button>
         <span class="sep"></span>
         <span id="folderChips" style="display:contents"></span>
       </div>
       <div class="inrow">
-        <textarea id="newText" rows="3" placeholder="할 일을 적으세요 — 첫 줄이 제목이 됩니다 (Ctrl+Enter 로 보내기)"></textarea>
+        <textarea id="newText" rows="3" placeholder="할 일을 적으세요. 첫 줄이 제목이 됩니다."></textarea>
         <button class="ghost filebtn" data-for="newText" title="이 PC 파일 붙이기 — 사진·pdf·문서·표(xlsx·csv)·텍스트, 5개·하나 10MB 까지">파일</button>
         <span class="snipwrap"><button class="ghost snipbtn" data-for="newText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">답 모음</button><div class="snip"></div></span>
         <button class="send" id="newSend" disabled>보내기</button>
       </div>
       <div class="filechips" id="newTextFiles"></div>
-      <div class="hint" id="newHint">읽기: 조회·분석만 · 수정 허용: 파일 수정·명령 실행까지(PC 가 실행 전에 확인 메일을 한 번 보냅니다)</div>
+      <div class="newfoot"><span class="hint" id="newHint"></span><span class="keys"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 보내기</span></div>
     </div>
   </div>
   <!-- 대화 -->
@@ -402,7 +415,7 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     <div id="msgs"></div>
     <div class="composer">
       <div class="inrow">
-        <textarea id="sayText" rows="1" placeholder="이어서 말하기 (Ctrl+Enter 로 보내기)"></textarea>
+        <textarea id="sayText" rows="1" placeholder="이어서 말하기 · Ctrl+Enter 보내기"></textarea>
         <button class="ghost filebtn" data-for="sayText" title="이 PC 파일 붙이기 — 사진·pdf·문서·표(xlsx·csv)·텍스트, 5개·하나 10MB 까지">파일</button>
         <span class="snipwrap"><button class="ghost snipbtn" data-for="sayText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">답 모음</button><div class="snip"></div></span>
         <button class="ghost" id="stopBtn" title="하던 일을 정리하고 멈추게 합니다">멈춤</button>
@@ -722,7 +735,16 @@ function showNew() {
 $('#newBtn').onclick = showNew;
 for (const b of document.querySelectorAll('#newChips [data-mode]')) b.onclick = () => {
   newMode = b.dataset.mode; for (const x of document.querySelectorAll('#newChips [data-mode]')) x.classList.toggle('on', x === b);
+  const h = $('#newHint'); h.textContent = newMode === 'write' ? '수정 허용 — 실행 전에 확인 메일이 한 번 갑니다' : ''; h.classList.toggle('wr', newMode === 'write');
 };
+// 단축키 — Alt+N 새 대화, / 대화 찾기(글 쓰는 칸 안에서는 그대로 글자)
+document.addEventListener('keydown', e => {
+  if (e.isComposing) return;
+  if (e.altKey && !e.ctrlKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN')) { e.preventDefault(); showNew(); return; }
+  if (e.key !== '/' || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
+  e.preventDefault(); document.body.classList.add('list'); $('#findQ').focus();
+});
 function drawFolders() {
   const box = $('#folderChips'); box.replaceChildren();
   const home = state.default_folder || {};
@@ -864,8 +886,8 @@ async function poll(force) {
   $('#who').textContent = (s.user || '계정 없음') + (s.source === 'gateway' ? ' · 이 PC 게이트웨이 계정' : run.active ? ' · 이 PC 에서 실행' : '');
   $('#dot').className = s.error ? 'bad' : (s.polled ? 'ok' : '');
   $('#newNote').textContent = run.active
-    ? '보내면 이 PC 의 Claude Code 가 받아 실행하고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&C 메신저 폰 페이지와 같은 대화입니다.'
-    : '보내면 메일로 PC 게이트웨이에 전달되고, 답은 이 화면에 대화로 옵니다. 폰 메일·D&C 메신저 폰 페이지와 같은 대화입니다.';
+    ? '이 PC 의 Claude Code 가 바로 받아 실행합니다. 답은 여기에 대화로 옵니다.'
+    : 'PC 게이트웨이에 메일로 맡깁니다. 답은 여기에 대화로 옵니다.';
   const ban = $('#banner');
   if (s.error === 'setup') { ban.style.display = 'none'; if (!$('#dlg').open) openSetup(true); }
   else if (s.error) { ban.textContent = '메일함을 읽지 못했습니다 — ' + s.error; ban.style.display = 'block'; }
