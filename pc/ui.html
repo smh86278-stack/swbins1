@@ -331,6 +331,93 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
 /* 품종·모습 고르기는 펫 자리에 마우스를 올렸을 때만(터치 화면은 늘) — 펫 아래 잘린 고르기 칸 셋이 늘 떠 있던 것 */
 @media (hover:hover){.petstage select{opacity:0;transition:opacity .15s}.petstage:hover select,.petstage:focus-within select{opacity:1}}
 </style>
+<style>
+/* ---------- 디자인(2026-11-16) — 앱공방(swbins-kit3 ui.html) 스킨과 같은 이름·색. <html data-design> 이 없으면 위 「종이 노트」 그대로(바탕·강조색 고르기도 그때만).
+   디자인마다 [라이트, 다크] 두 벌 — 어두운 작업실(night)만 늘 어둡다. 그룹웨어형·백오피스형은 대화 목록이 왼쪽 세로 판(흰/어두운)이 된다.
+   --rad 판·말풍선 모서리, --radb 단추 모서리, --rulew 머리 줄 아래 선 굵기, --band/--onband 이름 줄 띠(있는 디자인만) */
+:root{--primary:var(--rule);--onprimary:var(--onaccent);--petglow:transparent}
+:root[data-design=groupware]{--serif:var(--sans);--rad:8px;--radb:6px;--rulew:1px;
+  --bg:light-dark(#f2f4f7,#15181d);--solid:light-dark(#ffffff,#1d2128);--soft:light-dark(#f4f8ff,#232934);
+  --text:light-dark(#1d2733,#e4e8ee);--muted:light-dark(#6b7684,#9aa4b2);--line:light-dark(#e3e7ed,#2c323c);--rule:light-dark(#d6dce4,#3a414c);--field:light-dark(#c9d1dc,#4a525e);
+  --accent:light-dark(#2463d1,#7aa7f0);--primary:var(--accent);--onprimary:light-dark(#ffffff,#10141a);--band:light-dark(#2463d1,#1d3f80);--onband:#ffffff;
+  --side:light-dark(#ffffff,#1b1f26);--sideon:light-dark(#eaf1fd,#22324d)}
+:root[data-design=backoffice]{--serif:var(--sans);--rad:4px;--radb:3px;--rulew:1px;
+  --bg:light-dark(#eceff3,#16191e);--solid:light-dark(#ffffff,#1e2228);--soft:light-dark(#fff4ec,#2a2420);
+  --text:light-dark(#1f242b,#e2e5e9);--muted:light-dark(#6f7884,#98a0ab);--line:light-dark(#e1e5ea,#2d323a);--rule:light-dark(#c7cdd5,#3b414a);--field:light-dark(#c7cdd5,#4b525c);
+  --accent:light-dark(#e8590c,#ff8a4c);--primary:light-dark(#2f3540,#e2e5e9);--onprimary:light-dark(#ffffff,#16191e)}
+:root[data-design=mint]{--serif:var(--sans);--rad:10px;--radb:999px;--rulew:2px;
+  --bg:light-dark(#f4f8f5,#131a17);--solid:light-dark(#ffffff,#1a2420);--soft:light-dark(#f0f7f2,#1f2b26);
+  --text:light-dark(#17322a,#dcebe4);--muted:light-dark(#5d7469,#94ab9f);--line:light-dark(#dce8e0,#2a3a33);--rule:light-dark(#1f7a53,#5cc398);--field:light-dark(#b9cfc2,#466053);
+  --accent:light-dark(#1f7a53,#5cc398);--primary:var(--accent);--onprimary:light-dark(#ffffff,#0f1714)}
+:root[data-design=night]{color-scheme:dark;--serif:var(--sans);--rad:6px;--radb:4px;--rulew:2px;
+  --bg:#15171b;--solid:#1e2127;--soft:#23272e;--text:#e6e8eb;--muted:#959ba5;--line:#2c3038;--rule:#f2b43a;--field:#444a55;
+  --accent:#f2b43a;--primary:#f2b43a;--onprimary:#15171b;--bad:#ff8a7a}
+:root[data-design=ledger]{--rad:0px;--radb:0px;--rulew:3px;
+  --bg:light-dark(#ffffff,#111111);--solid:light-dark(#ffffff,#161616);--soft:light-dark(#fff6f6,#241818);
+  --text:light-dark(#111111,#f0f0f0);--muted:light-dark(#555555,#aaaaaa);--line:light-dark(#1a1a1a,#d0d0d0);--rule:light-dark(#1a1a1a,#f0f0f0);--field:light-dark(#1a1a1a,#bbbbbb);
+  --accent:light-dark(#c0262d,#ff6b6b);--primary:light-dark(#111111,#f0f0f0);--onprimary:light-dark(#ffffff,#111111)}
+:root[data-design=soft]{--serif:var(--sans);--rad:14px;--radb:999px;--rulew:2px;
+  --bg:light-dark(#fff8f3,#1f1916);--solid:light-dark(#ffffff,#2a211d);--soft:light-dark(#fff5ef,#332823);
+  --text:light-dark(#3d2f2a,#f1e4dd);--muted:light-dark(#8b746b,#bba79e);--line:light-dark(#f1dfd4,#3f322c);--rule:light-dark(#e9967a,#e9967a);--field:light-dark(#e8cbbd,#6b554b);
+  --accent:light-dark(#d9674a,#f0957a);--primary:light-dark(#e07a5f,#f0957a);--onprimary:light-dark(#ffffff,#1f1916)}
+:root[data-design=shop]{--serif:var(--sans);--rad:12px;--radb:8px;--rulew:1px;
+  --bg:light-dark(#ffffff,#0f0f0f);--solid:light-dark(#ffffff,#181818);--soft:light-dark(#fafafa,#222222);
+  --text:light-dark(#111111,#f2f2f2);--muted:light-dark(#6b6b6b,#a8a8a8);--line:light-dark(#ebebeb,#2a2a2a);--rule:light-dark(#111111,#f2f2f2);--field:light-dark(#d4d4d4,#4a4a4a);
+  --accent:light-dark(#d9480f,#ff7a45);--primary:light-dark(#111111,#f2f2f2);--onprimary:light-dark(#ffffff,#111111)}
+:root[data-design=brand]{--serif:var(--sans);--rad:10px;--radb:999px;--rulew:1px;
+  --bg:light-dark(#f6f6fb,#14131f);--solid:light-dark(#ffffff,#1d1b2c);--soft:light-dark(#f3f2ff,#26233a);
+  --text:light-dark(#1c1b2e,#e6e5f2);--muted:light-dark(#6b6a80,#a3a2b8);--line:light-dark(#e4e4f0,#2f2c45);--rule:light-dark(#4338ca,#8b85f0);--field:light-dark(#cfcfe3,#4a4766);
+  --accent:light-dark(#4338ca,#9a94ff);--primary:light-dark(#4338ca,#8b85f0);--onprimary:light-dark(#ffffff,#14131f);--band:#1e1b4b;--onband:#ffffff}
+/* 디자인 공통 — 모서리·선 굵기·단추 */
+:root[data-design] :is(.bubble,.choice,.lookpop,.snip,dialog,.jwlast){border-radius:var(--rad)}
+:root[data-design] :is(.opt,.chip,.ghost,.newbtn,.awaybtn,textarea,.filechips span,.snip .add){border-radius:min(var(--radb),var(--rad) + 4px)}
+:root[data-design] .send{border-radius:var(--radb);background:var(--primary);border-color:var(--primary);color:var(--onprimary)}
+:root[data-design] .switch input:checked+span{background:var(--primary);border-color:var(--primary)}
+:root[data-design] .switch input:checked+span::after{background:var(--onprimary)}
+:root[data-design] :is(.head,.filters .tools){border-bottom-width:var(--rulew)}
+:root[data-design] :is(.choice,.lookpop){border-top-width:var(--rulew)}
+:root[data-design] .run{border-top-width:var(--rulew)}
+:root[data-design] .head{background:var(--solid)}
+:root[data-design] .composer{background:var(--solid)}
+:root[data-design] .bot .bubble{background:var(--solid)}
+:root[data-design] :is(input[type=text],input[type=search],input[type=password],input[type=email],input[type=number],select:not(.petstage select):not(.tphead select)){
+  border:1px solid var(--line);border-bottom-color:var(--field);border-radius:min(var(--rad),8px);padding:6px 9px;background:var(--solid)}
+:root[data-design] :is(input,select):focus{border-color:var(--accent)}
+:root[data-design] .findbar input{padding:5px 8px}
+:root[data-design=night] dialog::backdrop{background:rgba(0,0,0,.55)}
+/* 이름 줄 띠 — 그룹웨어형(파랑)·브랜드형(남보라) */
+:root:is([data-design=groupware],[data-design=brand]) .brand{background:var(--band);color:var(--onband);padding-bottom:12px;margin-bottom:8px}
+:root:is([data-design=groupware],[data-design=brand]) .brand :is(.sub,.logo){color:color-mix(in srgb,var(--onband) 80%,transparent)}
+:root:is([data-design=groupware],[data-design=brand]) .brand .newbtn{color:var(--onband);border-color:color-mix(in srgb,var(--onband) 55%,transparent)}
+:root:is([data-design=groupware],[data-design=brand]) .brand .newbtn:hover{background:color-mix(in srgb,var(--onband) 14%,transparent);border-color:var(--onband)}
+:root:is([data-design=groupware],[data-design=brand]) #dot:not(.ok):not(.bad){background:color-mix(in srgb,var(--onband) 60%,transparent)}
+:root:is([data-design=groupware],[data-design=brand]) #dot.ok{background:#7fe0a8}
+/* 왼쪽 세로 판 — 그룹웨어형(흰)·백오피스형(어두운). 목록 줄은 메뉴처럼 판 안쪽에 둥글게, 고른 줄은 칠한다 */
+:root[data-design=groupware] aside{background:var(--side);border-right-color:var(--line)}
+:root[data-design=backoffice] aside{--bg:light-dark(#20252d,#111418);--panel:var(--bg);--solid:light-dark(#2f3641,#232932);--soft:light-dark(#272d36,#1a1e25);
+  --text:#e3e7ec;--muted:#8f99a6;--line:light-dark(#2f3641,#232932);--rule:#3a414c;--field:#56606d;--accent:#ff7a33;--accentsoft:color-mix(in srgb,#ff7a33 16%,#20252d);
+  --sideon:var(--solid);--petglow:rgba(255,255,255,.2);color:var(--text);background:var(--bg);border-right-color:#0d0f12}
+:root[data-design=backoffice] aside .brand h1{color:#fff}
+:root:is([data-design=groupware],[data-design=backoffice]) #list{padding:4px 8px 12px}
+:root:is([data-design=groupware],[data-design=backoffice]) .item{border:0;border-radius:var(--radb);margin:1px 0;padding:8px 10px}
+:root:is([data-design=groupware],[data-design=backoffice]) .item.sel{background:var(--sideon);box-shadow:inset 3px 0 0 var(--accent)}
+:root[data-design=groupware] .item.sel .title{color:var(--accent)}
+:root:is([data-design=groupware],[data-design=backoffice]) .item.urgent{box-shadow:inset 3px 0 0 var(--bad)}
+:root:is([data-design=groupware],[data-design=backoffice]) .filters .tools{border-bottom-color:var(--line)}
+:root:is([data-design=groupware],[data-design=backoffice]) .petstage{border-top-color:var(--line)}
+/* 펫이 어느 디자인에서도 묻히지 않게 — 어두운 바탕(다크 모드·어두운 작업실·백오피스 판)에서만 뒤에 옅은 받침 + 조금 밝게(허브 index.html 과 같은 방법) */
+.petstage .pet .art,.buddy .bart{position:relative;isolation:isolate}
+.petstage .pet .art::before{content:"";position:absolute;left:50%;bottom:-4px;width:96px;height:70px;transform:translateX(-50%);border-radius:50%;z-index:-1;pointer-events:none;
+  background:radial-gradient(closest-side,var(--petglow),transparent)}
+@media (prefers-color-scheme:dark){:root{--petglow:rgba(255,248,235,.16)}}
+:root[data-design=night]{--petglow:rgba(255,236,200,.17)}
+:root[data-design=night] .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)),:root[data-design=backoffice] aside .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}
+@media (prefers-color-scheme:dark){.petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}}
+/* 디자인 고르기 칸 */
+.lookpop .swatches.designs button{min-width:calc(50% - 3px)}
+.lookpop .basewrap[hidden]{display:none}
+.lookpop .lnote{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+</style>
 </head>
 <body>
 <aside>
@@ -349,14 +436,18 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     <div class="tools">
     <button class="iconbtn" id="refreshBtn" title="메일함 다시 읽기">↻</button>
     <button class="iconbtn" id="clearBtn" title="대화 전체 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다(일하는 중인 대화는 남김)">비우기</button>
-    <button class="iconbtn" id="lookBtn" title="바탕·강조색 고르기 — 이 PC 에만 기억">화면</button>
+    <button class="iconbtn" id="lookBtn" title="디자인·바탕·강조색 고르기 — 이 PC 에만 기억">화면</button>
     <button class="iconbtn" id="costBtn" title="비용 내역 — 맡긴 일에 든 Claude 비용(오늘·날짜별·대화별)">비용</button>
     <button class="iconbtn" id="setBtn" title="메일 계정">설정</button>
     </div>
     <!-- 화면 — 바탕 테마·강조색(누르면 바로 바뀐다, 라이트·다크는 시스템 설정을 따른다) -->
     <div class="lookpop" id="lookBox" hidden>
+      <div class="lt">디자인</div><div class="swatches designs" id="lookDesign"></div>
+      <div class="basewrap" id="lookBase">
       <div class="lt">바탕</div><div class="swatches" id="lookTheme"></div>
       <div class="lt">강조색</div><div class="swatches" id="lookAccent"></div>
+      </div>
+      <div class="lnote" id="lookBaseNote" hidden>바탕·강조색은 「종이 노트」에서 고를 수 있어요</div>
       <div class="lt">펫 × Claude Code 토큰 사용량</div>
       <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
       <label class="lookchk"><input type="checkbox" id="tokBuddy"> 기다리는 세션만 동료 펫으로 알려 줘요</label>
@@ -1095,19 +1186,28 @@ const LOOK_THEMES = { paper: ['종이 노트', '#f4efe6', '#1f1c19'], white: ['�
   slate: ['청회색', '#eef1f4', '#181c21'], kraft: ['크라프트지', '#e9dec9', '#221d16'] };
 const LOOK_ACCENTS = { brick: ['벽돌', '#9a3f1d', '#d9875f'], ink: ['남색', '#2f5283', '#8fb3e0'], pine: ['초록', '#2f6b4f', '#7fc0a0'],
   plum: ['자주', '#7b3a6b', '#d494c4'], ochre: ['황토', '#7d5a12', '#d8b363'], mono: ['먹', '#2b2723', '#ece5da'] };
+/* 디자인 — 앱공방(swbins-kit3 ui.html SWATCH)과 같은 이름·견본색. paper 는 위 바탕·강조색을 그대로 쓰는 기본 */
+const LOOK_DESIGNS = { paper: ['종이 노트', '#9a3f1d', '#d9875f'], groupware: ['그룹웨어형', '#2463d1', '#7aa7f0'], backoffice: ['백오피스형', '#20252d', '#ff8a4c'],
+  mint: ['산뜻한 매장', '#1f7a53', '#5cc398'], night: ['어두운 작업실', '#f2b43a', '#f2b43a'], ledger: ['반듯한 장부', '#c0262d', '#ff6b6b'],
+  soft: ['포근한 파스텔', '#e07a5f', '#f0957a'], shop: ['쇼핑몰형', '#111111', '#f2f2f2'], brand: ['브랜드형', '#4338ca', '#9a94ff'] };
 const LOOK_KEY = 'dnc-look', darkMq = matchMedia('(prefers-color-scheme: dark)');
 function lookGet() {
   let l = {}; try { l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') || {}; } catch (e) {}
-  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick' };
+  const q = new URLSearchParams(location.search).get('design');   // ?design=… — 스크린샷·미리보기용(기억은 안 바꿈)
+  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick',
+    design: LOOK_DESIGNS[q] ? q : LOOK_DESIGNS[l.design] ? l.design : 'paper' };
 }
 function lookApply() {
-  const l = lookGet(), d = darkMq.matches ? 2 : 1;
-  document.documentElement.dataset.theme = l.theme; document.documentElement.dataset.accent = l.accent;
-  for (const [box, list, key] of [['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
+  const l = lookGet(), d = darkMq.matches ? 2 : 1, root = document.documentElement;
+  root.dataset.theme = l.theme; root.dataset.accent = l.accent;
+  if (l.design === 'paper') delete root.dataset.design; else root.dataset.design = l.design;
+  $('#lookBase').hidden = l.design !== 'paper'; $('#lookBaseNote').hidden = l.design === 'paper';
+  for (const [box, list, key] of [['#lookDesign', LOOK_DESIGNS, 'design'], ['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
     $(box).replaceChildren(...Object.entries(list).map(([id, v]) => {
       const b = document.createElement('button'), i = document.createElement('i');
       b.type = 'button'; b.className = id === l[key] ? 'on' : ''; i.style.background = v[d]; b.append(i, v[0]);
-      b.onclick = () => { try { localStorage.setItem(LOOK_KEY, JSON.stringify({ ...lookGet(), [key]: id })); } catch (e) {} lookApply(); };
+      b.onclick = () => { const u = new URL(location.href); if (u.searchParams.has('design')) { u.searchParams.delete('design'); history.replaceState(null, '', u); }
+        try { localStorage.setItem(LOOK_KEY, JSON.stringify({ ...lookGet(), [key]: id })); } catch (e) {} lookApply(); };
       return b;
     }));
   }

@@ -846,6 +846,9 @@ class Runner:
                 where = ["--config", base + ".pw.json"]
             servers["browser"] = {"type": "stdio", "command": npx[0],
                                   "args": npx[1:] + ["-y", PLAYWRIGHT_MCP] + where + ["--output-dir", out]}
+            nd = modern_node_dir()                                       # 옛 node 가 PATH 앞이면 그 앞에 18+ 를 세운다
+            if nd:                                                       # npx 도 node 도 이 PATH 로 찾는다
+                servers["browser"]["env"] = {"PATH": nd + os.pathsep + os.environ.get("PATH", "")}
         if cfg.get("run_jira") and cfg.get("run_jira_token_enc") and any(t.startswith("mcp__jira__") for t in tools):
             servers["jira"] = {"type": "stdio", "command": "uvx", "args": list(JIRA_MCP_ARGS),
                                "env": {"JIRA_URL": cfg.get("run_jira_url") or "",
@@ -2138,6 +2141,42 @@ def find_tool(name):
     if not path and not IS_WIN:
         path = shutil.which(name, path=os.pathsep.join(mac_bin_dirs()))
     return path or ""
+
+
+_NODE_DIR = []
+
+
+def modern_node_dir():
+    """Node 18 이상이 든 폴더(없으면 ""). @playwright/mcp 는 18 미만에서 문법 오류로 바로 죽는다 — nvm 이 옛 node(v14)를
+    PATH 앞에 두면 전용 브라우저 MCP 가 CONNECTION_CLOSED 로 끝났다(2026-11-16 실측). PATH → Program Files → nvm 최신 순."""
+    if _NODE_DIR:
+        return _NODE_DIR[0]
+    exe = "node.exe" if IS_WIN else "node"
+    dirs = [d for d in os.environ.get("PATH", "").split(os.pathsep) if d]
+    if IS_WIN:
+        dirs.append(os.path.join(os.environ.get("PROGRAMFILES") or r"C:\Program Files", "nodejs"))
+        nvm = os.environ.get("NVM_HOME") or ""
+        try:
+            dirs += [os.path.join(nvm, v) for v in sorted(os.listdir(nvm), key=_version_key, reverse=True)] if nvm else []
+        except OSError:
+            pass
+    else:
+        dirs += mac_bin_dirs()
+    found = ""
+    for d in dirs:
+        if not os.path.isfile(os.path.join(d, exe)):
+            continue
+        try:
+            out = subprocess.run([os.path.join(d, exe), "--version"], capture_output=True, text=True, timeout=10,
+                                 creationflags=0x08000000 if IS_WIN else 0).stdout
+        except Exception:
+            continue
+        m = re.match(r"v(\d+)", out.strip())
+        if m and int(m.group(1)) >= 18:
+            found = d
+            break
+    _NODE_DIR.append(found)
+    return found
 
 
 def find_browser():
