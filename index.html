@@ -207,6 +207,66 @@ dialog::backdrop{background:rgba(30,25,20,.4)}
 .msg .meta .del{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;padding:0 4px;cursor:pointer}
 .field select{width:100%;font:inherit;padding:9px 10px;border-radius:3px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
 </style>
+<style>
+/* ---------- 디자인(2026-11-18 — PC 메신저 pc/ui.html 2026-11-16 판과 같은 이름·색). <html data-design> 이 없으면 위 「종이 노트」 그대로(바탕·강조색 고르기도 그때만).
+   --rad 말풍선·창 모서리, --radb 단추 모서리, --rulew 머리 줄·입력부 선 굵기, --band/--onband 머리 줄 띠(그룹웨어형·브랜드형) */
+:root{--primary:var(--rule);--onprimary:var(--bg)}
+:root[data-design=groupware]{--serif:var(--sans);--rad:8px;--radb:6px;--rulew:1px;
+  --bg:light-dark(#f2f4f7,#15181d);--solid:light-dark(#ffffff,#1d2128);--soft:light-dark(#f4f8ff,#232934);
+  --text:light-dark(#1d2733,#e4e8ee);--muted:light-dark(#6b7684,#9aa4b2);--line:light-dark(#e3e7ed,#2c323c);--rule:light-dark(#d6dce4,#3a414c);--field:light-dark(#c9d1dc,#4a525e);
+  --accent:light-dark(#2463d1,#7aa7f0);--primary:var(--accent);--onprimary:light-dark(#ffffff,#10141a);--band:light-dark(#2463d1,#1d3f80);--onband:#ffffff}
+:root[data-design=backoffice]{--serif:var(--sans);--rad:4px;--radb:3px;--rulew:1px;
+  --bg:light-dark(#eceff3,#16191e);--solid:light-dark(#ffffff,#1e2228);--soft:light-dark(#fff4ec,#2a2420);
+  --text:light-dark(#1f242b,#e2e5e9);--muted:light-dark(#6f7884,#98a0ab);--line:light-dark(#e1e5ea,#2d323a);--rule:light-dark(#c7cdd5,#3b414a);--field:light-dark(#c7cdd5,#4b525c);
+  --accent:light-dark(#e8590c,#ff8a4c);--primary:light-dark(#2f3540,#e2e5e9);--onprimary:light-dark(#ffffff,#16191e);--band:#20252d;--onband:#e3e7ec}
+:root[data-design=mint]{--serif:var(--sans);--rad:10px;--radb:999px;--rulew:2px;
+  --bg:light-dark(#f4f8f5,#131a17);--solid:light-dark(#ffffff,#1a2420);--soft:light-dark(#f0f7f2,#1f2b26);
+  --text:light-dark(#17322a,#dcebe4);--muted:light-dark(#5d7469,#94ab9f);--line:light-dark(#dce8e0,#2a3a33);--rule:light-dark(#1f7a53,#5cc398);--field:light-dark(#b9cfc2,#466053);
+  --accent:light-dark(#1f7a53,#5cc398);--primary:var(--accent);--onprimary:light-dark(#ffffff,#0f1714)}
+:root[data-design=night]{color-scheme:dark;--serif:var(--sans);--rad:6px;--radb:4px;--rulew:2px;
+  --bg:#15171b;--solid:#1e2127;--soft:#23272e;--text:#e6e8eb;--muted:#959ba5;--line:#2c3038;--rule:#f2b43a;--field:#444a55;
+  --accent:#f2b43a;--primary:#f2b43a;--onprimary:#15171b;--bad:#ff8a7a}
+:root[data-design=ledger]{--rad:0px;--radb:0px;--rulew:3px;
+  --bg:light-dark(#ffffff,#111111);--solid:light-dark(#ffffff,#161616);--soft:light-dark(#fff6f6,#241818);
+  --text:light-dark(#111111,#f0f0f0);--muted:light-dark(#555555,#aaaaaa);--line:light-dark(#1a1a1a,#d0d0d0);--rule:light-dark(#1a1a1a,#f0f0f0);--field:light-dark(#1a1a1a,#bbbbbb);
+  --accent:light-dark(#c0262d,#ff6b6b);--primary:light-dark(#111111,#f0f0f0);--onprimary:light-dark(#ffffff,#111111)}
+:root[data-design=soft]{--serif:var(--sans);--rad:14px;--radb:999px;--rulew:2px;
+  --bg:light-dark(#fff8f3,#1f1916);--solid:light-dark(#ffffff,#2a211d);--soft:light-dark(#fff5ef,#332823);
+  --text:light-dark(#3d2f2a,#f1e4dd);--muted:light-dark(#8b746b,#bba79e);--line:light-dark(#f1dfd4,#3f322c);--rule:light-dark(#e9967a,#e9967a);--field:light-dark(#e8cbbd,#6b554b);
+  --accent:light-dark(#d9674a,#f0957a);--primary:light-dark(#e07a5f,#f0957a);--onprimary:light-dark(#ffffff,#1f1916)}
+:root[data-design=shop]{--serif:var(--sans);--rad:12px;--radb:8px;--rulew:1px;
+  --bg:light-dark(#ffffff,#0f0f0f);--solid:light-dark(#ffffff,#181818);--soft:light-dark(#fafafa,#222222);
+  --text:light-dark(#111111,#f2f2f2);--muted:light-dark(#6b6b6b,#a8a8a8);--line:light-dark(#ebebeb,#2a2a2a);--rule:light-dark(#111111,#f2f2f2);--field:light-dark(#d4d4d4,#4a4a4a);
+  --accent:light-dark(#d9480f,#ff7a45);--primary:light-dark(#111111,#f2f2f2);--onprimary:light-dark(#ffffff,#111111)}
+:root[data-design=brand]{--serif:var(--sans);--rad:10px;--radb:999px;--rulew:1px;
+  --bg:light-dark(#f6f6fb,#14131f);--solid:light-dark(#ffffff,#1d1b2c);--soft:light-dark(#f3f2ff,#26233a);
+  --text:light-dark(#1c1b2e,#e6e5f2);--muted:light-dark(#6b6a80,#a3a2b8);--line:light-dark(#e4e4f0,#2f2c45);--rule:light-dark(#4338ca,#8b85f0);--field:light-dark(#cfcfe3,#4a4766);
+  --accent:light-dark(#4338ca,#9a94ff);--primary:light-dark(#4338ca,#8b85f0);--onprimary:light-dark(#ffffff,#14131f);--band:#1e1b4b;--onband:#ffffff}
+/* 디자인 공통 — 모서리·선 굵기·단추 */
+:root[data-design] :is(.bubble,dialog,.md pre,#gbar,.thumb img){border-radius:var(--rad)}
+:root[data-design] :is(.opt,.chip,.btn,.icon-btn,.stopbtn,.clip,.pick,.swatches button,textarea,.prefix,.dlg button[type=button]:not(.btn)){border-radius:min(var(--radb),var(--rad) + 4px)}
+:root[data-design] :is(.send,.btn.pri){border-radius:var(--radb);background:var(--primary);border-color:var(--primary);color:var(--onprimary)}
+:root[data-design] header{border-bottom-width:var(--rulew);background:var(--solid)}
+:root[data-design] :is(.composer,#editBar){border-top-width:var(--rulew);border-top-color:var(--rule);background:var(--solid)}
+:root[data-design] dialog{border-top-width:var(--rulew)}
+:root[data-design] .bubble.bot{background:var(--solid)}
+:root[data-design] :is(input[type=text],input[type=email],input[type=number],input[type=password],.field select){border-radius:min(var(--rad),8px);background:var(--solid)}
+:root[data-design] .prefix input{background:transparent}
+:root[data-design] :is(input,select,textarea):focus{border-color:var(--accent)}
+:root[data-design] .room.sel{border-left-color:var(--accent)}
+:root[data-design=night] dialog::backdrop{background:rgba(0,0,0,.55)}
+/* 머리 줄 띠 — 그룹웨어형(파랑)·백오피스형(먹색)·브랜드형(남보라) */
+:root:is([data-design=groupware],[data-design=backoffice],[data-design=brand]) header{background:var(--band);color:var(--onband);border-bottom-color:transparent}
+:root:is([data-design=groupware],[data-design=backoffice],[data-design=brand]) header :is(.sub,.logo){color:color-mix(in srgb,var(--onband) 80%,transparent)}
+:root:is([data-design=groupware],[data-design=backoffice],[data-design=brand]) header .back{color:var(--onband)}
+:root:is([data-design=groupware],[data-design=backoffice],[data-design=brand]) header .icon-btn{color:var(--onband);border-color:color-mix(in srgb,var(--onband) 55%,transparent)}
+/* 펫이 어두운 바탕에서 묻히지 않게 조금 밝게 */
+:root[data-design=night] .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}
+@media (prefers-color-scheme:dark){.petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}}
+/* 디자인 고르기 칸 */
+.swatches.designs button{min-width:calc(50% - 3px)}
+#lookBase[hidden],#lookBaseNote[hidden]{display:none}
+</style>
 <link rel="stylesheet" href="pet/pets.css">
 </head>
 <body>
@@ -295,10 +355,15 @@ dialog::backdrop{background:rgba(30,25,20,.4)}
     <div class="field"><label for="dogBreed">강아지 · 고양이 (이 기기에만 기억)</label>
       <div style="display:flex;gap:8px"><select id="petSkinSel" title="모습 — 인형 · 만화" style="flex:0 0 auto;width:auto"></select><select id="dogBreed"></select><select id="catBreed"></select></div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-top:8px"><input type="checkbox" id="petShow"> 화면에 보이기</label></div>
-    <div class="field"><label>바탕 (이 기기에만 기억)</label>
+    <div class="field"><label>디자인 (이 기기에만 기억)</label>
+      <div class="swatches designs" id="lookDesign"></div>
+      <div class="hint" id="lookBaseNote" hidden>바탕·강조색은 「종이 노트」에서 고를 수 있어요</div></div>
+    <div id="lookBase">
+    <div class="field"><label>바탕</label>
       <div class="swatches" id="lookTheme"></div></div>
     <div class="field"><label>강조색</label>
       <div class="swatches" id="lookAccent"></div></div>
+    </div>
     <div class="field"><button type="button" class="btn" id="clearSent" style="width:100%">보낸 기록 모두 지우기 (이 기기에서만)</button></div>
     <div class="actions"><button class="btn" value="cancel" formnovalidate>닫기</button><button class="btn pri" value="ok">저장</button></div>
   </form>

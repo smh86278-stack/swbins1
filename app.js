@@ -24,16 +24,29 @@ const LOOK_THEMES = { paper: ['종이 노트', '#f4efe6', '#1f1c19'], white: ['�
   slate: ['청회색', '#eef1f4', '#181c21'], kraft: ['크라프트지', '#e9dec9', '#221d16'] };
 const LOOK_ACCENTS = { brick: ['벽돌', '#9a3f1d', '#d9875f'], ink: ['남색', '#2f5283', '#8fb3e0'], pine: ['초록', '#2f6b4f', '#7fc0a0'],
   plum: ['자주', '#7b3a6b', '#d494c4'], ochre: ['황토', '#7d5a12', '#d8b363'], mono: ['먹', '#2b2723', '#ece5da'] };
+/* 디자인 — PC 메신저(pc/ui.html LOOK_DESIGNS)와 같은 이름·견본색. [이름, 견본 라이트, 견본 다크, 상태 막대 라이트, 상태 막대 다크]
+   paper 는 위 바탕·강조색을 그대로 쓰는 기본. 띠가 있는 디자인은 상태 막대를 띠 색으로 */
+const LOOK_DESIGNS = { paper: ['종이 노트', '#9a3f1d', '#d9875f'],
+  groupware: ['그룹웨어형', '#2463d1', '#7aa7f0', '#2463d1', '#1d3f80'], backoffice: ['백오피스형', '#20252d', '#ff8a4c', '#20252d', '#20252d'],
+  mint: ['산뜻한 매장', '#1f7a53', '#5cc398', '#ffffff', '#1a2420'], night: ['어두운 작업실', '#f2b43a', '#f2b43a', '#1e2127', '#1e2127'],
+  ledger: ['반듯한 장부', '#c0262d', '#ff6b6b', '#ffffff', '#161616'], soft: ['포근한 파스텔', '#e07a5f', '#f0957a', '#ffffff', '#2a211d'],
+  shop: ['쇼핑몰형', '#111111', '#f2f2f2', '#ffffff', '#181818'], brand: ['브랜드형', '#4338ca', '#9a94ff', '#1e1b4b', '#1e1b4b'] };
 const darkMq = matchMedia('(prefers-color-scheme: dark)');
 function lookGet() {
   const l = store.get('look', {});
-  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick' };
+  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick',
+    design: LOOK_DESIGNS[l.design] ? l.design : 'paper' };
 }
 function lookApply() {
   const l = lookGet(), d = darkMq.matches ? 2 : 1, h = document.documentElement;
   h.dataset.theme = l.theme; h.dataset.accent = l.accent;
-  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = LOOK_THEMES[l.theme][d];   // 아이폰 상태 막대
-  for (const [box, list, key] of [['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
+  if (l.design === 'paper') delete h.dataset.design; else h.dataset.design = l.design;
+  const bar = l.design === 'paper' ? LOOK_THEMES[l.theme][d] : LOOK_DESIGNS[l.design][d + 2];
+  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = bar;   // 아이폰 상태 막대
+  const base = $('#lookBase'), note = $('#lookBaseNote');
+  if (base) base.hidden = l.design !== 'paper';
+  if (note) note.hidden = l.design === 'paper';
+  for (const [box, list, key] of [['#lookDesign', LOOK_DESIGNS, 'design'], ['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
     const e = $(box); if (!e) continue;
     e.replaceChildren(...Object.entries(list).map(([id, v]) => {
       const b = el('button', id === l[key] ? 'on' : ''), i = el('i');
