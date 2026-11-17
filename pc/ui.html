@@ -442,12 +442,15 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     </div>
     <!-- 화면 — 바탕 테마·강조색(누르면 바로 바뀐다, 라이트·다크는 시스템 설정을 따른다) -->
     <div class="lookpop" id="lookBox" hidden>
+      <div class="lnote" id="lookHubNote" hidden>D&amp;C 창에서는 허브 「꾸미기」 디자인을 따라갑니다 — 바꾸려면 홈의 꾸미기에서</div>
+      <div id="lookPick">
       <div class="lt">디자인</div><div class="swatches designs" id="lookDesign"></div>
       <div class="basewrap" id="lookBase">
       <div class="lt">바탕</div><div class="swatches" id="lookTheme"></div>
       <div class="lt">강조색</div><div class="swatches" id="lookAccent"></div>
       </div>
       <div class="lnote" id="lookBaseNote" hidden>바탕·강조색은 「종이 노트」에서 고를 수 있어요</div>
+      </div>
       <div class="lt">펫 × Claude Code 토큰 사용량</div>
       <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
       <label class="lookchk"><input type="checkbox" id="tokBuddy"> 기다리는 세션만 동료 펫으로 알려 줘요</label>
@@ -1191,9 +1194,20 @@ const LOOK_DESIGNS = { paper: ['종이 노트', '#9a3f1d', '#d9875f'], groupware
   mint: ['산뜻한 매장', '#1f7a53', '#5cc398'], night: ['어두운 작업실', '#f2b43a', '#f2b43a'], ledger: ['반듯한 장부', '#c0262d', '#ff6b6b'],
   soft: ['포근한 파스텔', '#e07a5f', '#f0957a'], shop: ['쇼핑몰형', '#111111', '#f2f2f2'], brand: ['브랜드형', '#4338ca', '#9a94ff'] };
 const LOOK_KEY = 'dnc-look', darkMq = matchMedia('(prefers-color-scheme: dark)');
+/* D&C 창(허브 셸)은 탭을 열 때·허브 꾸미기를 바꿀 때 window.dncLook(허브 look) 을 부른다(2026-11-17 사용자 「메신저도 허브 디자인 따라가게」).
+   허브는 바탕 테마와 디자인 8벌을 한 이름(theme)으로 쓰니 여기 이름으로 나눠 담는다. 이 PC 기억(localStorage)은 건드리지 않는다 — 브라우저로 따로 열면 예전 고른 것 그대로 */
+let hubLook = null;
+window.dncLook = l => {
+  if (!l) return;
+  const t = l.theme;
+  hubLook = LOOK_DESIGNS[t] && t !== 'paper' ? { design: t, theme: 'paper' } : { design: 'paper', theme: LOOK_THEMES[t] ? t : 'paper' };
+  hubLook.accent = LOOK_ACCENTS[l.accent] ? l.accent : 'brick';
+  lookApply();
+};
 function lookGet() {
   let l = {}; try { l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') || {}; } catch (e) {}
   const q = new URLSearchParams(location.search).get('design');   // ?design=… — 스크린샷·미리보기용(기억은 안 바꿈)
+  if (hubLook && !LOOK_DESIGNS[q]) return { ...hubLook };
   return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick',
     design: LOOK_DESIGNS[q] ? q : LOOK_DESIGNS[l.design] ? l.design : 'paper' };
 }
@@ -1202,6 +1216,7 @@ function lookApply() {
   root.dataset.theme = l.theme; root.dataset.accent = l.accent;
   if (l.design === 'paper') delete root.dataset.design; else root.dataset.design = l.design;
   $('#lookBase').hidden = l.design !== 'paper'; $('#lookBaseNote').hidden = l.design === 'paper';
+  $('#lookPick').hidden = !!hubLook; $('#lookHubNote').hidden = !hubLook;
   for (const [box, list, key] of [['#lookDesign', LOOK_DESIGNS, 'design'], ['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
     $(box).replaceChildren(...Object.entries(list).map(([id, v]) => {
       const b = document.createElement('button'), i = document.createElement('i');
