@@ -1343,7 +1343,7 @@ async function petLoad() {                                 // 가끔 다시 맞�
   PetSkin.reset($('#pDogArt')); PetSkin.reset($('#pCatArt'));
   $('#petStage').classList.remove('off');
   petDraw();
-  tokSkinKey++; drawBuddies([]);                            // 품종이 바뀌면 동료 펫도 같은 스킨으로 다시
+  tokSkinKey++; drawBuddies([]);                            // ✋ 표 다시 그리기
 }
 function petMoods() {
   const s = state, th = s.threads || [], now = Date.now();
