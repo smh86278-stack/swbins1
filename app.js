@@ -28,20 +28,101 @@ const LOOK_ACCENTS = { mono: ['먹', '#2F3A3A', '#5A6D69'], ink: ['남색', '#2F
   plum: ['자주', '#7B3A6B', '#905784'], ochre: ['황토', '#7D5A12', '#83652D'] };
 const LOOK_MODES = { auto: ['자동'], light: ['밝게'], dark: ['어둡게'] };
 const darkMq = matchMedia('(prefers-color-scheme: dark)');
+/* 「직접」 — 색상표(input type=color)에서 고른 #rrggbb. 바탕 = look.theme 'custom' + look.bg, 강조 = look.accent 'custom' + look.custom.
+   아래 함수 묶음은 SPEC.md 「바탕 직접 고르기」 절 그대로(잠금 화면 lock/unlock.js 에도 같은 묶음).
+   bgFor 는 고른 색조로 밝게·어둡게 바탕 한 벌을, spineFor 는 그 바탕 위에서 읽히는 책등 두 값을 만든다. 이상한 값이면 null → 책등·먹 */
+// 바탕 직접 고르기 — 고른 색의 색조로 밝게·어둡게 바탕 한 벌(bg·ink·sub·face·face2·line·b3)을 만든다
+function hexHls(hex){var r=parseInt(hex.substr(1,2),16)/255,g=parseInt(hex.substr(3,2),16)/255,b=parseInt(hex.substr(5,2),16)/255;
+  var mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn,h=0,s=0;
+  if(d){s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h/=6}return [h,l,s]}
+function hlsHex(h,L,s){var q=L<.5?L*(1+s):L+s-L*s,p=2*L-q,f=function(t){t<0&&(t+=1);t>1&&(t-=1);return t<1/6?p+(q-p)*6*t:t<.5?q:t<2/3?p+(q-p)*(2/3-t)*6:p};
+  return '#'+[h+1/3,h,h-1/3].map(function(t){return ('0'+Math.round((s?f(t):L)*255).toString(16)).slice(-2)}).join('').toUpperCase()}
+function lum(h){var c=[1,3,5].map(function(i){var x=parseInt(h.substr(i,2),16)/255;return x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function cr(a,b){var x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
+function bgFor(hex){ // → {light:{bg,ink,sub,face,face2,line,b3}, dark:{…}} 또는 null
+  if(!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  var x=hexHls(hex),h=x[0],l=x[1],s=x[2];
+  var sl=Math.min(s,.45), sd=Math.min(s,.22), si=Math.min(s,.25);   // 바탕은 채도를 눌러 눈 피로 줄이기
+  var Lb=Math.max(Math.min(l,.95),.86);                              // 밝게 바탕: 고른 색이 밝으면 그대로, 진하면 0.86~0.95 로
+  var light={bg:hlsHex(h,Lb,sl),face:hlsHex(h,Lb-.05,sl),face2:hlsHex(h,Math.min(Lb+.03,.98),sl),line:hlsHex(h,Lb-.11,sl*.8),b3:hlsHex(h,Lb-.14,sl*.8),ink:hlsHex(h,.17,si),sub:hlsHex(h,.36,si)};
+  var dark={bg:hlsHex(h,.10,sd),face:hlsHex(h,.15,sd),face2:hlsHex(h,.075,sd),line:hlsHex(h,.20,sd),b3:hlsHex(h,.24,sd),ink:hlsHex(h,.88,si),sub:hlsHex(h,.66,si)};
+  // 글씨 대비 보정 — 본문 7 이상·보조 4.5 이상이 될 때까지 글씨를 밀어낸다
+  function fix(o,dirDark){var k,L;for(k of ['ink','sub']){var need=k==='ink'?7:4.5,c=o[k];L=hexHls(c)[1];
+    while(cr(c,o.bg)<need&&L>0&&L<1){L+=dirDark?-.01:.01;c=hlsHex(h,L,si)}o[k]=c}return o}
+  return {light:fix(light,true),dark:fix(dark,false)};
+}
+// 강조 spine — 바탕을 받아 그 바탕 위에서 3:1, 책등 글씨 4.5:1
+function spineFor(hex,bgL,bgD){
+  if(!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  bgL=bgL||['#EEF3EA','#E9DEC9']; bgD=bgD||['#1B2018','#221D16'];
+  var x=hexHls(hex),h=x[0],l=x[1],s=x[2],light=null,dark=null,L,c;
+  for(L=Math.min(l,.6);L>=0;L-=.005){c=hlsHex(h,L,s);if(cr(c,'#E9EEE2')>=4.5&&bgL.every(function(b){return cr(c,b)>=3})){light=c;break}}
+  for(L=.2;L<=.8;L+=.005){c=hlsHex(h,L,s);if(bgD.every(function(b){return cr(c,b)>=3.05})){if(cr(c,'#EEF2E8')>=4.5)dark=c;break}}
+  return {light:light||'#2F3A3A',dark:dark||'#5A6D69'};
+}
+const okHex = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : '';
 function lookGet() {
   const l = store.get('look', {}) || {};
-  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'spine', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'mono',
-    mode: LOOK_MODES[l.mode] ? l.mode : 'auto' };
+  const bg = okHex(l.bg), custom = okHex(l.custom);
+  let theme = LOOK_THEMES[l.theme] ? l.theme : 'spine';
+  if (l.theme === 'custom') theme = bg ? 'custom' : 'spine';
+  let accent = LOOK_ACCENTS[l.accent] ? l.accent : 'mono';
+  if (l.accent === 'custom') accent = custom ? 'custom' : 'mono';
+  return { theme, bg, accent, custom, mode: LOOK_MODES[l.mode] ? l.mode : 'auto' };
 }
 function lookDark(mode) {
   if (mode === 'auto') { const hr = new Date().getHours(); return hr >= 19 || hr < 7 || darkMq.matches; }
   return mode === 'dark';
 }
-function lookApply() {
-  const l = lookGet(), dark = lookDark(l.mode), d = dark ? 2 : 1, h = document.documentElement;
+/* 지금 고른 것으로 실제 색 — 바탕 한 벌(직접일 때만)·책등 두 값(직접 바탕이거나 직접 강조일 때만 계산, 아니면 CSS 표 값) */
+function lookColors(l) {
+  const bg = l.theme === 'custom' ? bgFor(l.bg) : null;
+  let sp = null;
+  if (bg || l.accent === 'custom') {
+    const hex = l.accent === 'custom' ? l.custom : LOOK_ACCENTS[l.accent][1];
+    sp = bg ? spineFor(hex, [bg.light.bg], [bg.dark.bg]) : spineFor(hex);
+  }
+  return { bg, sp };
+}
+const LD = (a, b) => 'light-dark(' + a + ',' + b + ')';
+let lookSig = '';
+function lookVars(l) {                                   // 색만 붙인다(칸은 다시 안 그린다 — 색상표를 돌리는 동안)
+  const dark = lookDark(l.mode), d = dark ? 2 : 1, h = document.documentElement, st = h.style, { bg, sp } = lookColors(l);
   h.dataset.theme = dark ? 'dark' : 'light'; h.dataset.base = l.theme; h.dataset.accent = l.accent;
   delete h.dataset.design;
-  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = LOOK_THEMES[l.theme][d];   // 아이폰 상태 막대 = 바탕
+  const vars = bg ? { '--bg': LD(bg.light.bg, bg.dark.bg), '--solid': LD(bg.light.face2, bg.dark.face2), '--soft': LD(bg.light.face, bg.dark.face),
+    '--face': LD(bg.light.face, bg.dark.face), '--b3': LD(bg.light.b3, bg.dark.b3), '--text': LD(bg.light.ink, bg.dark.ink),
+    '--muted': LD(bg.light.sub, bg.dark.sub), '--line': LD(bg.light.line, bg.dark.line),
+    '--field': 'color-mix(in srgb,var(--muted) 60%,var(--bg))', '--edge': LD(bg.light.ink, bg.dark.sub) } : {};
+  for (const k of ['--bg', '--solid', '--soft', '--face', '--b3', '--text', '--muted', '--line', '--field', '--edge']) {
+    if (vars[k]) st.setProperty(k, vars[k]); else st.removeProperty(k);
+  }
+  if (sp) st.setProperty('--spine', LD(sp.light, sp.dark)); else st.removeProperty('--spine');
+  const bar = bg ? (dark ? bg.dark.bg : bg.light.bg) : LOOK_THEMES[l.theme][d];
+  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = bar;   // 아이폰 상태 막대 = 바탕
+  for (const [id, pair] of [['#lookBgPrev', bg && [bg.light.bg, bg.dark.bg]], ['#lookCustomPrev', l.accent === 'custom' && sp && [sp.light, sp.dark]]]) {
+    const pv = $(id); if (!pv) continue;
+    pv.hidden = !pair;
+    if (pair) { const [a, b] = pv.querySelectorAll('i'); a.style.background = pair[0]; b.style.background = pair[1]; }
+  }
+  return { d, bg, sp };
+}
+/* 줄 끝 「직접」 칸 — 색상표를 칸 안에 감춰 두고 누르면 열린다. 고르는 동안 바로 칠하고, 다 고르면 칸을 다시 그린다 */
+function lookCustomCell(on, saved, show, label, onPick) {
+  const lab = el('label', 'custom' + (on ? ' on' : '')), inp = el('input'), i = el('i');
+  inp.type = 'color'; inp.value = saved || '#2f3a3a'; inp.setAttribute('aria-label', label);
+  i.style.background = show || 'transparent';
+  lab.append(i, '직접', inp);
+  const pick = done => { if (okHex(inp.value)) onPick(inp.value.toLowerCase(), done); };
+  inp.addEventListener('input', () => pick(false));
+  inp.addEventListener('change', () => pick(true));
+  if (!on && saved) lab.addEventListener('click', () => onPick(saved, true));   // 전에 고른 색이 있으면 누르기만 해도 그 색으로
+  return lab;
+}
+function lookApply() {
+  const l = lookGet(), { d, bg, sp } = lookVars(l), sig = JSON.stringify(l) + d;
+  if (sig === lookSig) return;                           // 1분마다 다시 볼 때 바뀐 게 없으면 칸을 그대로 둔다
+  lookSig = sig;
   for (const [box, list, key] of [['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent'], ['#lookMode', LOOK_MODES, 'mode']]) {
     const e = $(box); if (!e) continue;
     e.replaceChildren(...Object.entries(list).map(([id, v]) => {
@@ -52,6 +133,17 @@ function lookApply() {
       b.addEventListener('click', () => { store.set('look', { ...lookGet(), [key]: id }); lookApply(); });
       return b;
     }));
+    const set = patch => (hex, done) => { store.set('look', { ...lookGet(), ...patch(hex) }); if (done) lookApply(); else lookVars(lookGet()); };
+    if (key === 'theme') {
+      const sb = l.bg ? bgFor(l.bg) : null;
+      e.append(lookCustomCell(l.theme === 'custom', l.bg, sb && (d === 2 ? sb.dark.bg : sb.light.bg), '바탕색 직접 고르기',
+        set(hex => ({ theme: 'custom', bg: hex }))));
+    }
+    if (key === 'accent') {
+      const cs = l.accent === 'custom' ? sp : l.custom ? lookColors({ ...l, accent: 'custom' }).sp : null;
+      e.append(lookCustomCell(l.accent === 'custom', l.custom, cs && (d === 2 ? cs.dark : cs.light), '강조색 직접 고르기',
+        set(hex => ({ accent: 'custom', custom: hex }))));
+    }
   }
 }
 darkMq.addEventListener('change', lookApply);

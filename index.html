@@ -256,6 +256,16 @@ textarea:focus,input:focus{border-color:var(--spine)}
 :root[data-theme=dark] .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}
 /* 바탕·강조·밝기 고르기 칸 */
 .swatches i{border-color:color-mix(in srgb,var(--text) 25%,transparent)}
+/* 강조 「직접」 — 색상표(input type=color)를 칸 안에 감춰 두고 칸을 누르면 열린다 */
+.swatches label.custom{position:relative;display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--field);padding:5px 10px;margin:0;font-size:13px;font-weight:400;color:var(--muted);cursor:pointer;
+  transition:transform .15s}
+.swatches label.custom:active{transform:translateX(-6px)}
+.swatches label.custom.on{background:var(--spine);border:1px solid var(--spine);color:var(--onspine)}
+.swatches label.custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
+.swatches label.custom i{width:13px;height:13px;flex:none;border:1px solid color-mix(in srgb,var(--text) 25%,transparent)}
+#lookCustomPrev,#lookBgPrev{display:flex;align-items:center;gap:4px}
+#lookCustomPrev[hidden],#lookBgPrev[hidden]{display:none}
+:is(#lookCustomPrev,#lookBgPrev) i{width:13px;height:13px;flex:none;border:1px solid color-mix(in srgb,var(--text) 25%,transparent)}
 </style>
 <link rel="stylesheet" href="pet/pets.css">
 </head>
@@ -346,9 +356,11 @@ textarea:focus,input:focus{border-color:var(--spine)}
       <div style="display:flex;gap:8px"><select id="petSkinSel" title="모습 — 인형 · 만화" style="flex:0 0 auto;width:auto"></select><select id="dogBreed"></select><select id="catBreed"></select></div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:8px"><input type="checkbox" id="petShow"> 화면에 보이기</label></div>
     <div class="field"><label>바탕 (이 기기에만 기억)</label>
-      <div class="swatches" id="lookTheme"></div></div>
+      <div class="swatches" id="lookTheme"></div>
+      <div class="hint lookprev" id="lookBgPrev" hidden><i></i><i></i> 밝게·어둡게에선 이렇게 보여요</div></div>
     <div class="field"><label>강조색</label>
-      <div class="swatches" id="lookAccent"></div></div>
+      <div class="swatches" id="lookAccent"></div>
+      <div class="hint lookprev" id="lookCustomPrev" hidden><i></i><i></i> 밝게·어둡게에선 이렇게 보여요</div></div>
     <div class="field"><label>화면 밝기 (자동은 저녁 7시~아침 7시 어둡게)</label>
       <div class="swatches" id="lookMode"></div></div>
     <div class="field"><button type="button" class="btn" id="clearSent" style="width:100%">보낸 기록 모두 지우기 (이 기기에서만)</button></div>
