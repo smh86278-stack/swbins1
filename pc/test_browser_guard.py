@@ -64,7 +64,8 @@ class GuardTest(unittest.TestCase):
         return json.loads(out)["hookSpecificOutput"] if out else None
 
     def run_guard(self, tool, **inp):
-        d = {"tool_name": tool if tool == "Bash" else "mcp__browser__" + tool, "tool_input": inp,
+        d = {"tool_name": tool if tool in ("Bash", "PowerShell", "Monitor") or tool.startswith("mcp__") else "mcp__browser__" + tool,
+             "tool_input": inp,
              "transcript_path": self.transcript, "session_id": self.session, "hook_event_name": "PreToolUse"}
         return self.run_raw(json.dumps(d, ensure_ascii=False).encode("utf-8"))
 
@@ -129,6 +130,18 @@ class GuardTest(unittest.TestCase):
                     "npx playwright open https://x", "start chrome.exe --remote-debugging-port=9222",
                     "python -c \"import playwright; p.chromium.launch_persistent_context(r'%LOCALAPPDATA%\\DnC\\pw-profile')\""):
             self.blocked("Bash", command=cmd)
+
+    def test_other_shells_and_playwright_servers_checked_too(self):
+        """PowerShell·Monitor 도 Bash 처럼, 사용자 범위 playwright·playwright2 MCP 도 전용 브라우저처럼 본다(2026-11-20)."""
+        for shell in ("PowerShell", "Monitor"):
+            self.blocked(shell, command="curl http://127.0.0.1:9333/json/version")
+            self.allowed(shell, command="Get-ChildItem C:/swbins2")
+        for server in ("mcp__playwright__", "mcp__playwright2__"):
+            self.allowed(server + "browser_navigate", url="https://example.com/news")
+            self.allowed(server + "browser_resize", width=800, height=600)
+            self.blocked(server + "browser_navigate", url="http://127.0.0.1:8799/mail/delete?id=1")
+            self.blocked(server + "browser_handle_dialog", accept=True)
+        self.allowed("mcp__other__browser_click", ref="e1")                 # 다른 서버는 이 훅 담당이 아니다
 
     def test_exact_answer_allows_one_action(self):
         self.blocked("browser_click", element="보내기 버튼", ref="e5")

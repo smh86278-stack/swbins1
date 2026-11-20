@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /* D&C 브라우저 안전장치 — claude -p 의 PreToolUse 훅(--settings 로 붙인다. 워커 inbox-worker.ps1 · 메신저 chat_runner.py).
- * matcher 는 mcp__browser__.* 와 Bash 두 곳.
+ * matcher 는 mcp__browser__.*·mcp__playwright(2)__.* 와 Bash·PowerShell·Monitor.
  *
  * 2026-10-19 보안 점검으로 다시 짰다 — 전엔 '위험 낱말이 든 클릭만' 막아서 확인 창 accept·삭제 링크 이동·파일 올리기·
  * 난독화 스크립트·'휴지통 아이콘' 같은 흐린 설명이 다 통과했다. 이제는 **허용 목록**: 읽기·이동·검색어 입력처럼 안전한 동작만
@@ -123,14 +123,19 @@ function urlRisky(raw) {
 }
 
 // 이 동작이 확인을 받아야 하면 {what, why}, 아니면 null
+// 사용자 범위 Playwright MCP(playwright·playwright2)도 같은 브라우저 동작이라 같이 본다(2026-11-20)
+const BROWSER_RE = /^mcp__(browser|playwright2?)__/;
+// 명령을 받는 셸 도구 — Bash 와 똑같이 브라우저 직접 조종을 막는다(PowerShell·Monitor 를 열면서 2026-11-20)
+const SHELLS = ['Bash', 'PowerShell', 'Monitor'];
+
 function judge(tool, inp, snap) {
-  if (tool === 'Bash') {
+  if (SHELLS.includes(tool)) {
     const c = norm(inp.command);
     if (hasAny(c, BASH_BROWSER) || BASH_PLAYWRIGHT.test(c)) return { what: 'Bash 로 브라우저 직접 조종', why: '전용 브라우저는 브라우저 도구로만' };
     return null;
   }
-  if (!/^mcp__browser__/.test(String(tool || ''))) return null;
-  const act = String(tool).replace(/^mcp__browser__/, '');
+  if (!BROWSER_RE.test(String(tool || ''))) return null;
+  const act = String(tool).replace(BROWSER_RE, '');
   if (SAFE_TOOLS.includes(act)) return null;
   const at = snap.url ? ' @' + snap.url.split(/[?#]/)[0] : '';
   const ref = id => (id && snap.refs[id]) || null;
@@ -193,9 +198,9 @@ function decide(d) {
   if (!d || typeof d !== 'object' || typeof d.tool_name !== 'string') return deny(PREFIX + ': 훅 입력을 읽지 못해 막았습니다.');
   const inp = d.tool_input && typeof d.tool_input === 'object' ? d.tool_input : {};
   const lines = readLines(d.transcript_path || '');
-  const j = judge(d.tool_name, inp, d.tool_name === 'Bash' ? { url: '', refs: {} } : lastSnapshot(lines));
+  const j = judge(d.tool_name, inp, SHELLS.includes(d.tool_name) ? { url: '', refs: {} } : lastSnapshot(lines));
   if (!j) return null;
-  if (d.tool_name === 'Bash') return deny(PREFIX + ': ' + j.what + '은(는) 막혀 있습니다 — ' + j.why + '(mcp__browser__*) 다루세요.');
+  if (SHELLS.includes(d.tool_name)) return deny(PREFIX + ': ' + j.what + '은(는) 막혀 있습니다 — ' + j.why + '(mcp__browser__*) 다루세요.');
   const h = lastHuman(lines);
   if (h && approved(h.text) && consume(d.session_id, h.uuid, j.what)) return null;   // 사람이 허락함 — 이 동작 하나만
   return deny(
