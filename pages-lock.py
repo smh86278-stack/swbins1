@@ -7,7 +7,7 @@
 - 키는 입력 창으로만 받고 어디에도 저장하지 않는다(화면의 「암호 단어」와 같게 써도 된다).
 - 원래 index.html 과 app.js 를 한 덩어리로 묶어 PBKDF2-SHA256(60만 번) → AES-256-GCM 으로 감싸 payload.json 에 쓴다.
   열 때는 lock/unlock.js 가 브라우저에서 푼다(주소 끝 #k=키 또는 입력 칸).
-- 펫(pet/)·아이콘·manifest 는 그대로 올린다(비밀 없음).
+- 펫(pet/)·아이콘·manifest·글꼴(sunflower-*)은 그대로 올린다(비밀 없음).
 - gh-pages 는 매번 커밋 하나로 새로 만들어 강제 push 한다 — 예전 키로 감싼 payload 가 이력에 남지 않게.
 - GitHub 저장소 Settings → Pages → Branch 를 gh-pages / (root) 로 한 번 바꿔 두어야 이 브랜치가 보인다.
 """
@@ -72,7 +72,8 @@ def main():
     out = tempfile.mkdtemp(prefix='swbins1-pages-')
     shutil.copy(os.path.join(ROOT, 'lock', 'index.html'), out)
     shutil.copy(os.path.join(ROOT, 'lock', 'unlock.js'), out)
-    for f in ('manifest.webmanifest', 'icon-180.png', 'icon-512.png'):
+    for f in ('manifest.webmanifest', 'icon-180.png', 'icon-512.png',
+              'sunflower-medium-ks.woff2', 'sunflower-OFL.txt'):   # 「책등」 글꼴(잠금·풀린 화면 모두 같은 폴더에서 읽는다)
         shutil.copy(os.path.join(ROOT, f), out)
     shutil.copytree(os.path.join(ROOT, 'pet'), os.path.join(out, 'pet'),
                     ignore=shutil.ignore_patterns('README.md', '__pycache__'))

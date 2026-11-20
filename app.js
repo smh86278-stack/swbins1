@@ -19,44 +19,43 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(KEYP + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(KEYP + k, JSON.stringify(v)); } catch (e) {} },
 };
-/* ---- 바탕 테마 · 강조색 — 허브 꾸미기와 같은 이름·색(정본 swbins2 tools\macro-hub\web\theme.css). 견본 칸은 [라이트, 다크] ---- */
-const LOOK_THEMES = { paper: ['종이 노트', '#f4efe6', '#1f1c19'], white: ['흰 종이', '#fafaf8', '#1b1b1d'],
-  slate: ['청회색', '#eef1f4', '#181c21'], kraft: ['크라프트지', '#e9dec9', '#221d16'] };
-const LOOK_ACCENTS = { brick: ['벽돌', '#9a3f1d', '#d9875f'], ink: ['남색', '#2f5283', '#8fb3e0'], pine: ['초록', '#2f6b4f', '#7fc0a0'],
-  plum: ['자주', '#7b3a6b', '#d494c4'], ochre: ['황토', '#7d5a12', '#d8b363'], mono: ['먹', '#2b2723', '#ece5da'] };
-/* 디자인 — PC 메신저(pc/ui.html LOOK_DESIGNS)와 같은 이름·견본색. [이름, 견본 라이트, 견본 다크, 상태 막대 라이트, 상태 막대 다크]
-   paper 는 위 바탕·강조색을 그대로 쓰는 기본. 띠가 있는 디자인은 상태 막대를 띠 색으로 */
-const LOOK_DESIGNS = { paper: ['종이 노트', '#9a3f1d', '#d9875f'],
-  groupware: ['그룹웨어형', '#2463d1', '#7aa7f0', '#2463d1', '#1d3f80'], backoffice: ['백오피스형', '#20252d', '#ff8a4c', '#20252d', '#20252d'],
-  mint: ['산뜻한 매장', '#1f7a53', '#5cc398', '#ffffff', '#1a2420'], night: ['어두운 작업실', '#f2b43a', '#f2b43a', '#1e2127', '#1e2127'],
-  ledger: ['반듯한 장부', '#c0262d', '#ff6b6b', '#ffffff', '#161616'], soft: ['포근한 파스텔', '#e07a5f', '#f0957a', '#ffffff', '#2a211d'],
-  shop: ['쇼핑몰형', '#111111', '#f2f2f2', '#ffffff', '#181818'], brand: ['브랜드형', '#4338ca', '#9a94ff', '#1e1b4b', '#1e1b4b'] };
+/* ---- 공통 디자인 「책등」(2026-11-20, 정본 C:\swbins-pub\design-draft\identity\SPEC.md) — 바탕 · 강조색 · 화면 밝기.
+   견본 칸은 [이름, 밝게, 어둡게]. 바탕 견본·상태 막대는 바탕색, 강조 견본은 책등색.
+   남의 디자인과 겹친 옛 값(종이 노트·흰 종이·청회색·벽돌·디자인 여덟 벌)은 지웠다 — 저장된 옛 값은 책등·먹으로 읽는다.
+   밝기 자동 = 기기 시각 19:00~07:00 어둡게(기기 설정이 어둡게면 어둡게), 1분마다 다시 본다. 잠금 화면(lock/unlock.js)도 같은 'dnc.look' 을 읽는다 ---- */
+const LOOK_THEMES = { spine: ['책등', '#EEF3EA', '#1B2018'], kraft: ['크라프트지', '#E9DEC9', '#221D16'] };
+const LOOK_ACCENTS = { mono: ['먹', '#2F3A3A', '#5A6D69'], ink: ['남색', '#2F5283', '#4D6C98'], pine: ['초록', '#2F6B4F', '#45745E'],
+  plum: ['자주', '#7B3A6B', '#905784'], ochre: ['황토', '#7D5A12', '#83652D'] };
+const LOOK_MODES = { auto: ['자동'], light: ['밝게'], dark: ['어둡게'] };
 const darkMq = matchMedia('(prefers-color-scheme: dark)');
 function lookGet() {
-  const l = store.get('look', {});
-  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick',
-    design: LOOK_DESIGNS[l.design] ? l.design : 'paper' };
+  const l = store.get('look', {}) || {};
+  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'spine', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'mono',
+    mode: LOOK_MODES[l.mode] ? l.mode : 'auto' };
+}
+function lookDark(mode) {
+  if (mode === 'auto') { const hr = new Date().getHours(); return hr >= 19 || hr < 7 || darkMq.matches; }
+  return mode === 'dark';
 }
 function lookApply() {
-  const l = lookGet(), d = darkMq.matches ? 2 : 1, h = document.documentElement;
-  h.dataset.theme = l.theme; h.dataset.accent = l.accent;
-  if (l.design === 'paper') delete h.dataset.design; else h.dataset.design = l.design;
-  const bar = l.design === 'paper' ? LOOK_THEMES[l.theme][d] : LOOK_DESIGNS[l.design][d + 2];
-  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = bar;   // 아이폰 상태 막대
-  const base = $('#lookBase'), note = $('#lookBaseNote');
-  if (base) base.hidden = l.design !== 'paper';
-  if (note) note.hidden = l.design === 'paper';
-  for (const [box, list, key] of [['#lookDesign', LOOK_DESIGNS, 'design'], ['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
+  const l = lookGet(), dark = lookDark(l.mode), d = dark ? 2 : 1, h = document.documentElement;
+  h.dataset.theme = dark ? 'dark' : 'light'; h.dataset.base = l.theme; h.dataset.accent = l.accent;
+  delete h.dataset.design;
+  for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = LOOK_THEMES[l.theme][d];   // 아이폰 상태 막대 = 바탕
+  for (const [box, list, key] of [['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent'], ['#lookMode', LOOK_MODES, 'mode']]) {
     const e = $(box); if (!e) continue;
     e.replaceChildren(...Object.entries(list).map(([id, v]) => {
-      const b = el('button', id === l[key] ? 'on' : ''), i = el('i');
-      b.type = 'button'; i.style.background = v[d]; b.append(i, v[0]);
+      const b = el('button', id === l[key] ? 'on' : '');
+      b.type = 'button'; b.setAttribute('aria-pressed', String(id === l[key]));
+      if (v[d]) { const i = el('i'); i.style.background = v[d]; b.append(i); }
+      b.append(v[0]);
       b.addEventListener('click', () => { store.set('look', { ...lookGet(), [key]: id }); lookApply(); });
       return b;
     }));
   }
 }
 darkMq.addEventListener('change', lookApply);
+setInterval(lookApply, 60000);
 lookApply();
 
 let cfg = store.get('cfg', { mail: '', folders: [], prefix: '' });
@@ -622,6 +621,7 @@ function openRoom(key) {
   room = key; picks.clear(); stop = false; pickN = 4;
   try { history.pushState({ room: key }, ''); } catch (e) {}
   setTab('say'); $('#sayText').value = ''; draw();
+  const lg = $('#log'); lg.classList.remove('slide'); void lg.offsetWidth; lg.classList.add('slide');   // 책등 쪽에서 밀려 들어온다
 }
 function closeRoom() {
   if (history.state && history.state.room) history.back();       // 아이폰 쓸어 넘기기와 같은 길로

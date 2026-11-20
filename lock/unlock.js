@@ -11,6 +11,24 @@
   };
   let payload = null;
 
+  /* 「책등」 바탕·강조·밝기 — 풀린 화면(app.js look)이 기억한 'dnc.look' 을 그대로 따른다. 옛 값·빈 값은 책등·먹·자동 */
+  function look() {
+    let l = {};
+    try { l = JSON.parse(localStorage.getItem('dnc.look') || '{}') || {}; } catch (e) {}
+    const base = l.theme === 'kraft' ? 'kraft' : 'spine';
+    const accent = ['ink', 'pine', 'plum', 'ochre'].includes(l.accent) ? l.accent : 'mono';
+    const mode = ['light', 'dark'].includes(l.mode) ? l.mode : 'auto';
+    const hr = new Date().getHours(), mq = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = mode === 'auto' ? (hr >= 19 || hr < 7 || mq) : mode === 'dark';
+    const h = document.documentElement;
+    if (!h.querySelector('#f')) return;                  // 이미 풀린 화면이면 그쪽 app.js 가 맡는다
+    h.dataset.theme = dark ? 'dark' : 'light'; h.dataset.base = base; h.dataset.accent = accent;
+    const bar = base === 'kraft' ? (dark ? '#221D16' : '#E9DEC9') : (dark ? '#1B2018' : '#EEF3EA');
+    for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = bar;
+  }
+  look();
+  const lookTimer = setInterval(look, 60000);
+
   async function load() {
     if (!payload) payload = await (await fetch('payload.json', { cache: 'no-cache' })).json();
     return payload;
@@ -24,6 +42,7 @@
     return JSON.parse(new TextDecoder().decode(plain));
   }
   function show(b) {
+    clearInterval(lookTimer);
     const app = URL.createObjectURL(new Blob([b.app], { type: 'text/javascript' }));
     const html = b.html.replace('<script src="app.js"></script>', '<script src="' + app + '"></script>');
     document.open(); document.write(html); document.close();
