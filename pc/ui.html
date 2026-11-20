@@ -1264,7 +1264,7 @@ function lookApply() {
     pv.hidden = !p; pv.replaceChildren();
     if (p) {
       const chip = (bg, sp) => { const i = document.createElement('i'); i.style.background = bg; i.style.boxShadow = 'inset -5px 0 0 ' + sp; return i; };
-      pv.append('밝게 ', chip(p.bg ? p.bg.light.bg : '#EEF3EA', p.spine.light), ' 어둡게 ', chip(p.bg ? p.bg.dark.bg : '#1B2018', p.spine.dark), ' 에선 이렇게 보인다');
+      pv.append('밝게 ', chip(p.bg ? p.bg.light.bg : LOOK_BASES[l.base][1], p.spine.light), ' 어둡게 ', chip(p.bg ? p.bg.dark.bg : LOOK_BASES[l.base][2], p.spine.dark), ' 에선 이렇게 보인다');
     }
   }
 }
