@@ -1,6 +1,7 @@
 /* 잠긴 페이지 풀기 — 키는 주소 끝 #k=… 또는 입력 칸으로 받는다(# 뒤는 서버로 안 간다).
    한 번 풀리면 이 기기에 키를 기억해 두어 다음부터(홈 화면 앱·구글 로그인에서 돌아올 때 포함) 바로 열린다.
-   payload.json 은 pages-lock.py 가 만든다: PBKDF2-SHA256 → AES-GCM, 안에는 { html, app } (원래 index.html 과 app.js). */
+   payload.json 은 pages-lock.py 가 만든다: PBKDF2-SHA256 → AES-GCM, 안에는 { html, app } (원래 index.html 과 app.js)
+   + 허브가 실은 폰 암호 단어 word(있을 때만) — 풀린 화면(app.js)이 설정의 암호 단어로 받아 넣는다. */
 (function () {
   const KEEP = 'lockKey';
   const $ = id => document.getElementById(id);
@@ -84,6 +85,8 @@
   }
   function show(b) {
     clearInterval(lookTimer);
+    // 허브가 실은 폰 암호 단어 — 같은 탭의 풀린 화면(app.js)이 바로 읽고 지운다
+    try { if (typeof b.word === 'string' && b.word) sessionStorage.setItem('dnc.lockWord', b.word); else sessionStorage.removeItem('dnc.lockWord'); } catch (e) {}
     const app = URL.createObjectURL(new Blob([b.app], { type: 'text/javascript' }));
     const html = b.html.replace('<script src="app.js"></script>', '<script src="' + app + '"></script>');
     document.open(); document.write(html); document.close();

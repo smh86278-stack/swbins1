@@ -151,6 +151,16 @@ setInterval(lookApply, 60000);
 lookApply();
 
 let cfg = store.get('cfg', { mail: '', folders: [], prefix: '' });
+// 암호 단어는 허브가 정본 — 잠긴 페이지(lock/unlock.js)가 풀면서 허브가 실어 보낸 단어를 넘겨준다(2026-11-20).
+// 손으로 넣은 값과 다르면 허브 값으로 바꾸고 한 번만 알린다(단어 원문은 화면에 띄우지 않는다).
+(() => {
+  let w = '';
+  try { w = sessionStorage.getItem('dnc.lockWord') || ''; sessionStorage.removeItem('dnc.lockWord'); } catch (e) {}
+  if (!/^[^\s\[\]]{6,40}$/.test(w) || w === cfg.key) return;
+  const had = !!cfg.key;
+  cfg.key = w; store.set('cfg', cfg);
+  setTimeout(() => toast(had ? '암호 단어가 새로 바뀌었어요' : '암호 단어를 PC 에서 받아 넣었어요'), 700);
+})();
 let sent = store.get('sent', []);
 let mode = 'read', folder = '', picks = new Set(), stop = false, pickN = 4;
 
