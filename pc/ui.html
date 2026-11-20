@@ -35,6 +35,15 @@ apply();document.addEventListener('DOMContentLoaded',apply);setInterval(apply,60
   --display:"Sunflower","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
 }
 :root[data-theme=dark]{color-scheme:dark}
+/* 바탕·강조색(2026-11-20 SPEC 「고를 수 있는 것」, 허브 tools\macro-hub\web\theme.css 와 같은 값) — 「책등」이 기본(data-base 없음·spine), 크라프트지는 바탕 값만,
+   강조색은 책등·주 단추·고른 탭 색(--spine)만 바뀐다. <html data-base>·<html data-accent> 는 아래 lookApply 가 단다(data-theme 은 밝기) */
+:root[data-base=kraft]{--bg:light-dark(#E9DEC9,#221D16);--solid:light-dark(#F5ECDC,#2A241B);--soft:light-dark(#DED1B9,#302920);--face:light-dark(#DED1B9,#302920);
+  --text:light-dark(#2E2418,#EFE4CF);--rule:light-dark(#2E2418,#EFE4CF);--muted:light-dark(#6B5C47,#B6A68B);--field:light-dark(#6B5C47,#B6A68B);
+  --line:light-dark(#CFBFA3,#3E3527);--b3:light-dark(#D5C6AA,#3A3226);--edge:light-dark(#2F3A3A,#B6A68B);--accent:light-dark(#2F3A3A,#EFE4CF);--ok:light-dark(#2F3A3A,#B6A68B)}
+:root[data-accent=ink]{--spine:light-dark(#2F5283,#4D6C98);--edge:light-dark(#2F5283,var(--muted));--accent:light-dark(#2F5283,var(--text));--ok:light-dark(#2F5283,var(--muted))}
+:root[data-accent=pine]{--spine:light-dark(#2F6B4F,#45745E);--edge:light-dark(#2F6B4F,var(--muted));--accent:light-dark(#2F6B4F,var(--text));--ok:light-dark(#2F6B4F,var(--muted))}
+:root[data-accent=plum]{--spine:light-dark(#7B3A6B,#905784);--edge:light-dark(#7B3A6B,var(--muted));--accent:light-dark(#7B3A6B,var(--text));--ok:light-dark(#7B3A6B,var(--muted))}
+:root[data-accent=ochre]{--spine:light-dark(#7D5A12,#83652D);--edge:light-dark(#7D5A12,var(--muted));--accent:light-dark(#7D5A12,var(--text));--ok:light-dark(#7D5A12,var(--muted))}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{color:var(--text);font:400 14px/1.55 var(--sans);background:var(--bg);
@@ -245,6 +254,12 @@ dialog::backdrop{background:color-mix(in srgb,#1B2018 45%,transparent)}
 .lookpop .swatches button:hover{border-color:var(--field);color:var(--text)}
 .lookpop .swatches button.on,.lookpop .swatches button[aria-pressed=true]{border-color:var(--spine);color:var(--onspine);font-weight:400;background:var(--spine)}
 .lookpop .swatches i{width:11px;height:11px;border-radius:0;border:1px solid var(--line);flex:none}
+/* 「직접」 — 줄 끝 색상표. 고른 색의 밝게·어둡게 쓰임은 #lookPreview 두 칸 */
+.lookpop .swatches label.own{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);padding:1px 8px 1px 3px;font-size:12px;color:var(--muted);cursor:pointer}
+.lookpop .swatches label.own:hover{border-color:var(--field);color:var(--text)}
+.lookpop .swatches label.own.on{border-color:var(--spine);background:var(--spine);color:var(--onspine)}
+.lookpop .swatches label.own input{width:22px;height:18px;padding:0;border:1px solid var(--line);background:none;cursor:pointer}
+.lookpop .lpre i{display:inline-block;width:28px;height:13px;vertical-align:-2px;border:1px solid var(--line);margin:0 2px}
 .lookpop .lookchk{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin:0 0 5px;cursor:pointer}
 .lookpop .lookchk input{margin:2px 0 0;flex:none}
 /* 비용 내역 — 화면 칸과 같은 자리·모양 */
@@ -388,8 +403,11 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
     </div>
     <!-- 화면 — 화면 밝기(누르면 바로 바뀐다, 자동은 저녁 7시~아침 7시 어둡게). D&C 창 안에서는 허브 「화면 밝기」를 따라간다 -->
     <div class="lookpop" id="lookBox" hidden>
-      <div class="lnote" id="lookHubNote" hidden>D&amp;C 창에서는 허브 「화면 밝기」를 따라간다 — 바꾸려면 홈의 꾸미기에서</div>
-      <div id="lookPick"><div class="lt">화면 밝기</div><div class="swatches" id="lookTheme" role="group" aria-label="화면 밝기"><button type="button" data-theme-btn="auto">자동</button><button type="button" data-theme-btn="light">밝게</button><button type="button" data-theme-btn="dark">어둡게</button></div></div>
+      <div class="lnote" id="lookHubNote" hidden>D&amp;C 창에서는 허브 「꾸미기」(밝기·바탕·강조색)를 따라간다 — 바꾸려면 홈의 꾸미기에서</div>
+      <div id="lookPick"><div class="lt">화면 밝기</div><div class="swatches" id="lookTheme" role="group" aria-label="화면 밝기"><button type="button" data-theme-btn="auto">자동</button><button type="button" data-theme-btn="light">밝게</button><button type="button" data-theme-btn="dark">어둡게</button></div>
+      <div class="lt">바탕</div><div class="swatches" id="lookBase" role="group" aria-label="바탕"></div>
+      <div class="lt">강조색</div><div class="swatches" id="lookAccent" role="group" aria-label="강조색"></div>
+      <div class="lnote lpre" id="lookPreview" hidden></div></div>
       <div class="lt">펫 × Claude Code 토큰 사용량</div>
       <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
       <label class="lookchk"><input type="checkbox" id="tokBuddy"> 기다리는 세션을 ✋ 로 알려 줘요</label>
@@ -1124,13 +1142,134 @@ $('#setForm').onsubmit = async e => {
 let petSkin = null, petting = null, petBreedAt = 0;
 const petFlash = {bark: 0, happy: 0, sad: 0}, petSeen = {};
 /* 품종: 여기서 고른 게 있으면 그것(이 PC 에만 기억), '허브와 같게'면 이 PC 허브가 고른 것(허브가 없으면 첫 번째) */
-/* ---------- 화면 — 밝기(자동·밝게·어둡게)는 <head> 의 작은 스크립트가 맡는다(data-theme-btn). 예전 디자인·바탕 테마·강조색(dnc-look)은 「책등」 한 벌로 합쳤다.
-   D&C 창(허브 셸)은 탭을 열 때·허브 밝기를 바꿀 때 window.dncLook(허브 look) 을 부른다 — 허브 밝기(mode)를 따라가고, 이 PC 기억(localStorage)은 건드리지 않는다 ---------- */
+/* ---------- 화면 — 밝기(자동·밝게·어둡게)는 <head> 의 작은 스크립트가 맡는다(data-theme-btn). 바탕·강조색은 여기서(이 PC 기억 localStorage "dnc-look").
+   공통 디자인 「책등」(2026-11-20)이 기본 — 바탕은 책등·크라프트지, 강조색은 먹·남색·초록·자주·황토만 남겼다(허브 꾸미기와 같은 이름·색).
+   남의 디자인과 겹쳐 지운 옛 값(종이 노트·흰 종이·청회색·벽돌·디자인 여덟 벌)이 기억에 남아 있으면 책등·먹으로 읽는다.
+   D&C 창(허브 셸)은 탭을 열 때·허브 꾸미기를 바꿀 때 window.dncLook(허브 look) 을 부른다 — 허브의 밝기(mode)·바탕(theme)·강조색(accent)을 따라가고,
+   이 PC 기억(localStorage)은 건드리지 않는다 — 브라우저로 따로 열면 여기서 고른 것 그대로 ---------- */
+/* 직접 고른 색 — 허브 web/theme.js HubColor 와 같은 함수(SPEC 「직접 고르기」·「바탕 직접 고르기」 그대로). 바깥 이름과 안 겹치게 묶는다 */
+const DncColor = (() => {
+/* 직접 고르기 — SPEC 「직접 고르기」·「바탕 직접 고르기」(2026-11-20, C:\swbins-pub\design-draft\identity\SPEC.md) 함수 그대로.
+   bgFor(바탕 #rrggbb) → 밝게·어둡게 바탕 한 벌, spineFor(강조 #rrggbb, [밝게 바탕들], [어둡게 바탕들]) → 책등 두 색.
+   lookPalette() 가 고른 값을 한 벌로 묶고, lookVars() 가 제품마다 다른 CSS 변수 이름(M)으로 light-dark(밝게, 어둡게) 값을 만든다(없으면 빈 객체 = CSS 기본값). */
+function hexHls(hex){var r=parseInt(hex.substr(1,2),16)/255,g=parseInt(hex.substr(3,2),16)/255,b=parseInt(hex.substr(5,2),16)/255;
+  var mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn,h=0,s=0;
+  if(d){s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h/=6}return [h,l,s]}
+function hlsHex(h,L,s){var q=L<.5?L*(1+s):L+s-L*s,p=2*L-q,f=function(t){t<0&&(t+=1);t>1&&(t-=1);return t<1/6?p+(q-p)*6*t:t<.5?q:t<2/3?p+(q-p)*(2/3-t)*6:p};
+  return '#'+[h+1/3,h,h-1/3].map(function(t){return ('0'+Math.round((s?f(t):L)*255).toString(16)).slice(-2)}).join('').toUpperCase()}
+function lum(h){var c=[1,3,5].map(function(i){var x=parseInt(h.substr(i,2),16)/255;return x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function cr(a,b){var x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
+function bgFor(hex){ // → {light:{bg,ink,sub,face,face2,line,b3}, dark:{…}} 또는 null
+  if(!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  var x=hexHls(hex),h=x[0],l=x[1],s=x[2];
+  var sl=Math.min(s,.45), sd=Math.min(s,.22), si=Math.min(s,.25);   // 바탕은 채도를 눌러 눈 피로 줄이기
+  var Lb=Math.max(Math.min(l,.95),.86);                              // 밝게 바탕: 고른 색이 밝으면 그대로, 진하면 0.86~0.95 로
+  var light={bg:hlsHex(h,Lb,sl),face:hlsHex(h,Lb-.05,sl),face2:hlsHex(h,Math.min(Lb+.03,.98),sl),line:hlsHex(h,Lb-.11,sl*.8),b3:hlsHex(h,Lb-.14,sl*.8),ink:hlsHex(h,.17,si),sub:hlsHex(h,.36,si)};
+  var dark={bg:hlsHex(h,.10,sd),face:hlsHex(h,.15,sd),face2:hlsHex(h,.075,sd),line:hlsHex(h,.20,sd),b3:hlsHex(h,.24,sd),ink:hlsHex(h,.88,si),sub:hlsHex(h,.66,si)};
+  // 글씨 대비 보정 — 본문 7 이상·보조 4.5 이상이 될 때까지 글씨를 밀어낸다
+  function fix(o,dirDark){var k,L;for(k of ['ink','sub']){var need=k==='ink'?7:4.5,c=o[k];L=hexHls(c)[1];
+    while(cr(c,o.bg)<need&&L>0&&L<1){L+=dirDark?-.01:.01;c=hlsHex(h,L,si)}o[k]=c}return o}
+  return {light:fix(light,true),dark:fix(dark,false)};
+}
+// 강조 spine — 바탕을 받아 그 바탕 위에서 3:1, 책등 글씨 4.5:1
+function spineFor(hex,bgL,bgD){
+  if(!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  bgL=bgL||['#EEF3EA','#E9DEC9']; bgD=bgD||['#1B2018','#221D16'];
+  var x=hexHls(hex),h=x[0],l=x[1],s=x[2],light=null,dark=null,L,c;
+  for(L=Math.min(l,.6);L>=0;L-=.005){c=hlsHex(h,L,s);if(cr(c,'#E9EEE2')>=4.5&&bgL.every(function(b){return cr(c,b)>=3})){light=c;break}}
+  for(L=.2;L<=.8;L+=.005){c=hlsHex(h,L,s);if(bgD.every(function(b){return cr(c,b)>=3.05})){if(cr(c,'#EEF2E8')>=4.5)dark=c;break}}
+  return {light:light||'#2F3A3A',dark:dark||'#5A6D69'};
+}
+var LOOK_ACC_HEX={mono:'#2F3A3A',ink:'#2F5283',pine:'#2F6B4F',plum:'#7B3A6B',ochre:'#7D5A12'};   // 강조 견본(밝게 값) — 바탕을 직접 고르면 이 색으로 다시 계산
+// 바탕(base: spine·kraft·custom + bgHex) · 강조(accent: mono…ochre·custom + accHex) → {bg, spine} 또는 null(직접 고른 것 없음 — CSS 기본값)
+function lookPalette(base,bgHex,accent,accHex){
+  var bg=base==='custom'?bgFor(bgHex):null, own=accent==='custom'&&!!spineFor(accHex);
+  if(!bg&&!own)return null;
+  var a=own?accHex:(LOOK_ACC_HEX[accent]||LOOK_ACC_HEX.mono);
+  return {bg:bg,spine:bg?spineFor(a,[bg.light.bg],[bg.dark.bg]):spineFor(a)};
+}
+// M = {bg,ink,sub,face,face2,line,b3: [CSS 변수…], spine: 책등색, spineInk: 밝게 책등색·어둡게 글씨색, spineSub: 밝게 책등색·어둡게 보조 글씨색, spineFace2: 밝게 책등색·어둡게 옅은 면}
+function lookVars(p,M){
+  var o={};if(!p)return o;
+  var ld=function(a,b){return 'light-dark('+a+','+b+')'}, put=function(k,v){(M[k]||[]).forEach(function(n){o[n]=v})};
+  if(p.bg)['bg','ink','sub','face','face2','line','b3'].forEach(function(k){put(k,ld(p.bg.light[k],p.bg.dark[k]))});
+  var dk=function(k){return p.bg?p.bg.dark[k]:'var('+M[k][0]+')'};
+  put('spine',ld(p.spine.light,p.spine.dark));put('spineInk',ld(p.spine.light,dk('ink')));
+  put('spineSub',ld(p.spine.light,dk('sub')));put('spineFace2',ld(p.spine.light,dk('face2')));
+  return o;
+}
+return { bgFor, spineFor, lookPalette, lookVars };
+})();
+// 이 화면 변수 이름 — 직접 고른 바탕·강조가 light-dark(밝게, 어둡게) 로 <html style> 에 심긴다
+const LOOK_MAP = { bg: ['--bg'], ink: ['--text', '--rule'], sub: ['--muted', '--field'], face: ['--soft', '--face'], face2: ['--solid'], line: ['--line'], b3: ['--b3'],
+  spine: ['--spine'], spineInk: ['--accent'], spineSub: ['--edge', '--ok'], spineFace2: [] };
+const LOOK_VARS = Object.values(LOOK_MAP).flat();
+const LOOK_BASES = { spine: ['책등', '#EEF3EA', '#1B2018'], kraft: ['크라프트지', '#E9DEC9', '#221D16'] };   // 견본 [밝게, 어둡게]
+const LOOK_ACCENTS = { mono: ['먹', '#2F3A3A', '#5A6D69'], ink: ['남색', '#2F5283', '#4D6C98'], pine: ['초록', '#2F6B4F', '#45745E'],
+  plum: ['자주', '#7B3A6B', '#905784'], ochre: ['황토', '#7D5A12', '#83652D'] };
+const LOOK_KEY = 'dnc-look', HEX = /^#[0-9a-f]{6}$/i;
+let hubLook = null;
 window.dncLook = l => {
   if (!l) return;
   window.dncBright && window.dncBright(['auto', 'light', 'dark'].includes(l.mode) ? l.mode : 'auto');
-  $('#lookPick').hidden = true; $('#lookHubNote').hidden = false;
+  hubLook = lookClean({ base: l.theme, accent: l.accent, bgHex: l.bg_hex, accentHex: l.accent_hex });
+  lookApply();
 };
+// 바탕: spine·kraft·custom(+bgHex) / 강조: mono…ochre·custom(+accentHex). 이상한 값·예전 값은 책등·먹으로
+function lookClean(l) {
+  const bgHex = HEX.test(l.bgHex || '') ? l.bgHex.toLowerCase() : '', accentHex = HEX.test(l.accentHex || '') ? l.accentHex.toLowerCase() : '';
+  const base = LOOK_BASES[l.base] || (l.base === 'custom' && bgHex) ? l.base : 'spine';
+  const accent = LOOK_ACCENTS[l.accent] || (l.accent === 'custom' && accentHex) ? l.accent : 'mono';
+  return { base, accent, bgHex, accentHex };
+}
+function lookGet() {
+  if (hubLook) return { ...hubLook };
+  let l = {}; try { l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') || {}; } catch (e) {}
+  return lookClean({ ...l, base: l.base || l.theme });                // 예전 기억은 theme 이름
+}
+function lookSave(change) { try { localStorage.setItem(LOOK_KEY, JSON.stringify({ ...lookGet(), ...change })); } catch (e) {} lookApply(); }
+function lookPaint(l) {
+  const root = document.documentElement, st = root.style;
+  if (l.base === 'spine') delete root.dataset.base; else root.dataset.base = l.base;
+  if (l.accent === 'mono') delete root.dataset.accent; else root.dataset.accent = l.accent;
+  for (const k of LOOK_VARS) st.removeProperty(k);
+  const p = DncColor.lookPalette(l.base, l.bgHex, l.accent, l.accentHex);
+  for (const [k, v] of Object.entries(DncColor.lookVars(p, LOOK_MAP))) st.setProperty(k, v);
+  return p;
+}
+function lookApply() {
+  const l = lookGet(), d = document.documentElement.dataset.theme === 'dark' ? 2 : 1;
+  const p = lookPaint(l);
+  $('#lookPick').hidden = !!hubLook; $('#lookHubNote').hidden = !hubLook;
+  for (const [box, list, key, hexKey, def] of [['#lookBase', LOOK_BASES, 'base', 'bgHex', '#EEF3EA'], ['#lookAccent', LOOK_ACCENTS, 'accent', 'accentHex', '#2F3A3A']]) {
+    const btns = Object.entries(list).map(([id, v]) => {
+      const b = document.createElement('button'), i = document.createElement('i');
+      b.type = 'button'; b.className = id === l[key] ? 'on' : ''; b.setAttribute('aria-pressed', String(id === l[key]));
+      i.style.background = v[d]; b.append(i, v[0]);
+      b.onclick = () => lookSave({ [key]: id });
+      return b;
+    });
+    // 「직접」 — 색상표에서 아무 색이나(#rrggbb). 고르는 동안 미리 보이고 다 고르면 이 PC 에 기억
+    const on = l[key] === 'custom', lab = document.createElement('label'), c = document.createElement('input');
+    lab.className = 'own' + (on ? ' on' : ''); c.type = 'color'; c.value = l[hexKey] || def; c.title = '색상표에서 직접 고르기'; c.setAttribute('aria-label', '직접 고르기');
+    c.oninput = () => lookPaint({ ...lookGet(), [key]: 'custom', [hexKey]: c.value });
+    c.onchange = () => lookSave({ [key]: 'custom', [hexKey]: c.value });
+    lab.onclick = () => { if (!on && l[hexKey]) lookSave({ [key]: 'custom' }); };
+    lab.append(c, '직접');
+    $(box).replaceChildren(...btns, lab);
+  }
+  // 직접 고른 색이 실제로 어떻게 쓰이는지 — 밝게·어둡게 두 칸
+  const pv = $('#lookPreview');
+  if (pv) {
+    pv.hidden = !p; pv.replaceChildren();
+    if (p) {
+      const chip = (bg, sp) => { const i = document.createElement('i'); i.style.background = bg; i.style.boxShadow = 'inset -5px 0 0 ' + sp; return i; };
+      pv.append('밝게 ', chip(p.bg ? p.bg.light.bg : '#EEF3EA', p.spine.light), ' 어둡게 ', chip(p.bg ? p.bg.dark.bg : '#1B2018', p.spine.dark), ' 에선 이렇게 보인다');
+    }
+  }
+}
+lookApply();
+new MutationObserver(lookApply).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });   // 밝기가 바뀌면 견본색도
 function lookShow(on) { $('#lookBox').hidden = !on; $('#lookBtn').classList.toggle('lookon', on); if (on) costShow(false); }
 $('#lookBtn').onclick = e => { e.stopPropagation(); lookShow($('#lookBox').hidden); };
 $('#lookBox').onclick = e => e.stopPropagation();                 // 고르는 동안은 열어 둔다
