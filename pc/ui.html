@@ -4,40 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>D&amp;C 메신저</title>
+<script>
+// 화면 밝기 「책등」 — 자동(기본: 저녁 7시~아침 7시, 또는 기기가 어둡게면 어둡게) · 밝게 · 어둡게. 1분마다 다시 본다. 그리기 전에 붙여야 깜빡이지 않는다
+(function(){var KEY='dnc-chat-theme',mode='auto';try{mode=localStorage.getItem(KEY)||'auto'}catch(e){}
+if(['auto','light','dark'].indexOf(mode)<0)mode='auto';
+var mq=window.matchMedia?matchMedia('(prefers-color-scheme: dark)'):null;
+function apply(){var d;if(mode==='auto'){var h=new Date().getHours();d=(h>=19||h<7)||(mq&&mq.matches);}else d=(mode==='dark');
+document.documentElement.setAttribute('data-theme',d?'dark':'light');
+document.querySelectorAll('[data-theme-btn]').forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute('data-theme-btn')===mode));});}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-theme-btn]');if(!b)return;mode=b.getAttribute('data-theme-btn');try{localStorage.setItem(KEY,mode)}catch(x){}apply();},true);
+window.dncBright=function(m){mode=m;apply();};
+apply();document.addEventListener('DOMContentLoaded',apply);setInterval(apply,60000);if(mq&&mq.addEventListener)mq.addEventListener('change',apply);})();
+</script>
 <style>
-/* D&C 메신저 화면 — 디자인 B 「종이 노트」(2026-10-26): 미색 종이·먹색 글자·벽돌색 포인트·명조 제목, 카드 대신 가로줄.
-   색은 자동화 허브(tools\macro-hub\web\theme.css)와 같은 값. 이 화면은 다른 PC·폰·맥의 exe 에서도 혼자 돌아야 해서 값을 옮겨 왔다(웹 글꼴·CDN 없이 이 PC 글꼴만).
-   바탕 테마(<html data-theme>)·강조색(data-accent)은 목록 위 단추 줄의 「화면」에서 고르고 이 PC 에 기억한다(2026-10-27, 허브 꾸미기·폰 페이지와 같은 이름·색). */
-:root{color-scheme:light dark;
-  --bg:light-dark(#f4efe6,#1f1c19);--solid:light-dark(#fffaf2,#27231f);--panel:var(--bg);--soft:light-dark(#ece5d9,#2b2722);
-  --text:light-dark(#2b2723,#ece5da);--muted:light-dark(#6a6157,#b3a998);--line:light-dark(#ddd3c3,#3a342e);
-  --rule:light-dark(#2b2723,#ece5da);--field:light-dark(#8c8276,#8a8074);
-  --accent:light-dark(#9a3f1d,#d9875f);--accent2:var(--accent);--accentsoft:color-mix(in srgb,var(--accent) 10%,var(--bg));--onaccent:var(--bg);
-  --ok:light-dark(#3f6b3a,#8fbb86);--warn:light-dark(#9a6412,#d9a55a);--bad:light-dark(#b42318,#f08a7a);--info:light-dark(#355a78,#93b4cf);
+/* 디스패치 대화 화면 — 공통 디자인 「책등」(2026-11-20): 거의 흰 쑥 기운 바탕 · 먹색 글씨 · 오른쪽 먹색 책등(세로 「메신저」).
+   색 값은 자동화 허브(tools\macro-hub\web\theme.css)와 같다. 이 화면은 다른 PC·폰·맥의 exe 에서도 혼자 돌아야 해서 값을 옮겨 왔다(웹 글꼴·CDN 없이 시스템 고딕).
+   화면 밝기(<html data-theme> light·dark)는 목록 위 「화면」에서 자동·밝게·어둡게 — 이 PC 에 기억(localStorage "dnc-chat-theme"), 기본 자동 = 저녁 7시~아침 7시 어둡게. */
+@font-face{font-family:"Sunflower";src:url(/sunflower-medium-ks.woff2) format("woff2");font-display:swap}
+:root{color-scheme:light;
+  --bg:light-dark(#F3F5EE,#1B2018);--solid:light-dark(#FAFBF7,#151A13);--panel:var(--bg);--soft:light-dark(#E2E8D8,#2C3527);
+  --text:light-dark(#2A3324,#DEE5D3);--muted:light-dark(#5A6650,#A4AE97);--line:light-dark(#D6DCCB,#2F382A);
+  --rule:light-dark(#2A3324,#DEE5D3);--field:light-dark(#5A6650,#A4AE97);
+  --spine:light-dark(#2F3A3A,#3C4A48);--onspine:light-dark(#E9EEE2,#EEF2E8);--face:light-dark(#E2E8D8,#2C3527);--b3:light-dark(#CDD5C0,#3A4433);
+  --edge:light-dark(#2F3A3A,#A4AE97);--spine-w:40px;
+  --accent:light-dark(#2F3A3A,#DEE5D3);--accent2:var(--accent);--accentsoft:var(--face);--onaccent:var(--onspine);
+  --ok:light-dark(#2F3A3A,#A4AE97);--warn:var(--muted);--bad:light-dark(#8A4A3A,#C98A78);--info:var(--accent);
   --shadow:none;--shadow2:none;
-  --serif:'Gowun Batang','Batang','BatangChe','AppleMyungjo',serif;
-  --sans:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+  --sans:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --serif:var(--sans);
+  --display:"Sunflower","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
 }
-/* 바탕 테마 — paper(종이 노트)는 위 :root 그대로 */
-:root[data-theme=white]{--bg:light-dark(#fafaf8,#1b1b1d);--solid:light-dark(#ffffff,#232326);--soft:light-dark(#efefec,#28282b);
-  --text:light-dark(#222222,#ececec);--muted:light-dark(#62625f,#a9a9ad);--line:light-dark(#e2e2de,#353538);--rule:var(--text);--field:light-dark(#8a8a86,#7e7e84)}
-:root[data-theme=slate]{--bg:light-dark(#eef1f4,#181c21);--solid:light-dark(#fafbfc,#1f252c);--soft:light-dark(#e2e7ec,#252c34);
-  --text:light-dark(#1e2833,#e3e8ee);--muted:light-dark(#586472,#9ba8b5);--line:light-dark(#d2d9e0,#323b45);--rule:var(--text);--field:light-dark(#7b8795,#748191)}
-:root[data-theme=kraft]{--bg:light-dark(#e9dec9,#221d16);--solid:light-dark(#f5ecdc,#2a241b);--soft:light-dark(#ded1b9,#302920);
-  --text:light-dark(#2e2418,#efe4cf);--muted:light-dark(#6b5c47,#b6a68b);--line:light-dark(#cfbfa3,#3e3527);--rule:var(--text);--field:light-dark(#8a7860,#8b7a60)}
-/* 강조색 — brick(벽돌)은 위 :root 그대로 */
-:root[data-accent=ink]{--accent:light-dark(#2f5283,#8fb3e0)}
-:root[data-accent=pine]{--accent:light-dark(#2f6b4f,#7fc0a0)}
-:root[data-accent=plum]{--accent:light-dark(#7b3a6b,#d494c4)}
-:root[data-accent=ochre]{--accent:light-dark(#7d5a12,#d8b363)}
-:root[data-accent=mono]{--accent:var(--text)}
+:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{color:var(--text);font:14px/1.55 var(--sans);background:var(--bg);
-  display:grid;grid-template-columns:320px 1fr;overflow:hidden}
+body{color:var(--text);font:400 14px/1.55 var(--sans);background:var(--bg);
+  display:grid;grid-template-columns:320px minmax(0,1fr) var(--spine-w);overflow:hidden}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer}
-::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:0;border:2px solid transparent;background-clip:padding-box}
 
 /* ---------- 왼쪽: 대화 목록 ---------- */
 aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--panel)}
@@ -48,11 +52,11 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .brand .sub{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px}
 #dot{width:7px;height:7px;border-radius:50%;background:var(--field);flex:none}
 #dot.ok{background:var(--ok)}#dot.bad{background:var(--bad)}
-.iconbtn{border:1px solid transparent;background:transparent;border-radius:3px;padding:2px 7px;font-size:12px;color:var(--muted)}
+.iconbtn{border:1px solid transparent;background:transparent;border-radius:0;padding:2px 7px;font-size:12px;color:var(--muted)}
 .iconbtn:hover{color:var(--text);border-color:var(--field)}
 /* 새 대화 — 이름 줄 오른쪽 작은 단추(2026-11-13: 목록 위를 가로지르던 큰 테두리 단추를 줄임). 꽉 찬 먹색은 한 화면에 하나(보내기)만 */
-.newbtn{margin-left:auto;flex:none;border:1px solid var(--field);border-radius:3px;padding:2px 9px;font-size:12px;font-weight:700;color:var(--text);background:transparent}
-.newbtn:hover{border-color:var(--text);background:var(--solid)}
+.newbtn{margin-left:auto;flex:none;border:0;border-radius:0;padding:3px 10px;font-size:12px;font-weight:400;color:var(--text);background:var(--face);box-shadow:inset -4px 0 0 var(--edge)}
+.newbtn:hover{background:var(--b3)}
 /* 목록 머리 — 위 줄은 도구(다시 읽기·비우기·화면·비용·설정, 오른쪽 흐린 글자), 굵은 선 아래 줄은 거르기 탭.
    한 줄에 다 넣으면 320px 칸을 넘어 대화 쪽으로 삐져나왔다(2026-11-10) */
 .filters{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line)}
@@ -60,7 +64,7 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .filters .tools button{padding:3px 6px;margin:0;border-bottom:0}
 .filters button{border:0;border-bottom:2px solid transparent;background:transparent;border-radius:0;padding:7px 6px 5px;margin-bottom:-1px;font-size:12px;color:var(--muted);white-space:nowrap}
 .filters button:hover{color:var(--text)}
-.filters button.on{color:var(--text);border-bottom-color:var(--accent);font-weight:700}
+.filters button.on{color:var(--text);border-bottom:3px solid var(--spine);font-weight:400}
 #list{flex:1;overflow:auto;padding:0 0 12px}
 #list>.hint{padding:10px 16px}
 .findbar{padding:4px 10px 6px}                                  /* 찾기 칸 밑줄이 곧 구분선 — 칸 아래 선을 또 그으면 두 줄이 겹쳐 보였다 */
@@ -71,14 +75,15 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .brand h1,.head h2{letter-spacing:-.02em}
 .item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;background:transparent;border-radius:0;padding:9px 16px 9px 13px;margin:0}
 .item:hover{background:var(--soft)}
-.item.sel{background:var(--solid);border-left-color:var(--accent)}
+.item.sel{background:var(--spine);color:var(--onspine);border-left-color:var(--spine);box-shadow:inset -4px 0 0 var(--text)}
+.item.sel :is(.time,.last,.no,.badge){color:var(--onspine)}
 .item .top{display:flex;align-items:center;gap:6px}
 .item .title{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .time{font-size:11px;color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
 .item .last{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
 .no{font-size:11px;font-weight:700;color:var(--accent);flex:none;font-variant-numeric:tabular-nums}
 /* 상태 — 작은 글자 + 색 점 */
-.badge{--c:var(--field);display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--muted);flex:none;white-space:nowrap}
+.badge{--c:var(--field);display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:400;color:var(--muted);flex:none;white-space:nowrap}
 .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--c);flex:none}
 .b-ask{--c:var(--accent);color:var(--accent);font-weight:700}
 .b-confirm{--c:var(--warn);color:var(--warn);font-weight:700}
@@ -96,10 +101,10 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 #urgBtn.on{color:var(--bad);border-color:var(--bad)}
 .snipwrap{position:relative}
 .filechips{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 0}.filechips:empty{display:none}
-.filechips span{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:3px;padding:1px 4px 1px 8px;font-size:12px;color:var(--muted);max-width:260px}
+.filechips span{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:0;padding:1px 4px 1px 8px;font-size:12px;color:var(--muted);max-width:260px}
 .filechips span b{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filechips span button{border:0;background:none;padding:0 3px;color:var(--muted);cursor:pointer}
-.snip{position:absolute;bottom:calc(100% + 6px);right:0;width:min(420px,80vw);max-height:300px;overflow:auto;background:var(--solid);border:1px solid var(--field);border-radius:4px;padding:4px 0;z-index:20;display:none}
+.snip{position:absolute;bottom:calc(100% + 6px);right:0;width:min(420px,80vw);max-height:300px;overflow:auto;background:var(--solid);border:1px solid var(--field);border-radius:0;padding:4px 0;z-index:20;display:none}
 .snip.open{display:block}
 .snip .it{display:flex;gap:6px;align-items:flex-start;padding:6px 12px;border-bottom:1px solid var(--line);cursor:pointer}
 .snip .it:hover{background:var(--soft)}
@@ -107,7 +112,7 @@ aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var
 .snip .it button{border:0;background:transparent;color:var(--muted);padding:0 4px}
 .snip .it button:hover{color:var(--bad)}
 .snip>.hint{padding:6px 12px;margin:0}
-.snip .add{display:block;width:calc(100% - 16px);margin:6px 8px 2px;border:1px dashed var(--field);background:transparent;border-radius:3px;padding:5px;color:var(--muted);font-size:12px}
+.snip .add{display:block;width:calc(100% - 16px);margin:6px 8px 2px;border:1px dashed var(--field);background:transparent;border-radius:0;padding:5px;color:var(--muted);font-size:12px}
 .snip .add:hover:not(:disabled){color:var(--text);border-color:var(--text)}
 
 /* ---------- 오른쪽: 대화 ---------- */
@@ -118,14 +123,14 @@ main{display:flex;flex-direction:column;min-height:0;min-width:0}
 .row{display:flex;flex-direction:column;max-width:min(720px,82%)}
 .row.me{align-self:flex-end;align-items:flex-end}
 .row.bot{align-self:flex-start}
-.bubble{border-radius:4px;padding:9px 13px;white-space:pre-wrap;word-break:break-word}
-.me .bubble{background:var(--accentsoft);color:var(--text)}
+.bubble{border-radius:0;padding:9px 13px;white-space:pre-wrap;word-break:break-word}
+.me .bubble{background:var(--face);color:var(--text);box-shadow:inset -4px 0 0 var(--spine)}
 .me.pending .bubble{opacity:.6}
 .bot .bubble{background:var(--solid);border:1px solid var(--line)}
 .bot.err .bubble{border-color:var(--bad);border-left-width:3px}
 .meta{font-size:11px;color:var(--muted);margin:3px 2px 0;display:flex;gap:6px;align-items:center;font-variant-numeric:tabular-nums}
 .foot{font-size:11px;color:var(--muted);margin-top:6px;border-top:1px solid var(--line);padding-top:5px;white-space:pre-wrap}
-.who{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--muted);margin:0 2px 3px}
+.who{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:400;color:var(--muted);margin:0 2px 3px}
 .who i{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
 .dayline{align-self:stretch;display:flex;align-items:center;gap:10px;font:12px/1.4 var(--serif);color:var(--muted)}
 .dayline::before,.dayline::after{content:"";flex:1;height:1px;background:var(--line)}
@@ -136,7 +141,7 @@ main{display:flex;flex-direction:column;min-height:0;min-width:0}
 .prog .ph{display:flex;gap:8px;align-items:center;font-weight:700;color:var(--muted);margin-bottom:5px}
 .prog .ph b{color:var(--text);font-family:var(--serif)}
 .prog ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;max-height:240px;overflow:auto}
-.prog li{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;line-height:1.45;cursor:pointer;border-radius:2px;padding:0 4px}
+.prog li{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;line-height:1.45;cursor:pointer;border-radius:0;padding:0 4px}
 .prog li:hover{background:var(--soft)}
 .prog li.open{background:var(--soft);padding-bottom:4px}
 .prog .dt{display:none;flex-basis:100%;margin:2px 0 0 18px;padding:6px 8px;border-left:2px solid var(--line);background:var(--bg);border-radius:0;font:11px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;cursor:text}
@@ -153,12 +158,12 @@ main{display:flex;flex-direction:column;min-height:0;min-width:0}
 
 /* 선택지 */
 .choice{align-self:flex-start;max-width:min(560px,82%);background:var(--solid);border:1px solid var(--line);border-top:2px solid var(--rule);
-  border-radius:2px;padding:11px 14px}
+  border-radius:0;padding:11px 14px}
 .choice .q{font-weight:700;margin-bottom:8px}
 .choice .q small{color:var(--muted);font-weight:400}
-.opt{display:flex;align-items:center;gap:9px;padding:6px 10px;border:1px solid var(--line);border-radius:3px;margin-bottom:5px;cursor:pointer;background:transparent}
+.opt{display:flex;align-items:center;gap:9px;padding:6px 10px;border:1px solid var(--line);border-radius:0;margin-bottom:5px;cursor:pointer;background:transparent}
 .opt:hover{border-color:var(--field)}
-.opt.on{background:var(--accentsoft);border-color:var(--accent)}
+.opt.on{background:var(--face);border-color:var(--spine);box-shadow:inset -4px 0 0 var(--edge)}
 .opt input{accent-color:var(--accent);width:15px;height:15px;margin:0}
 .opt .n{font:700 13px/1 var(--serif);color:var(--accent);min-width:14px}
 .choice .acts{display:flex;gap:8px;align-items:center;margin-top:8px}
@@ -171,25 +176,25 @@ main{display:flex;flex-direction:column;min-height:0;min-width:0}
 /* 입력부 */
 .composer{border-top:1px solid var(--line);background:var(--panel);padding:10px 20px 14px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
-.chip{border:1px solid var(--line);background:transparent;border-radius:3px;padding:3px 10px;font-size:12px;color:var(--muted)}
+.chip{border:1px solid var(--line);background:transparent;border-radius:0;padding:3px 10px;font-size:12px;color:var(--muted)}
 .chip:hover{border-color:var(--field);color:var(--text)}
-.chip.on{background:var(--solid);border-color:var(--text);color:var(--text);font-weight:700}
+.chip.on{background:var(--spine);border-color:var(--spine);color:var(--onspine);font-weight:400}
 .chip.on.wr{border-color:var(--warn);color:var(--warn)}
 .sep{width:1px;height:16px;background:var(--line);margin:0 4px}
 .inrow{display:flex;gap:8px;align-items:flex-end}
-input[type=text],input[type=search],input[type=password],input[type=email],input[type=number],select{width:100%;background:transparent;border:0;border-bottom:1px solid var(--field);border-radius:0;padding:6px 2px;outline:none}
-textarea{width:100%;background:var(--solid);border:1px solid var(--line);border-radius:3px;padding:8px 10px;outline:none;resize:none;min-height:40px;max-height:180px}
+input[type=text],input[type=search],input[type=password],input[type=email],input[type=number],select{width:100%;background:var(--solid);border:0;border-bottom:2px solid var(--field);border-radius:0;padding:6px 2px;outline:none}
+textarea{width:100%;background:var(--solid);border:0;border-bottom:2px solid var(--field);border-radius:0;padding:8px 10px;outline:none;resize:none;min-height:40px;max-height:180px}
 select{cursor:pointer}
 textarea:focus{border-color:var(--field)}
-input:focus,select:focus{border-bottom-color:var(--accent)}
-.send{flex:none;white-space:nowrap;border:1px solid var(--rule);border-radius:3px;padding:8px 16px;font-weight:700;color:var(--onaccent);background:var(--rule)}
-.send:hover:not(:disabled){opacity:.88}
+input:focus,select:focus,textarea:focus{border-bottom-color:var(--rule)}
+.send{flex:none;white-space:nowrap;border:0;border-radius:0;padding:8px 18px;font-weight:400;color:var(--onspine);background:var(--spine);box-shadow:inset -4px 0 0 var(--text)}
+.send:hover:not(:disabled){background:color-mix(in srgb,var(--spine) 86%,var(--text))}
 .send:disabled{opacity:.4;cursor:default}
-.ghost{border:1px solid var(--field);background:transparent;border-radius:3px;padding:8px 13px;color:var(--text);white-space:nowrap;flex:none}
-.ghost:hover:not(:disabled){border-color:var(--text)}
+.ghost{border:0;background:var(--face);border-radius:0;padding:8px 14px;color:var(--text);white-space:nowrap;flex:none;font-weight:400;box-shadow:inset -4px 0 0 var(--edge)}
+.ghost:hover:not(:disabled){background:var(--b3)}
 .ghost:disabled{opacity:.45;cursor:default}
 .hint{font-size:12px;color:var(--muted);margin-top:6px}
-kbd{font:500 11px/1 var(--sans);color:var(--muted);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:2px 5px}
+kbd{font:400 11px/1 var(--sans);color:var(--muted);border:1px solid var(--line);border-bottom-width:2px;border-radius:0;padding:2px 5px}
 .keys{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap}
 
 /* 새 대화 — 대화 화면과 같은 틀(머리 줄 · 빈 대화 · 아래 입력부). 가운데 큰 제목 + 설명 문단 카드는 걷었다(2026-11-13) */
@@ -201,10 +206,10 @@ kbd{font:500 11px/1 var(--sans);color:var(--muted);border:1px solid var(--line);
 .newfoot .hint.wr{color:var(--warn)}
 .banner{margin:10px 20px 0;padding:6px 10px;border-left:3px solid var(--bad);border-radius:0;background:color-mix(in srgb,var(--bad) 7%,transparent);color:var(--bad);font-size:12px;display:none}
 
-dialog{border:1px solid var(--field);border-radius:4px;padding:0;width:min(460px,calc(100vw - 40px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg);color:var(--text)}
-dialog::backdrop{background:rgba(31,28,25,.4)}
+dialog{border:1px solid var(--field);border-radius:0;padding:0;width:min(460px,calc(100vw - 40px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg);color:var(--text)}
+dialog::backdrop{background:color-mix(in srgb,#1B2018 45%,transparent)}
 .dlg{padding:18px 20px}.dlg h2{margin:0 0 4px;font:700 20px/1.3 var(--serif)}.dlg p{margin:0 0 12px;color:var(--muted);font-size:12px}
-.field{margin-bottom:12px}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:2px}
+.field{margin-bottom:12px}.field label{display:block;font-size:12px;font-weight:400;margin-bottom:2px}
 .two{display:grid;grid-template-columns:1fr 110px;gap:12px}
 .dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
 #setErr{color:var(--bad);font-size:12px;min-height:18px}
@@ -214,10 +219,10 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .run p{margin:4px 0 10px;color:var(--muted);font-size:12px}
 .switch{position:relative;display:inline-flex;align-items:center;margin-left:auto;cursor:pointer;font-family:var(--sans)}
 .switch input{position:absolute;opacity:0;width:0;height:0}
-.switch span{width:36px;height:20px;border-radius:3px;border:1px solid var(--field);background:transparent;transition:.15s;position:relative}
-.switch span::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:2px;background:var(--field);transition:.15s}
-.switch input:checked+span{background:var(--rule);border-color:var(--rule)}
-.switch input:checked+span::after{left:18px;background:var(--onaccent)}
+.switch span{width:36px;height:20px;border-radius:0;border:1px solid var(--field);background:transparent;transition:.15s;position:relative}
+.switch span::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:0;background:var(--field);transition:.15s}
+.switch input:checked+span{background:var(--spine);border-color:var(--edge)}
+.switch input:checked+span::after{left:18px;background:var(--onspine)}
 .switch input:disabled+span{opacity:.45;cursor:not-allowed}
 .switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
 #runWhy{font-size:12px;border-left:3px solid;border-radius:0;padding:4px 9px;margin-bottom:10px;display:none}
@@ -233,13 +238,13 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .filters{position:relative}
 .filters button.lookon{color:var(--text);border-bottom-color:var(--field)}
 .lookpop{position:absolute;left:8px;right:8px;top:calc(100% + 4px);z-index:30;background:var(--solid);border:1px solid var(--line);border-top:2px solid var(--rule);
-  border-radius:2px;padding:10px 12px 4px;box-shadow:0 6px 18px color-mix(in srgb,var(--text) 14%,transparent)}
-.lookpop .lt{font:700 12px/1.3 var(--sans);margin:0 0 6px}
+  border-radius:0;padding:10px 12px 4px;}
+.lookpop .lt{font:400 12px/1.3 var(--sans);margin:0 0 6px}
 .lookpop .swatches{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
-.lookpop .swatches button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:3px;margin:0;padding:3px 8px;font-size:12px;color:var(--muted)}
+.lookpop .swatches button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:0;margin:0;padding:3px 8px;font-size:12px;color:var(--muted)}
 .lookpop .swatches button:hover{border-color:var(--field);color:var(--text)}
-.lookpop .swatches button.on{border-color:var(--text);color:var(--text);font-weight:700;background:var(--bg)}
-.lookpop .swatches i{width:11px;height:11px;border-radius:2px;border:1px solid var(--line);flex:none}
+.lookpop .swatches button.on,.lookpop .swatches button[aria-pressed=true]{border-color:var(--spine);color:var(--onspine);font-weight:400;background:var(--spine)}
+.lookpop .swatches i{width:11px;height:11px;border-radius:0;border:1px solid var(--line);flex:none}
 .lookpop .lookchk{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin:0 0 5px;cursor:pointer}
 .lookpop .lookchk input{margin:2px 0 0;flex:none}
 /* 비용 내역 — 화면 칸과 같은 자리·모양 */
@@ -250,7 +255,7 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .costpop .lt:not(:first-child){margin-top:12px}
 .costpop .cnote{color:var(--muted);font-size:12px;margin:0 0 10px}
 .costpop .bars{display:flex;align-items:flex-end;gap:3px;height:56px;margin:0 0 2px;border-bottom:1px solid var(--line)}
-.costpop .bars i{flex:1;background:var(--text);opacity:.75;min-height:1px;border-radius:2px 2px 0 0}
+.costpop .bars i{flex:1;background:var(--text);opacity:.75;min-height:1px;border-radius:0 2px 0 0}
 .costpop .bars i.z{opacity:.15}
 .costpop .bars i.td{background:var(--accent,var(--text));opacity:1}
 .costpop .axis{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:0 0 10px}
@@ -269,12 +274,12 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 /* Jira 새 티켓 감시 — 대화 목록 위 자리비움 단추(켜져 있으면 눈에 띄게) · 설정 칸 */
 .away{margin:0 16px 10px;display:flex;flex-direction:column;gap:4px}
 .away[hidden]{display:none}
-.awaybtn{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:transparent;border-radius:3px;padding:6px 10px;font-size:12px;color:var(--muted);text-align:left}
+.awaybtn{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:transparent;border-radius:0;padding:6px 10px;font-size:12px;color:var(--muted);text-align:left}
 .awaybtn:hover{border-color:var(--field);color:var(--text)}
 .awaybtn .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.awaybtn .tr{flex:none;width:28px;height:16px;border-radius:3px;border:1px solid var(--field);position:relative;transition:.15s}
+.awaybtn .tr{flex:none;width:28px;height:16px;border-radius:0;border:1px solid var(--field);position:relative;transition:.15s}
 .awaybtn .tr::after{content:"";position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:2px;background:var(--field);transition:.15s}
-.awaybtn.on{background:color-mix(in srgb,var(--warn) 8%,transparent);border-color:var(--warn);color:var(--warn);font-weight:700}
+.awaybtn.on{background:color-mix(in srgb,var(--warn) 8%,transparent);border-color:var(--warn);color:var(--warn);font-weight:400}
 .awaybtn.on .tr{background:var(--warn);border-color:var(--warn)}
 .awaybtn.on .tr::after{left:14px;background:var(--onaccent)}
 .awaynote[hidden]{display:none}
@@ -291,15 +296,33 @@ dialog::backdrop{background:rgba(31,28,25,.4)}
 .jwlast ul{margin:4px 0 0;padding-left:16px}
 .jwlast .e{color:var(--bad)}
 #jwErr{color:var(--bad);font-size:12px;min-height:16px}
-code{font:12px ui-monospace,Consolas,monospace;background:var(--soft);padding:0 3px;border-radius:2px}
-#toast{position:fixed;right:18px;bottom:18px;background:var(--text);color:var(--bg);padding:8px 14px;border-radius:3px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;max-width:520px;z-index:9}
+code{font:12px ui-monospace,Consolas,monospace;background:var(--soft);padding:0 3px;border-radius:0}
+#toast{position:fixed;right:calc(18px + var(--spine-w));bottom:18px;background:var(--spine);color:var(--onspine);font-weight:400;box-shadow:inset -4px 0 0 var(--text);padding:8px 14px;border-radius:0;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;max-width:520px;z-index:9}
 #toast.show{opacity:.96;transform:none}
 /* 좁은 창(카톡처럼) — 목록과 대화를 번갈아. 처음엔 목록, ← 로 목록에 돌아간다 */
 .narrowonly{display:none!important}
-@media (max-width:760px){body{grid-template-columns:minmax(0,1fr)}aside,main{min-width:0}aside{display:none}body.list aside{display:flex}body.list main{display:none}
+@media (max-width:760px){:root{--spine-w:32px}body{grid-template-columns:minmax(0,1fr);padding-right:var(--spine-w)}.spine{position:fixed;top:0;right:0;bottom:0}.spine .vt{font-size:15px}.spine small{font-size:10px}aside,main{min-width:0}aside{display:none}body.list aside{display:flex}body.list main{display:none}
   #backBtn{display:inline-grid!important}.narrowonly{display:inline-grid!important}
   .head{padding:10px 14px 8px}#msgs{padding:14px}.composer{padding:10px 14px 12px}
   .welcome .empty{padding:14px}.keys,.findbar kbd{display:none}}
+/* 책등 — 오른쪽 끝 세로 띠, 제품 이름을 한글로 세워 쓴다. 아래 작은 글씨는 지금 화면 이름 */
+.spine{width:var(--spine-w);background:var(--spine);color:var(--onspine);display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  padding:18px 0 14px;user-select:none;overflow:hidden;z-index:8}
+.spine .vt{writing-mode:vertical-rl;text-orientation:upright;letter-spacing:.12em;font-family:var(--display);font-weight:400;font-size:17px}
+/* 큰 제목·주 단추 — Sunflower Medium(굵기 하나, 800 주지 않음) */
+.brand h1,.head h2,.dlg h2{font-family:var(--display);font-weight:400;letter-spacing:0}
+.send{font-family:var(--display);font-weight:400}
+.spine small{writing-mode:vertical-rl;font-size:11px;font-weight:400;letter-spacing:.1em;opacity:.85}
+h1,h2,h3,h4{letter-spacing:-.03em}
+/* 단추 — 누르면 책을 빼듯 왼쪽으로 6px, 등이 넓어진다 */
+:is(.send,.ghost,.newbtn,.item,.chip,.opt,.iconbtn,.filters button){transition:transform .15s,box-shadow .15s,background-color .15s}
+:is(.send,.ghost,.newbtn,.item,.chip,.opt,.iconbtn):active:not(:disabled){transform:translateX(-6px)}
+:is(.send,.newbtn,.ghost):active:not(:disabled){box-shadow:inset -10px 0 0 var(--edge)}
+.filters button:active{transform:translateY(-3px)}
+/* 새 화면(대화)은 책등 쪽에서 밀려 들어온다 */
+main{animation:slidein .32s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes slidein{from{transform:translateX(28px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){main{animation:none}*,*::before,*::after{transition:none!important}:active{transform:none!important}}
 </style>
 <link rel="stylesheet" href="/pet/pets.css">
 <style>
@@ -317,11 +340,11 @@ body.tok-busy .petstage .pet .art{animation-duration:5s}
 body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-duration:24s}
 /* ② 기다리는 세션 — 따로 펫을 띄우지 않고 고른 강아지 머리 옆에 ✋ 표(2026-11-17 사용자 「펫을 고르는 의미가 없어서」 동료 펫을 없앰). 누르면 폴더 이름 */
 .petstage .buddies{display:none}
-.tok-wait{position:absolute;left:-6px;top:-4px;z-index:3;font-size:12px;font-style:normal;line-height:1;background:#fffaf2;color:#3a332c;border:1px solid #8c8276;border-radius:10px;padding:2px 5px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.tok-wait{position:absolute;left:-6px;top:-4px;z-index:3;font-size:12px;font-style:normal;line-height:1;background:var(--solid);color:var(--text);border:1px solid var(--field);border-radius:2px;padding:2px 5px;cursor:pointer}
 .tok-wait b{font-size:10px;margin-left:1px}
 .petstage .pet.hop .skin-media{animation:jump .5s ease-in-out 3!important}
 .petbbl{position:absolute;left:50%;bottom:calc(100% + 2px);transform:translate(-50%,4px);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
-  width:max-content;max-width:210px;z-index:6;font-size:12px;line-height:1.35;background:#fffaf2;color:#3a332c;border:1px solid #8c8276;border-radius:10px;padding:4px 9px;word-break:keep-all}
+  width:max-content;max-width:210px;z-index:6;font-size:12px;line-height:1.35;background:var(--solid);color:var(--text);border:1px solid var(--field);border-radius:2px;padding:4px 9px;word-break:keep-all}
 .petbbl.show{opacity:1;transform:translate(-50%,0)}
 #dogBbl{left:0;transform:translate(0,4px)}#dogBbl.show{transform:none}   /* 강아지는 왼쪽 끝 — 긴 말(✋ 기다림 알림)이 창 밖으로 잘리지 않게 오른쪽으로 편다 */
 .petstage .slot{position:relative}
@@ -330,91 +353,16 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
 @media (hover:hover){.petstage select{opacity:0;transition:opacity .15s}.petstage:hover select,.petstage:focus-within select{opacity:1}}
 </style>
 <style>
-/* ---------- 디자인(2026-11-16) — 앱공방(swbins-kit3 ui.html) 스킨과 같은 이름·색. <html data-design> 이 없으면 위 「종이 노트」 그대로(바탕·강조색 고르기도 그때만).
-   디자인마다 [라이트, 다크] 두 벌 — 어두운 작업실(night)만 늘 어둡다. 그룹웨어형·백오피스형은 대화 목록이 왼쪽 세로 판(흰/어두운)이 된다.
-   --rad 판·말풍선 모서리, --radb 단추 모서리, --rulew 머리 줄 아래 선 굵기, --band/--onband 이름 줄 띠(있는 디자인만) */
-:root{--primary:var(--rule);--onprimary:var(--onaccent);--petglow:transparent}
-:root[data-design=groupware]{--serif:var(--sans);--rad:8px;--radb:6px;--rulew:1px;
-  --bg:light-dark(#f2f4f7,#15181d);--solid:light-dark(#ffffff,#1d2128);--soft:light-dark(#f4f8ff,#232934);
-  --text:light-dark(#1d2733,#e4e8ee);--muted:light-dark(#6b7684,#9aa4b2);--line:light-dark(#e3e7ed,#2c323c);--rule:light-dark(#d6dce4,#3a414c);--field:light-dark(#c9d1dc,#4a525e);
-  --accent:light-dark(#2463d1,#7aa7f0);--primary:var(--accent);--onprimary:light-dark(#ffffff,#10141a);--band:light-dark(#2463d1,#1d3f80);--onband:#ffffff;
-  --side:light-dark(#ffffff,#1b1f26);--sideon:light-dark(#eaf1fd,#22324d)}
-:root[data-design=backoffice]{--serif:var(--sans);--rad:4px;--radb:3px;--rulew:1px;
-  --bg:light-dark(#eceff3,#16191e);--solid:light-dark(#ffffff,#1e2228);--soft:light-dark(#fff4ec,#2a2420);
-  --text:light-dark(#1f242b,#e2e5e9);--muted:light-dark(#6f7884,#98a0ab);--line:light-dark(#e1e5ea,#2d323a);--rule:light-dark(#c7cdd5,#3b414a);--field:light-dark(#c7cdd5,#4b525c);
-  --accent:light-dark(#e8590c,#ff8a4c);--primary:light-dark(#2f3540,#e2e5e9);--onprimary:light-dark(#ffffff,#16191e)}
-:root[data-design=mint]{--serif:var(--sans);--rad:10px;--radb:999px;--rulew:2px;
-  --bg:light-dark(#f4f8f5,#131a17);--solid:light-dark(#ffffff,#1a2420);--soft:light-dark(#f0f7f2,#1f2b26);
-  --text:light-dark(#17322a,#dcebe4);--muted:light-dark(#5d7469,#94ab9f);--line:light-dark(#dce8e0,#2a3a33);--rule:light-dark(#1f7a53,#5cc398);--field:light-dark(#b9cfc2,#466053);
-  --accent:light-dark(#1f7a53,#5cc398);--primary:var(--accent);--onprimary:light-dark(#ffffff,#0f1714)}
-:root[data-design=night]{color-scheme:dark;--serif:var(--sans);--rad:6px;--radb:4px;--rulew:2px;
-  --bg:#15171b;--solid:#1e2127;--soft:#23272e;--text:#e6e8eb;--muted:#959ba5;--line:#2c3038;--rule:#f2b43a;--field:#444a55;
-  --accent:#f2b43a;--primary:#f2b43a;--onprimary:#15171b;--bad:#ff8a7a}
-:root[data-design=ledger]{--rad:0px;--radb:0px;--rulew:3px;
-  --bg:light-dark(#ffffff,#111111);--solid:light-dark(#ffffff,#161616);--soft:light-dark(#fff6f6,#241818);
-  --text:light-dark(#111111,#f0f0f0);--muted:light-dark(#555555,#aaaaaa);--line:light-dark(#1a1a1a,#d0d0d0);--rule:light-dark(#1a1a1a,#f0f0f0);--field:light-dark(#1a1a1a,#bbbbbb);
-  --accent:light-dark(#c0262d,#ff6b6b);--primary:light-dark(#111111,#f0f0f0);--onprimary:light-dark(#ffffff,#111111)}
-:root[data-design=soft]{--serif:var(--sans);--rad:14px;--radb:999px;--rulew:2px;
-  --bg:light-dark(#fff8f3,#1f1916);--solid:light-dark(#ffffff,#2a211d);--soft:light-dark(#fff5ef,#332823);
-  --text:light-dark(#3d2f2a,#f1e4dd);--muted:light-dark(#8b746b,#bba79e);--line:light-dark(#f1dfd4,#3f322c);--rule:light-dark(#e9967a,#e9967a);--field:light-dark(#e8cbbd,#6b554b);
-  --accent:light-dark(#d9674a,#f0957a);--primary:light-dark(#e07a5f,#f0957a);--onprimary:light-dark(#ffffff,#1f1916)}
-:root[data-design=shop]{--serif:var(--sans);--rad:12px;--radb:8px;--rulew:1px;
-  --bg:light-dark(#ffffff,#0f0f0f);--solid:light-dark(#ffffff,#181818);--soft:light-dark(#fafafa,#222222);
-  --text:light-dark(#111111,#f2f2f2);--muted:light-dark(#6b6b6b,#a8a8a8);--line:light-dark(#ebebeb,#2a2a2a);--rule:light-dark(#111111,#f2f2f2);--field:light-dark(#d4d4d4,#4a4a4a);
-  --accent:light-dark(#d9480f,#ff7a45);--primary:light-dark(#111111,#f2f2f2);--onprimary:light-dark(#ffffff,#111111)}
-:root[data-design=brand]{--serif:var(--sans);--rad:10px;--radb:999px;--rulew:1px;
-  --bg:light-dark(#f6f6fb,#14131f);--solid:light-dark(#ffffff,#1d1b2c);--soft:light-dark(#f3f2ff,#26233a);
-  --text:light-dark(#1c1b2e,#e6e5f2);--muted:light-dark(#6b6a80,#a3a2b8);--line:light-dark(#e4e4f0,#2f2c45);--rule:light-dark(#4338ca,#8b85f0);--field:light-dark(#cfcfe3,#4a4766);
-  --accent:light-dark(#4338ca,#9a94ff);--primary:light-dark(#4338ca,#8b85f0);--onprimary:light-dark(#ffffff,#14131f);--band:#1e1b4b;--onband:#ffffff}
-/* 디자인 공통 — 모서리·선 굵기·단추 */
-:root[data-design] :is(.bubble,.choice,.lookpop,.snip,dialog,.jwlast){border-radius:var(--rad)}
-:root[data-design] :is(.opt,.chip,.ghost,.newbtn,.awaybtn,textarea,.filechips span,.snip .add){border-radius:min(var(--radb),var(--rad) + 4px)}
-:root[data-design] .send{border-radius:var(--radb);background:var(--primary);border-color:var(--primary);color:var(--onprimary)}
-:root[data-design] .switch input:checked+span{background:var(--primary);border-color:var(--primary)}
-:root[data-design] .switch input:checked+span::after{background:var(--onprimary)}
-:root[data-design] :is(.head,.filters .tools){border-bottom-width:var(--rulew)}
-:root[data-design] :is(.choice,.lookpop){border-top-width:var(--rulew)}
-:root[data-design] .run{border-top-width:var(--rulew)}
-:root[data-design] .head{background:var(--solid)}
-:root[data-design] .composer{background:var(--solid)}
-:root[data-design] .bot .bubble{background:var(--solid)}
-:root[data-design] :is(input[type=text],input[type=search],input[type=password],input[type=email],input[type=number],select:not(.petstage select):not(.tphead select)){
-  border:1px solid var(--line);border-bottom-color:var(--field);border-radius:min(var(--rad),8px);padding:6px 9px;background:var(--solid)}
-:root[data-design] :is(input,select):focus{border-color:var(--accent)}
-:root[data-design] .findbar input{padding:5px 8px}
-:root[data-design=night] dialog::backdrop{background:rgba(0,0,0,.55)}
-/* 이름 줄 띠 — 그룹웨어형(파랑)·브랜드형(남보라) */
-:root:is([data-design=groupware],[data-design=brand]) .brand{background:var(--band);color:var(--onband);padding-bottom:12px;margin-bottom:8px}
-:root:is([data-design=groupware],[data-design=brand]) .brand :is(.sub,.logo){color:color-mix(in srgb,var(--onband) 80%,transparent)}
-:root:is([data-design=groupware],[data-design=brand]) .brand .newbtn{color:var(--onband);border-color:color-mix(in srgb,var(--onband) 55%,transparent)}
-:root:is([data-design=groupware],[data-design=brand]) .brand .newbtn:hover{background:color-mix(in srgb,var(--onband) 14%,transparent);border-color:var(--onband)}
-:root:is([data-design=groupware],[data-design=brand]) #dot:not(.ok):not(.bad){background:color-mix(in srgb,var(--onband) 60%,transparent)}
-:root:is([data-design=groupware],[data-design=brand]) #dot.ok{background:#7fe0a8}
-/* 왼쪽 세로 판 — 그룹웨어형(흰)·백오피스형(어두운). 목록 줄은 메뉴처럼 판 안쪽에 둥글게, 고른 줄은 칠한다 */
-:root[data-design=groupware] aside{background:var(--side);border-right-color:var(--line)}
-:root[data-design=backoffice] aside{--bg:light-dark(#20252d,#111418);--panel:var(--bg);--solid:light-dark(#2f3641,#232932);--soft:light-dark(#272d36,#1a1e25);
-  --text:#e3e7ec;--muted:#8f99a6;--line:light-dark(#2f3641,#232932);--rule:#3a414c;--field:#56606d;--accent:#ff7a33;--accentsoft:color-mix(in srgb,#ff7a33 16%,#20252d);
-  --sideon:var(--solid);--petglow:rgba(255,255,255,.2);color:var(--text);background:var(--bg);border-right-color:#0d0f12}
-:root[data-design=backoffice] aside .brand h1{color:#fff}
-:root:is([data-design=groupware],[data-design=backoffice]) #list{padding:4px 8px 12px}
-:root:is([data-design=groupware],[data-design=backoffice]) .item{border:0;border-radius:var(--radb);margin:1px 0;padding:8px 10px}
-:root:is([data-design=groupware],[data-design=backoffice]) .item.sel{background:var(--sideon);box-shadow:inset 3px 0 0 var(--accent)}
-:root[data-design=groupware] .item.sel .title{color:var(--accent)}
-:root:is([data-design=groupware],[data-design=backoffice]) .item.urgent{box-shadow:inset 3px 0 0 var(--bad)}
-:root:is([data-design=groupware],[data-design=backoffice]) .filters .tools{border-bottom-color:var(--line)}
-:root:is([data-design=groupware],[data-design=backoffice]) .petstage{border-top-color:var(--line)}
-/* 펫이 어느 디자인에서도 묻히지 않게 — 어두운 바탕(다크 모드·어두운 작업실·백오피스 판)에서만 뒤에 옅은 받침 + 조금 밝게(허브 index.html 과 같은 방법) */
+/* 펫이 어두운 바탕에서 묻히지 않게 — 어둡게일 때만 뒤에 옅은 받침 + 조금 밝게 */
+:root{--petglow:transparent}
+:root[data-theme=dark]{--petglow:rgba(238,242,232,.14)}
 .petstage .pet .art{position:relative;isolation:isolate}
 .petstage .pet .art::before{content:"";position:absolute;left:50%;bottom:-4px;width:96px;height:70px;transform:translateX(-50%);border-radius:50%;z-index:-1;pointer-events:none;
   background:radial-gradient(closest-side,var(--petglow),transparent)}
-@media (prefers-color-scheme:dark){:root{--petglow:rgba(255,248,235,.16)}}
-:root[data-design=night]{--petglow:rgba(255,236,200,.17)}
-:root[data-design=night] .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)),:root[data-design=backoffice] aside .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}
-@media (prefers-color-scheme:dark){.petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.15)!important}}
-/* 디자인 고르기 칸 */
-.lookpop .swatches.designs button{min-width:calc(50% - 3px)}
-.lookpop .basewrap[hidden]{display:none}
+:root[data-theme=dark] .petstage .art :is(.skin-img,.skin-media:not(.skin-fx)){filter:brightness(1.1)!important}
 .lookpop .lnote{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
+:root[data-theme=dark] :is(input[type=checkbox],input[type=radio]){accent-color:var(--muted)}
 </style>
 </head>
 <body>
@@ -434,21 +382,14 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     <div class="tools">
     <button class="iconbtn" id="refreshBtn" title="메일함 다시 읽기">↻</button>
     <button class="iconbtn" id="clearBtn" title="대화 전체 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다(일하는 중인 대화는 남김)">비우기</button>
-    <button class="iconbtn" id="lookBtn" title="디자인·바탕·강조색 고르기 — 이 PC 에만 기억">화면</button>
+    <button class="iconbtn" id="lookBtn" title="화면 밝기 · 펫 · 알림 — 이 PC 에만 기억">화면</button>
     <button class="iconbtn" id="costBtn" title="비용 내역 — 맡긴 일에 든 Claude 비용(오늘·날짜별·대화별)">비용</button>
     <button class="iconbtn" id="setBtn" title="메일 계정">설정</button>
     </div>
-    <!-- 화면 — 바탕 테마·강조색(누르면 바로 바뀐다, 라이트·다크는 시스템 설정을 따른다) -->
+    <!-- 화면 — 화면 밝기(누르면 바로 바뀐다, 자동은 저녁 7시~아침 7시 어둡게). D&C 창 안에서는 허브 「화면 밝기」를 따라간다 -->
     <div class="lookpop" id="lookBox" hidden>
-      <div class="lnote" id="lookHubNote" hidden>D&amp;C 창에서는 허브 「꾸미기」 디자인을 따라갑니다 — 바꾸려면 홈의 꾸미기에서</div>
-      <div id="lookPick">
-      <div class="lt">디자인</div><div class="swatches designs" id="lookDesign"></div>
-      <div class="basewrap" id="lookBase">
-      <div class="lt">바탕</div><div class="swatches" id="lookTheme"></div>
-      <div class="lt">강조색</div><div class="swatches" id="lookAccent"></div>
-      </div>
-      <div class="lnote" id="lookBaseNote" hidden>바탕·강조색은 「종이 노트」에서 고를 수 있어요</div>
-      </div>
+      <div class="lnote" id="lookHubNote" hidden>D&amp;C 창에서는 허브 「화면 밝기」를 따라간다 — 바꾸려면 홈의 꾸미기에서</div>
+      <div id="lookPick"><div class="lt">화면 밝기</div><div class="swatches" id="lookTheme" role="group" aria-label="화면 밝기"><button type="button" data-theme-btn="auto">자동</button><button type="button" data-theme-btn="light">밝게</button><button type="button" data-theme-btn="dark">어둡게</button></div></div>
       <div class="lt">펫 × Claude Code 토큰 사용량</div>
       <label class="lookchk"><input type="checkbox" id="tokMood"> 컨디션 — 사용 속도·한도에 따라 바쁨·지침·탈진</label>
       <label class="lookchk"><input type="checkbox" id="tokBuddy"> 기다리는 세션을 ✋ 로 알려 줘요</label>
@@ -517,6 +458,7 @@ body.tok-tired .petstage .pet .art,body.tok-spent .petstage .pet .art{animation-
     </div>
   </div>
 </main>
+<div class="spine" aria-hidden="true"><b class="vt">메신저</b><small>D&amp;C</small></div>
 
 <dialog id="dlg">
   <form class="dlg" id="setForm" method="dialog">
@@ -1182,51 +1124,13 @@ $('#setForm').onsubmit = async e => {
 let petSkin = null, petting = null, petBreedAt = 0;
 const petFlash = {bark: 0, happy: 0, sad: 0}, petSeen = {};
 /* 품종: 여기서 고른 게 있으면 그것(이 PC 에만 기억), '허브와 같게'면 이 PC 허브가 고른 것(허브가 없으면 첫 번째) */
-/* ---------- 화면 — 바탕 테마·강조색(허브 꾸미기와 같은 이름·색, 정본 swbins2 tools\macro-hub\web\theme.css). 견본은 [라이트, 다크] ---------- */
-const LOOK_THEMES = { paper: ['종이 노트', '#f4efe6', '#1f1c19'], white: ['흰 종이', '#fafaf8', '#1b1b1d'],
-  slate: ['청회색', '#eef1f4', '#181c21'], kraft: ['크라프트지', '#e9dec9', '#221d16'] };
-const LOOK_ACCENTS = { brick: ['벽돌', '#9a3f1d', '#d9875f'], ink: ['남색', '#2f5283', '#8fb3e0'], pine: ['초록', '#2f6b4f', '#7fc0a0'],
-  plum: ['자주', '#7b3a6b', '#d494c4'], ochre: ['황토', '#7d5a12', '#d8b363'], mono: ['먹', '#2b2723', '#ece5da'] };
-/* 디자인 — 앱공방(swbins-kit3 ui.html SWATCH)과 같은 이름·견본색. paper 는 위 바탕·강조색을 그대로 쓰는 기본 */
-const LOOK_DESIGNS = { paper: ['종이 노트', '#9a3f1d', '#d9875f'], groupware: ['그룹웨어형', '#2463d1', '#7aa7f0'], backoffice: ['백오피스형', '#20252d', '#ff8a4c'],
-  mint: ['산뜻한 매장', '#1f7a53', '#5cc398'], night: ['어두운 작업실', '#f2b43a', '#f2b43a'], ledger: ['반듯한 장부', '#c0262d', '#ff6b6b'],
-  soft: ['포근한 파스텔', '#e07a5f', '#f0957a'], shop: ['쇼핑몰형', '#111111', '#f2f2f2'], brand: ['브랜드형', '#4338ca', '#9a94ff'] };
-const LOOK_KEY = 'dnc-look', darkMq = matchMedia('(prefers-color-scheme: dark)');
-/* D&C 창(허브 셸)은 탭을 열 때·허브 꾸미기를 바꿀 때 window.dncLook(허브 look) 을 부른다(2026-11-17 사용자 「메신저도 허브 디자인 따라가게」).
-   허브는 바탕 테마와 디자인 8벌을 한 이름(theme)으로 쓰니 여기 이름으로 나눠 담는다. 이 PC 기억(localStorage)은 건드리지 않는다 — 브라우저로 따로 열면 예전 고른 것 그대로 */
-let hubLook = null;
+/* ---------- 화면 — 밝기(자동·밝게·어둡게)는 <head> 의 작은 스크립트가 맡는다(data-theme-btn). 예전 디자인·바탕 테마·강조색(dnc-look)은 「책등」 한 벌로 합쳤다.
+   D&C 창(허브 셸)은 탭을 열 때·허브 밝기를 바꿀 때 window.dncLook(허브 look) 을 부른다 — 허브 밝기(mode)를 따라가고, 이 PC 기억(localStorage)은 건드리지 않는다 ---------- */
 window.dncLook = l => {
   if (!l) return;
-  const t = l.theme;
-  hubLook = LOOK_DESIGNS[t] && t !== 'paper' ? { design: t, theme: 'paper' } : { design: 'paper', theme: LOOK_THEMES[t] ? t : 'paper' };
-  hubLook.accent = LOOK_ACCENTS[l.accent] ? l.accent : 'brick';
-  lookApply();
+  window.dncBright && window.dncBright(['auto', 'light', 'dark'].includes(l.mode) ? l.mode : 'auto');
+  $('#lookPick').hidden = true; $('#lookHubNote').hidden = false;
 };
-function lookGet() {
-  let l = {}; try { l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') || {}; } catch (e) {}
-  const q = new URLSearchParams(location.search).get('design');   // ?design=… — 스크린샷·미리보기용(기억은 안 바꿈)
-  if (hubLook && !LOOK_DESIGNS[q]) return { ...hubLook };
-  return { theme: LOOK_THEMES[l.theme] ? l.theme : 'paper', accent: LOOK_ACCENTS[l.accent] ? l.accent : 'brick',
-    design: LOOK_DESIGNS[q] ? q : LOOK_DESIGNS[l.design] ? l.design : 'paper' };
-}
-function lookApply() {
-  const l = lookGet(), d = darkMq.matches ? 2 : 1, root = document.documentElement;
-  root.dataset.theme = l.theme; root.dataset.accent = l.accent;
-  if (l.design === 'paper') delete root.dataset.design; else root.dataset.design = l.design;
-  $('#lookBase').hidden = l.design !== 'paper'; $('#lookBaseNote').hidden = l.design === 'paper';
-  $('#lookPick').hidden = !!hubLook; $('#lookHubNote').hidden = !hubLook;
-  for (const [box, list, key] of [['#lookDesign', LOOK_DESIGNS, 'design'], ['#lookTheme', LOOK_THEMES, 'theme'], ['#lookAccent', LOOK_ACCENTS, 'accent']]) {
-    $(box).replaceChildren(...Object.entries(list).map(([id, v]) => {
-      const b = document.createElement('button'), i = document.createElement('i');
-      b.type = 'button'; b.className = id === l[key] ? 'on' : ''; i.style.background = v[d]; b.append(i, v[0]);
-      b.onclick = () => { const u = new URL(location.href); if (u.searchParams.has('design')) { u.searchParams.delete('design'); history.replaceState(null, '', u); }
-        try { localStorage.setItem(LOOK_KEY, JSON.stringify({ ...lookGet(), [key]: id })); } catch (e) {} lookApply(); };
-      return b;
-    }));
-  }
-}
-darkMq.addEventListener('change', lookApply);
-lookApply();
 function lookShow(on) { $('#lookBox').hidden = !on; $('#lookBtn').classList.toggle('lookon', on); if (on) costShow(false); }
 $('#lookBtn').onclick = e => { e.stopPropagation(); lookShow($('#lookBox').hidden); };
 $('#lookBox').onclick = e => e.stopPropagation();                 // 고르는 동안은 열어 둔다

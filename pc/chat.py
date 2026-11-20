@@ -1294,6 +1294,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
         if u.path == "/favicon.ico":
             return self._send(204, b"", "image/x-icon")
+        if u.path == "/sunflower-medium-ks.woff2":                                          # 화면 글꼴 Sunflower Medium(OFL) — exe 안에도 묶는다(build.py)
+            p = os.path.join(RES, "sunflower-medium-ks.woff2")
+            if os.path.isfile(p):
+                with open(p, "rb") as f:
+                    return self._send(200, f.read(), "font/woff2")
+            return self._send(404, {"error": "no font"})
         if u.path.startswith("/pet/") and u.path[5:] in PET_FILES:                 # 펫 코드(허브 web\ 과 같은 파일)
             p = os.path.join(PET_WEB, u.path[5:])
             if os.path.isfile(p):
