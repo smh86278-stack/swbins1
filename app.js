@@ -892,7 +892,8 @@ function drawRoom(box, r) {
       const a = { question: String(m.ask.question || ''), multi: !!m.ask.multi, options: m.ask.options.slice(0, 9).map(String) }, ask = el('div', 'ask');
       ask.append(el('div', 'q', '❓ ' + a.question + (a.multi ? ' (여러 개)' : '')));
       a.options.forEach((o, i) => {
-        const n = i + 1, c = el('button', 'opt' + (ansT === m.thread && picks.has(n) ? ' on' : ''), n + '. ' + o);
+        const n = i + 1, rm = /\s*[(（]추천[)）]\s*$/.exec(o), c = el('button', 'opt' + (rm ? ' recd' : '') + (ansT === m.thread && picks.has(n) ? ' on' : ''), n + '. ' + (rm ? o.slice(0, rm.index) : o));
+        if (rm) c.append(el('span', 'rec', '추천'));
         c.onclick = () => {
           if (parseInt($('#ansThread').value, 10) !== m.thread) { picks.clear(); $('#ansThread').value = m.thread; }
           if (a.multi && picks.has(n)) picks.delete(n); else { if (!a.multi) picks.clear(); picks.add(n); }

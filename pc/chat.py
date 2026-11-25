@@ -914,6 +914,7 @@ def job_progress(job_id):
         except OSError:
             pass
     return {"id": job["id"], "status": job.get("status"), "started_at": job.get("started_at") or "",
+            "finished_at": job.get("finished_at") or "",
             "count": len(steps), "steps": steps[-40:], "updated": mtime, "now": time.time()}
 
 
