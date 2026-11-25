@@ -383,11 +383,78 @@ def reply_html(cfg, job, ask, text, footer):
     return "".join(parts)
 
 
+# 바뀐 파일 — 이번 실행에서 Claude 가 고친 파일(세션 기록에서). chat.py changed_files·chat_runner/mail-gateway 가 같은 모양.
+CHANGED_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+
+def changed_files_note(job, limit=15):
+    """답장 꼬리에 붙일 한 줄 「바뀐 파일 n개: a.py 3번 · b.md 작성 · c.txt 실패」. 없거나 못 읽으면 빈 값."""
+    sid, wd = str(job.get("session_id") or ""), str(job.get("workdir") or "")
+    if not wd or not re.fullmatch(r"[\w\-]{8,80}", sid):
+        return ""
+    p = os.path.join(os.path.expanduser("~"), ".claude", "projects", re.sub(r"[^A-Za-z0-9]", "-", wd), sid + ".jsonl")
+    try:
+        since = datetime.strptime(job.get("started_at") or "", "%Y-%m-%d %H:%M:%S").timestamp() - 5
+    except ValueError:
+        since = 0.0
+    try:
+        with open(p, "rb") as f:
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    files, at, ids = [], {}, {}
+    for ln in lines:
+        if '"tool_use"' not in ln and '"tool_result"' not in ln:
+            continue
+        try:
+            ev = json.loads(ln)
+        except ValueError:
+            continue
+        if not isinstance(ev, dict) or ev.get("isSidechain") or ev.get("parent_tool_use_id"):
+            continue
+        try:
+            ts = datetime.fromisoformat(str(ev.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            ts = 0.0
+        if since and ts < since:
+            continue
+        content = (ev.get("message") or {}).get("content")
+        for c in content if isinstance(content, list) else []:
+            if not isinstance(c, dict):
+                continue
+            if c.get("type") == "tool_use" and c.get("name") in CHANGED_TOOLS:
+                inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                fp = str(inp.get("file_path") or inp.get("notebook_path") or "")
+                if not fp:
+                    continue
+                if fp not in at:
+                    at[fp] = len(files)
+                    files.append({"path": fp, "n": 0, "err": 0, "new": c.get("name") == "Write"})
+                files[at[fp]]["n"] += 1
+                ids[c.get("id")] = fp
+            elif c.get("type") == "tool_result" and c.get("tool_use_id") in ids and c.get("is_error"):
+                files[at[ids[c["tool_use_id"]]]]["err"] += 1
+    if not files:
+        return ""
+    base = wd.replace("/", "\\").rstrip("\\").lower() + "\\"
+
+    def show(x):
+        fp = x["path"].replace("/", "\\")
+        name = fp[len(base):] if fp.lower().startswith(base) else fp
+        tag = "실패" if x["err"] >= x["n"] else "작성" if x["new"] and x["n"] == 1 else "%d번" % x["n"] if x["n"] > 1 else ""
+        return name + (" " + tag if tag else "")
+    more = len(files) - limit
+    return "바뀐 파일 %d개: %s%s" % (len(files), " · ".join(show(x) for x in files[:limit]), " 외 %d개" % more if more > 0 else "")
+
+
 def reply_footer(job):
     secs = int((job.get("duration_ms") or 0) / 1000)
     lines = ["%s작업 폴더 %s · %d초 · $%.3f%s%s · 이 PC 에서 실행" % (
         ("[T%s] · " % job["thread"]) if job.get("thread") else "", job.get("workdir") or "", secs, job.get("cost_usd") or 0,
         " · 수정 허용 모드" if job.get("mode") == "write" else "", " · 이어서 실행" if job.get("resume_id") else "")]
+    note = changed_files_note(job)                      # 바뀐 파일 — 폰·메신저가 이 줄을 읽어 목록으로
+    if note:
+        lines.append(note)
     if job.get("session_id"):
         lines.append("PC에서 이어서: cd %s && claude --resume %s" % (job.get("workdir") or "", job["session_id"]))
     return "\n".join(lines)

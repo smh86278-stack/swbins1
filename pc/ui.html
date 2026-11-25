@@ -763,6 +763,7 @@ function drawInfo(t) {
     if (pf && pf.id === t.job) { if (pf.files && pf.files.length) box.append(filesBox(pf.files)); }
     else if (!live) infoFiles(t);
   }
+  else { const ff = footFiles(t); if (ff.length) box.append(filesBox(ff)); }
   box.append(el('div', 'sec', '활동'));
   const ol = el('ol', '');
   for (const e of timeline(t)) {
@@ -801,6 +802,13 @@ async function histToggle(t) {
 
 
 /* 오르카 결 3차 — 바뀐 파일 · 완료 기준 */
+function footFiles(t) {                                   // 답장 꼬리 「바뀐 파일 n개: a 3번 · b 작성」 → filesBox 모양
+  const m = [...t.msgs].reverse().find(x => x.bot && /^바뀐 파일 \d+개: /m.test(x.foot || ''));
+  if (!m) return [];
+  const line = /^바뀐 파일 \d+개: (.+)$/m.exec(m.foot)[1].replace(/ 외 \d+개$/, '');
+  return line.split(' · ').map(x => { const k = / (작성|실패|\d+번)$/.exec(x), p = k ? x.slice(0, k.index) : x;
+    return { path: p, n: k && /번$/.test(k[1]) ? parseInt(k[1], 10) : 1, ok: !(k && k[1] === '실패'), new: !!(k && k[1] === '작성') }; });
+}
 function filesBox(files, title) {
   const box = el('div', 'pfiles'), h = el('div', '');
   h.append(el('b', '', title || '바뀐 파일'), el('span', '', files.length + '개')); box.append(h);
@@ -809,7 +817,7 @@ function filesBox(files, title) {
     const k = Math.max(f.path.lastIndexOf('\\'), f.path.lastIndexOf('/')), li = el('li', '');
     li.title = f.path;
     li.append(el('span', 'fn', f.path.slice(k + 1)), el('span', 'fd', k > 0 ? f.path.slice(0, k) : ''),
-              el('span', 'fx' + (f.ok ? '' : ' bad'), !f.ok ? '실패' : f.new && f.n === 1 ? '새로' : f.n > 1 ? f.n + '번' : '고침'));
+              el('span', 'fx' + (f.ok ? '' : ' bad'), !f.ok ? '실패' : f.new && f.n === 1 ? '작성' : f.n > 1 ? f.n + '번' : '고침'));
     ul.append(li);
   }
   box.append(ul); return box;

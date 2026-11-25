@@ -495,6 +495,8 @@ function gParse(g) {
     let b = body.includes(ASK_SPLIT) ? body.slice(body.indexOf(ASK_SPLIT) + ASK_SPLIT.length) : body;   // 맨 위 ☐ 선택지 줄은 따로 받는다
     const i = b.lastIndexOf('\n--\n');
     m.text = (i >= 0 ? b.slice(0, i) : b).trim();
+    const fm = i >= 0 ? /^바뀐 파일 (\d+)개: (.+)$/m.exec(b.slice(i + 4)) : null;   // 답장 꼬리의 바뀐 파일 줄
+    m.files = fm ? { n: +fm[1], list: fm[2].trim().split(' · ') } : null;
     m.ask = null;
     if (H['x-dispatch-ask']) try { m.ask = JSON.parse(txt(bin(atob(mimeWords(H['x-dispatch-ask']).replace(/\s+/g, ''))))); } catch (e) {}
   } else {
@@ -1009,7 +1011,13 @@ function openInfo(r) {
     const t0 = r.msgs[0].ts, t1 = r.msgs[r.msgs.length - 1].ts;
     add('시작', hmd(t0)); add(isBusy(r) ? '지난 시간' : '걸린 시간', dur((isBusy(r) ? Date.now() : t1) - t0));
   }
-  box.append(dl, el('div', 'sec', '활동'));
+  const fl = [...r.msgs].reverse().find(m => m.bot && m.files);
+  if (fl) {
+    box.append(dl, el('div', 'sec', '바뀐 파일 · ' + fl.files.n + '개'));
+    const ul = el('ul', 'files');
+    for (const x of fl.files.list) { const k = / (작성|실패|\d+번)$/.exec(x), li = el('li'); li.append(el('span', 'fn', k ? x.slice(0, k.index) : x)); if (k) li.append(el('span', 'fx' + (k[1] === '실패' ? ' bad' : ''), k[1])); ul.append(li); }
+    box.append(ul, el('div', 'sec', '활동'));
+  } else box.append(dl, el('div', 'sec', '활동'));
   const ol = el('ol');
   for (const e of roomEvents(r)) { const li = el('li', 'k-' + e.k), tx = el('div'); tx.append(document.createTextNode(e.a)); if (e.b) tx.append(el('small', '', e.b)); li.append(el('i'), tx, el('time', '', hmd(e.ts))); ol.append(li); }
   box.append(ol);
