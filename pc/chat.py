@@ -918,6 +918,35 @@ def find_transcript(job, since):
     return ""
 
 
+def job_sessions(max_age=6 * 3600):
+    """지금 일하는 맡긴 일 → 그 Claude 세션 id 앞 8자리 {세션: 작업 id}. 세션 목록에서 그 대화로 가는 데 쓴다(이 PC 에 인박스가 있을 때만)."""
+    jd, out, now = jobs_dir(), {}, time.time()
+    if not jd:
+        return out
+    try:
+        names = [f for f in os.listdir(jd) if f.endswith(".json")]
+    except OSError:
+        return out
+    for f in names:
+        p = os.path.join(jd, f)
+        try:
+            if now - os.path.getmtime(p) > max_age:
+                continue
+        except OSError:
+            continue
+        job = read_json(p)
+        if not job or job.get("status") != "running" or not job.get("id"):
+            continue
+        try:
+            since = datetime.strptime(job.get("started_at") or "", "%Y-%m-%d %H:%M:%S").timestamp() - 5
+        except ValueError:
+            continue
+        tp = find_transcript(job, since)
+        if tp:
+            out[os.path.basename(tp)[:8]] = job["id"]
+    return out
+
+
 def job_progress(job_id):
     """작업 하나의 진행 상황(이 PC 에 게이트웨이 인박스가 있거나 이 PC 에서 직접 실행할 때만). 작업 파일 이름이 곧 id 다."""
     jd = jobs_dir()
@@ -1353,7 +1382,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if u.path == "/api/tokens/projects":                                        # 「비용」 칸 — Claude Code 토큰 프로젝트별(이번 달·전체, 읽기 전용)
             return self._send(200, token_projects_now())
         if u.path == "/api/tokens":                                                 # 화면 펫 × Claude Code 토큰(읽기 전용, 허브가 없으면 files 0)
-            return self._send(200, pet_tokens_cached())
+            return self._send(200, dict(pet_tokens_cached(), jobs=job_sessions()))
         if u.path == "/api/state":
             cfg, src = load_cfg()
             run = RUNNER.summary()

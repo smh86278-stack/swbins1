@@ -406,6 +406,21 @@ button.worked:hover{color:var(--text);text-decoration:underline}
 #infoPane .crit .m{flex:none;width:1.2em;color:var(--muted)}
 #infoPane .crit .m.ok{color:var(--ok)}#infoPane .crit .m.no{color:var(--bad)}
 #infoPane .crit small{display:block;color:var(--muted)}
+
+/* 오르카 결 4차 — 도우미(Claude 세션) 목록 */
+.usage .sesbtn{display:flex;gap:6px;align-items:center;width:100%;border:0;background:none;padding:3px 0 1px;font:inherit;font-size:11px;color:var(--muted);cursor:pointer;text-align:left}
+.usage .sesbtn:hover{color:var(--text)}
+.usage .sesbtn b{font-family:var(--serif);color:var(--text);font-weight:700}
+.usage .sesbtn .go{margin-left:auto}
+.usage ul.ses{list-style:none;margin:4px 0 0;padding:0;max-height:168px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.usage ul.ses li{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:baseline;padding:3px 0;border-bottom:1px dotted var(--line)}
+.usage ul.ses li:last-child{border-bottom:0}
+.usage ul.ses i{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--muted);align-self:center}
+.usage ul.ses li.busy i{border-color:var(--spine);background:var(--spine)}
+.usage ul.ses .nm{color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.usage ul.ses small{display:block;font-size:11px;color:var(--muted)}
+.usage ul.ses .tk{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.usage ul.ses a{color:var(--spine);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 </style>
 <link rel="stylesheet" href="/pet/pets.css">
 <style>
@@ -760,15 +775,15 @@ function drawInfo(t) {
 $('#infoBtn').onclick = () => { infoOn = !infoOn; try { localStorage.setItem('dnc-info', infoOn ? '1' : '0'); } catch (e) {} infoShow(); if (infoOn && cur) drawInfo(cur); };
 function drawUsage(v) {
   const box = $('#usage'), lim = (v && v.limits) || {}, rows = [['오늘', lim.dayState], ['이번 달', lim.monthState]].filter(r => r[1] && r[1].pct != null);
-  const busyN = ((v && v.sessions) || []).filter(x => x.busy).length;
-  if (!rows.length) { box.hidden = true; return; }
+  const ses = sesBlock(v);
+  if (!rows.length && !ses) { box.hidden = true; return; }
   box.replaceChildren();
   for (const [k, s] of rows) {
     const pct = Math.max(0, Math.min(100, Math.round(s.pct))), r = el('div', 'ur'), bar = el('span', 'bar'), b = el('b', pct >= 85 ? 'hi' : '');
-    b.style.width = pct + '%'; bar.append(b); r.append(el('span', '', k), bar, el('span', '', pct + '%')); box.append(r);
+    b.style.width = pct + '%'; bar.append(b); r.append(el('span', '', k), bar, el('span', '', pct + '%')); r.title = '허브에 정한 Claude Code 토큰 한도 대비 사용량'; box.append(r);
   }
-  if (busyN) box.append(el('div', '', 'Claude Code 세션 ' + busyN + '개 작업 중'));
-  box.title = '허브에 정한 Claude Code 토큰 한도 대비 사용량'; box.hidden = false;
+  if (ses) box.append(ses);
+  box.hidden = false;
 }
 
 
@@ -824,6 +839,33 @@ $('#doneChip').onclick = () => { const on = $('#doneBox').classList.toggle('on')
 function withCrit(text) {
   const lines = $('#doneBox').classList.contains('on') ? $('#doneText').value.split('\n').map(x => x.replace(/^[ \t]*[-·*]\s*/, '').trim()).filter(Boolean) : [];
   return lines.length ? text + '\n\n완료 기준:\n' + lines.map(x => '- ' + x).join('\n') : text;
+}
+
+
+/* 오르카 결 4차 — 도우미(Claude 세션) 목록: 이 PC 에서 켜진 Claude Code 세션, 메신저가 맡긴 일이면 그 대화로 */
+let sesOpen = false; try { sesOpen = localStorage.getItem('dnc-ses') === '1'; } catch (e) {}
+function tokShort(n) { return n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n || 0); }
+function agoMs(ms) { const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? '방금' : s < 3600 ? Math.floor(s / 60) + '분 전' : Math.floor(s / 3600) + '시간 전'; }
+function sesBlock(v) {
+  const list = (v && v.sessions) || [], jobs = (v && v.jobs) || {}, wrap = el('div', '');
+  if (!list.length) return null;
+  const busyN = list.filter(x => x.busy).length, b = el('button', 'sesbtn');
+  b.append(el('b', '', 'Claude 세션 ' + list.length), el('span', '', busyN ? '작업 중 ' + busyN : '모두 대기'), el('span', 'go', sesOpen ? '▾' : '›'));
+  b.title = '이 PC 에서 켜져 있는 Claude Code 세션 — 폴더 · 작업 중/대기 · 이번 세션 토큰';
+  b.onclick = () => { sesOpen = !sesOpen; try { localStorage.setItem('dnc-ses', sesOpen ? '1' : '0'); } catch (e) {} drawUsage(v); };
+  wrap.append(b);
+  if (!sesOpen) return wrap;
+  const ul = el('ul', 'ses');
+  for (const x of list) {
+    const li = el('li', x.busy ? 'busy' : ''), tx = el('div', ''), sub = el('small', '', (x.busy ? '작업 중' : '대기') + (x.last ? ' · ' + agoMs(x.last) : ''));
+    tx.append(el('div', 'nm', x.name || '세션'));
+    const t = jobs[x.id] && state.threads.find(th => th.job === jobs[x.id]);
+    if (t) { const a = el('a', '', (t.no ? 'T' + t.no + ' ' : '') + t.title); a.title = '메신저가 맡긴 일 — 이 대화 열기'; a.onclick = () => openThread(t.key); sub.append(document.createTextNode(' · '), a); }
+    tx.append(sub);
+    li.append(el('i'), tx, el('span', 'tk', tokShort(x.total)));
+    li.title = x.name + ' · 세션 ' + x.id; ul.append(li);
+  }
+  wrap.append(ul); return wrap;
 }
 
 /* ---------- 대화 ---------- */
