@@ -211,6 +211,34 @@ dialog::backdrop{background:rgba(30,25,20,.4)}
 .petstage .pet.dragging{filter:drop-shadow(0 8px 10px rgba(40,30,20,.3));transition:none}
 .msg .meta .del{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;padding:0 4px;cursor:pointer}
 .field select{width:100%;font:inherit;padding:9px 10px;border-radius:0;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+
+/* 오르카 결(11-25) — 요약줄 · 걸린 시간 · 상세 시트 */
+#sumBar{display:none;gap:6px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px}
+#sumBar.on{display:flex}
+#sumBar button{border:1px solid var(--line);background:transparent;color:var(--text);padding:3px 10px;font-size:13px;font-weight:400;border-radius:0}
+#sumBar button.wait b{color:var(--bad)}
+#sumBar button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+#sumBar button.on b{color:inherit}
+header .ttl.tap{cursor:pointer}
+header .ttl.tap .sub::after{content:" · 상세 ›";color:var(--text)}
+.worked{align-self:flex-start;font-size:11px;color:var(--muted);margin:-4px 4px -6px;font-variant-numeric:tabular-nums}
+#infoDlg{margin:auto 0 0;width:100%;max-width:100%;max-height:82vh;border:0;border-top:3px solid var(--text);padding:16px 18px calc(18px + env(safe-area-inset-bottom));background:var(--bg);color:var(--text);overflow:auto}
+#infoDlg::backdrop{background:rgba(0,0,0,.35)}
+#infoDlg h3{margin:0 34px 4px 0;font-size:16px;line-height:1.35}
+#infoDlg .x{position:absolute;top:10px;right:12px;border:0;background:transparent;color:var(--muted);font-size:20px;padding:4px 8px}
+#infoDlg .sec{margin:14px 0 6px;font-size:11px;color:var(--muted)}
+#infoDlg .needs{margin:8px 0 0;padding:7px 10px;border:1px solid var(--bad);color:var(--bad);font-weight:700;font-size:14px}
+#infoDlg .task{margin:0;padding:8px 10px;background:var(--face,var(--solid));white-space:pre-wrap;word-break:break-word;font-size:14px;max-height:9em;overflow:auto}
+#infoDlg dl{display:grid;grid-template-columns:64px minmax(0,1fr);gap:4px 8px;margin:0;font-size:14px}
+#infoDlg dt{color:var(--muted)}#infoDlg dd{margin:0}
+#infoDlg ol{list-style:none;margin:0;padding:0;font-size:14px}
+#infoDlg li{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)}
+#infoDlg li i{width:8px;height:8px;margin-top:6px;border-radius:50%;border:1.5px solid var(--muted)}
+#infoDlg li.k-ask i,#infoDlg li.k-confirm i{border-color:var(--bad);background:var(--bad)}
+#infoDlg li.k-done i{border-color:var(--ok);background:var(--ok)}
+#infoDlg li.k-error i{border-color:var(--bad)}
+#infoDlg li small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#infoDlg li time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 </style>
 <style>
 /* ---------- 책등 — 머리·발 굵은 먹선 3px, 고른 것은 책등 색, 주 단추 오른쪽 4px 등, 모서리 0 ---------- */
@@ -285,6 +313,7 @@ textarea:focus,input:focus{border-color:var(--spine)}
 </div>
 <div id="searchBar"><input type="search" id="q" placeholder="대화 찾기 (제목·내용)" autocomplete="off" enterkeyhint="search"></div>
 <div id="gbar"><span id="gbarText"></span><button class="btn" id="gbarBtn">다시 연결</button></div>
+<div id="sumBar" role="group" aria-label="대화 요약"></div>
 <main id="log" aria-live="polite"></main>
 
 <div class="composer">
@@ -371,6 +400,7 @@ textarea:focus,input:focus{border-color:var(--spine)}
   <button class="btn" id="selAll">모두 선택</button>
   <button class="btn danger" id="selDel" disabled>지우기</button>
 </div>
+<dialog id="infoDlg" aria-label="대화 상세"><button class="x" id="infoX" aria-label="닫기">✕</button><div id="infoBody"></div></dialog>
 <div id="toast"></div>
 <div class="spine" aria-hidden="true"><b class="vt">메신저</b><small>D&amp;C</small></div>
 <script src="pet/petwarp.js"></script>

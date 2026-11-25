@@ -523,8 +523,10 @@ function gList() {                                         // 화면에 보일 �
     if (o.thread) { m.thread = o.thread; delete m.root; break; }
     m.root = o.root || o.id;
   }
+  for (const m of list) m.events = [];                // 메시지 객체는 남아 있으니 그릴 때마다 새로
   for (const m of list) if (m.ack || m.prog) for (const r of m.refs) if (byId[r]) {
     byId[r].got = true;
+    byId[r].events.push({ ts: m.ts, k: m.ack ? 'ack' : 'progress', a: m.ack ? 'PC 가 받음' : '진행 중', b: m.prog ? (m.text || '').split('\n')[0] : '' });
     if (m.prog) byId[r].progLine = (m.text || '').split('\n')[0];   // 시간순이라 마지막 진행 줄이 남는다
   }
   return list.filter(m => !(m.bot && (m.ack || m.prog)));   // 진행 메일은 답이 아니다 — 완료·안 읽음·말풍선에 안 셈
@@ -768,6 +770,8 @@ function roomBar(r) {                                  // 머리줄 · 입력부
   $('#backBtn').style.display = inRoom ? '' : 'none';
   $('#delBtn').textContent = inRoom ? '지우기' : editing ? '완료' : '편집';
   $('#pinBtn').style.display = inRoom ? '' : 'none';
+  curRoom = r || null; document.querySelector('header .ttl').classList.toggle('tap', inRoom);
+  if (inRoom && $('#infoDlg').open && infoRoom && infoRoom.key === r.key) openInfo(r);
   if (inRoom) $('#pinBtn').textContent = gpin[r.key] ? '고정 해제' : '고정';
   $('#delBtn').style.display = inRoom ? '' : 'none';             // 목록에선 방이 있을 때 drawRooms 가 켠다
   $('.composer').style.display = editing ? 'none' : '';
@@ -817,10 +821,12 @@ function drawGmail(box) {
   }
   const r = room && rooms.find(x => x.key === room);
   roomBar(r); drawQuick(r);
-  if (r) { $('#searchBar').classList.remove('on'); drawRoom(box, r); } else drawRooms(box, rooms);
+  if (r) { $('#searchBar').classList.remove('on'); $('#sumBar').classList.remove('on'); drawRoom(box, r); } else drawRooms(box, rooms);
   try { petDraw(); } catch (e) {}                         // 처음 그릴 땐 펫 코드가 아직 준비 전이다
 }
 function drawRooms(box, rooms) {
+  drawSum(rooms);
+  if (sumF) rooms = rooms.filter(sumF === 'wait' ? isWait : isBusy);
   $('#searchBar').classList.toggle('on', rooms.length > 4 || !!query);   // 방이 몇 개 넘으면 검색칸
   if (query) {
     const hit = t => (t || '').toLowerCase().includes(query);
@@ -871,7 +877,9 @@ function drawRoom(box, r) {
     box.append(node);
   };
   const hm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
-  for (const m of r.msgs) {
+  r.msgs.forEach((m, i) => {
+    const pv = r.msgs[i - 1];
+    if (m.bot && pv && !pv.bot && m.ts - pv.ts >= 5000) add(m.ts, el('div', 'worked', '↳ ' + dur(m.ts - pv.ts) + ' 만에 답'));
     const w = el('div', 'msg' + (m.bot ? ' bot' : '')), b = el('div', 'bubble' + (m.bot ? ' bot' : ''));
     if (m.bot) mdBubble(b, m.text || '(빈 회신)', m.id || m.ts);
     else b.textContent = (m.text || m.rest || '(빈 메일)') + (m.photos ? '\n📷 사진 ' + m.photos + '장' : '');
@@ -896,7 +904,7 @@ function drawRoom(box, r) {
       b.append(ask);
     }
     w.append(b, meta); add(m.ts, w);
-  }
+  });
   for (const o of r.out) {                             // 아직 못 보낸 것
     const w = el('div', 'msg');
     w.append(el('div', 'bubble wait', o.text + ((o.files || []).length ? '\n📷 사진 ' + o.files.length + '장' : '')), el('div', 'meta', '보내는 중…'));
@@ -904,7 +912,8 @@ function drawRoom(box, r) {
   }
   if (r.st === '일하는 중' || r.st === '전송됨') {
     const w = el('div', 'msg bot'), row = el('div', 'typingrow');
-    if (r.st === '일하는 중') row.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…'));
+    const lm = r.msgs[r.msgs.length - 1], since = lm && !lm.bot ? ' · ' + dur(Date.now() - lm.ts) + '째' : '';
+    if (r.st === '일하는 중') row.append(el('div', 'bubble bot typing', '🐱 PC 가 일하는 중…' + since));
     const stopB = el('button', 'stopbtn', '■ 멈춤');
     stopB.onclick = () => roomStop(r);
     row.append(stopB); w.append(row); box.append(w);
@@ -917,6 +926,68 @@ function drawRoom(box, r) {
   gseen[r.key] = r.ts; store.set('gseen', gseen);
   box.scrollTop = box.scrollHeight;
 }
+
+/* ---- 오르카 결(11-25) — 요약줄 · 걸린 시간 · 상세 시트 ---- */
+var sumF = '';                                          // '' | 'wait' | 'busy' — 목록 요약줄로 고른 것
+function dur(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return sec + '초';
+  const m = Math.floor(sec / 60); if (m < 60) return m + '분';
+  const hh = Math.floor(m / 60); return hh + '시간' + (m % 60 ? ' ' + (m % 60) + '분' : '');
+}
+function isWait(r) { return r.st === '질문' || r.st === '실행 확인'; }
+function isBusy(r) { return ['일하는 중', '전송됨', '보내는 중'].includes(r.st); }
+function drawSum(rooms) {
+  const bar = $('#sumBar'), w = rooms.filter(isWait).length, b = rooms.filter(isBusy).length;
+  bar.classList.toggle('on', !room && !editing && (w + b > 0 || !!sumF));
+  bar.replaceChildren();
+  const mk = (f, label, n, cls) => { const x = el('button', cls + (sumF === f ? ' on' : '')); x.append(document.createTextNode(label + ' '), el('b', '', String(n))); x.onclick = () => { sumF = sumF === f ? '' : f; draw(); }; return x; };
+  bar.append(mk('wait', '답할 것', w, 'wait'), mk('busy', '진행 중', b, 'busy'));
+}
+function roomEvents(r) {
+  const ev = []; let prevAsk = false;
+  r.msgs.forEach((m, i) => {
+    if (!m.bot) {
+      const first = !r.msgs.slice(0, i).some(x => !x.bot);
+      ev.push({ ts: m.ts, k: 'me', a: first ? '지시 보냄' : prevAsk ? '내가 답함' : '이어서 말함', b: (m.text || m.rest || '').split('\n')[0] });
+      for (const e of m.events || []) ev.push(e);
+      prevAsk = false;
+    } else {
+      const k = m.kind === 'confirm' ? 'confirm' : m.status === 'error' ? 'error' : m.ask ? 'ask' : 'done';
+      ev.push({ ts: m.ts, k, a: { confirm: '실행 확인을 물음', error: '오류로 끝남', ask: '질문함', done: '답이 옴' }[k], b: k === 'ask' ? String((m.ask && m.ask.question) || '') : (m.text || '').split('\n')[0] });
+      prevAsk = k === 'ask' || k === 'confirm';
+    }
+  });
+  return ev.sort((a, b) => a.ts - b.ts);
+}
+var infoRoom = null;
+function openInfo(r) {
+  infoRoom = r; const box = $('#infoBody'); box.replaceChildren();
+  const hmd = ts => { const d = new Date(ts), n = new Date(); return (d.toDateString() === n.toDateString() ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  box.append(el('h3', '', (r.no ? 'T' + r.no + ' ' : '') + r.title));
+  if (r.st) box.append(el('span', 'rst' + (isWait(r) ? ' ask' : r.st === '오류' ? ' err' : isBusy(r) ? ' busy' : ''), r.st));
+  if (isWait(r)) box.append(el('div', 'needs', r.st === '실행 확인' ? '● 실행 확인을 기다려요' : '● 내 답을 기다려요'));
+  const first = r.msgs.find(m => !m.bot);
+  if (first && (first.text || first.rest)) { box.append(el('div', 'sec', '맡긴 일')); box.append(el('p', 'task', first.text || first.rest)); }
+  box.append(el('div', 'sec', '정보'));
+  const dl = el('dl'), add = (k, v) => { if (v) dl.append(el('dt', '', k), el('dd', '', v)); };
+  add('번호', r.no ? 'T' + r.no : '대기'); add('권한', r.mode === 'write' ? '수정 허용' : '읽기');
+  const fm = first && /^@(\S+)/.exec(first.text || ''); add('폴더', fm ? '@' + fm[1] : '');
+  if (r.msgs.length) {
+    const t0 = r.msgs[0].ts, t1 = r.msgs[r.msgs.length - 1].ts;
+    add('시작', hmd(t0)); add(isBusy(r) ? '지난 시간' : '걸린 시간', dur((isBusy(r) ? Date.now() : t1) - t0));
+  }
+  box.append(dl, el('div', 'sec', '활동'));
+  const ol = el('ol');
+  for (const e of roomEvents(r)) { const li = el('li', 'k-' + e.k), tx = el('div'); tx.append(document.createTextNode(e.a)); if (e.b) tx.append(el('small', '', e.b)); li.append(el('i'), tx, el('time', '', hmd(e.ts))); ol.append(li); }
+  box.append(ol);
+  if (!$('#infoDlg').open) $('#infoDlg').showModal();
+}
+document.querySelector('header .ttl').addEventListener('click', () => { if (curRoom) openInfo(curRoom); });   // 방 제목을 누르면 상세(메신저 앱처럼)
+$('#infoX').onclick = () => $('#infoDlg').close();
+$('#infoDlg').addEventListener('click', e => { if (e.target === $('#infoDlg')) $('#infoDlg').close(); });
+var curRoom = null;
+
 gTakeHash();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) gPoll(); });
 
