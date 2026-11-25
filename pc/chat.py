@@ -813,6 +813,28 @@ def _ts(iso):
         return 0.0
 
 
+WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+
+def changed_file(name, inp):
+    """파일을 고치는 도구면 그 파일 경로(아니면 빈 값)."""
+    inp = inp if isinstance(inp, dict) else {}
+    return str(inp.get("file_path") or inp.get("notebook_path") or "") if name in WRITE_TOOLS else ""
+
+
+def changed_files(steps):
+    """바뀐 파일 — 처음 고친 순서, 고친 횟수, 실패만 있었는지."""
+    out, at = [], {}
+    for x in steps:
+        f = x.get("file")
+        if not f:
+            continue
+        if f not in at:
+            at[f] = len(out); out.append({"path": f, "n": 0, "ok": 0, "new": x.get("name") == "Write"})
+        r = out[at[f]]; r["n"] += 1; r["ok"] += x.get("state") != "err"
+    return out[:80]
+
+
 def parse_progress(lines, since=0.0):
     """Claude 세션 기록(.jsonl) 줄들 → 화면에 띄울 단계 목록.
     since 보다 앞선 줄(이어받은 세션의 지난 대화)과 하위 에이전트 안쪽 말은 뺀다(본 흐름만)."""
@@ -837,7 +859,8 @@ def parse_progress(lines, since=0.0):
             elif typ == "assistant" and c.get("type") == "tool_use":
                 by_id[c.get("id")] = len(steps)
                 steps.append({"kind": "tool", "name": c.get("name") or "?", "text": tool_line(c.get("name"), c.get("input")),
-                              "state": "run", "detail": tool_detail(c.get("name"), c.get("input")), "result": ""})
+                              "state": "run", "detail": tool_detail(c.get("name"), c.get("input")), "result": "",
+                              "file": changed_file(c.get("name"), c.get("input"))})
             elif typ == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in by_id:
                 st = steps[by_id[c["tool_use_id"]]]
                 st["state"] = "err" if c.get("is_error") else "ok"
@@ -915,7 +938,7 @@ def job_progress(job_id):
             pass
     return {"id": job["id"], "status": job.get("status"), "started_at": job.get("started_at") or "",
             "finished_at": job.get("finished_at") or "",
-            "count": len(steps), "steps": steps[-40:], "updated": mtime, "now": time.time()}
+            "count": len(steps), "steps": steps[-40:], "files": changed_files(steps), "updated": mtime, "now": time.time()}
 
 
 # ----------------------------------------------------------------- 메일함 감시

@@ -387,6 +387,25 @@ main{animation:slidein .32s cubic-bezier(.2,.8,.2,1) backwards}
 button.worked{border:0;background:none;padding:0;cursor:pointer;text-align:left;font:inherit;font-size:11px}
 button.worked:hover{color:var(--text);text-decoration:underline}
 .prog.hist{max-width:min(720px,82%)}
+
+/* 오르카 결 3차 — 바뀐 파일 · 완료 기준 */
+.pfiles{margin:6px 0 2px;padding-top:6px;border-top:1px dashed var(--line);font-size:12px}
+.pfiles b{font-family:var(--serif);font-weight:700;color:var(--text);margin-right:6px}
+.pfiles ul{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.pfiles li,#infoPane .pfiles li{display:flex;gap:6px;align-items:baseline;min-width:0;padding:1px 0;border:0}
+.pfiles .fn{color:var(--text);white-space:nowrap}
+.pfiles .fd{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left;min-width:0;flex:1}
+.pfiles .fx{color:var(--muted);flex:none;font-size:11px}
+.pfiles .fx.bad{color:var(--bad)}
+#doneBox{display:none;margin-top:8px}
+#doneBox.on{display:block}
+#doneBox textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13px;border:1px dashed var(--field);background:transparent;color:var(--text);padding:6px 8px;resize:vertical}
+#infoPane .crit{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+#infoPane .crit li{display:flex;gap:6px;padding:3px 0}
+#infoPane .pfiles{margin-top:14px}
+#infoPane .crit .m{flex:none;width:1.2em;color:var(--muted)}
+#infoPane .crit .m.ok{color:var(--ok)}#infoPane .crit .m.no{color:var(--bad)}
+#infoPane .crit small{display:block;color:var(--muted)}
 </style>
 <link rel="stylesheet" href="/pet/pets.css">
 <style>
@@ -492,6 +511,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
       <div class="chips" id="newChips">
         <button class="chip on" data-mode="read" title="조회·분석만">읽기</button>
         <button class="chip wr" data-mode="write" title="파일 수정·명령 실행까지 — PC 가 실행 전에 확인 메일을 한 번 보냅니다">수정 허용</button>
+        <button class="chip" id="doneChip" title="다 됐다고 볼 조건 — 끝낼 때 하나씩 ✅/❌ 로 점검해 답합니다">완료 기준</button>
         <span class="sep"></span>
         <span id="folderChips" style="display:contents"></span>
       </div>
@@ -501,6 +521,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
         <span class="snipwrap"><button class="ghost snipbtn" data-for="newText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">답 모음</button><div class="snip"></div></span>
         <button class="send" id="newSend" disabled>보내기</button>
       </div>
+      <div id="doneBox"><textarea id="doneText" rows="2" placeholder="완료 기준 — 한 줄에 하나 (예: 시험 모두 통과 · 바뀐 화면 캡처)"></textarea></div>
       <div class="filechips" id="newTextFiles"></div>
       <div class="newfoot"><span class="hint" id="newHint"></span><span class="keys"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 보내기</span></div>
     </div>
@@ -697,9 +718,17 @@ function drawInfo(t) {
   }
   const first = t.msgs.find(m => !m.bot);
   if (first && first.text) {
+    const [body, crit] = critSplit(first.text);
     box.append(el('div', 'sec', '맡긴 일'));
-    const task = el('p', 'task', first.text); box.append(task);
-    if (first.text.split('\n').length > 6 || first.text.length > 240) {
+    const task = el('p', 'task', body); box.append(task);
+    if (crit.length) {
+      const ms = critMarks(t, crit), okN = ms.filter(x => x.m === 'ok').length;
+      box.append(el('div', 'sec', '완료 기준 · ' + (ms.some(x => x.m) ? okN + '/' + crit.length : '점검 전')));
+      const ul = el('ul', 'crit');
+      for (const x of ms) { const li = el('li', ''), tx = el('div', '', x.c); if (x.why) tx.append(el('small', '', x.why)); li.append(el('span', 'm ' + x.m, x.m === 'ok' ? '✓' : x.m === 'no' ? '✕' : '☐'), tx); ul.append(li); }
+      box.append(ul);
+    }
+    if (body.split('\n').length > 6 || body.length > 240) {
       const mb = el('button', 'more', '펼치기'); mb.onclick = () => { task.classList.toggle('open'); mb.textContent = task.classList.contains('open') ? '접기' : '펼치기'; }; box.append(mb);
     }
   }
@@ -714,6 +743,11 @@ function drawInfo(t) {
     add(['sent', 'queued', 'running'].includes(t.status) ? '지난 시간' : '걸린 시간', dur((['sent', 'queued', 'running'].includes(t.status) ? Date.now() / 1000 : t1) - t0));
   }
   box.append(kv);
+  if (t.job && state.local) {
+    const live = ['sent', 'queued', 'running'].includes(t.status), pf = live && progKey === t.key ? prog : hist[t.key];
+    if (pf && pf.id === t.job) { if (pf.files && pf.files.length) box.append(filesBox(pf.files)); }
+    else if (!live) infoFiles(t);
+  }
   box.append(el('div', 'sec', '활동'));
   const ol = el('ol', '');
   for (const e of timeline(t)) {
@@ -748,6 +782,48 @@ async function histToggle(t) {
     try { const r = await api('/api/progress?job=' + encodeURIComponent(t.job)); if (r.progress) hist[t.key] = r.progress; } catch (e) { toast(e.message); }
   }
   if (cur && cur.key === t.key) drawThread(false);
+}
+
+
+/* 오르카 결 3차 — 바뀐 파일 · 완료 기준 */
+function filesBox(files, title) {
+  const box = el('div', 'pfiles'), h = el('div', '');
+  h.append(el('b', '', title || '바뀐 파일'), el('span', '', files.length + '개')); box.append(h);
+  const ul = el('ul', '');
+  for (const f of files) {
+    const k = Math.max(f.path.lastIndexOf('\\'), f.path.lastIndexOf('/')), li = el('li', '');
+    li.title = f.path;
+    li.append(el('span', 'fn', f.path.slice(k + 1)), el('span', 'fd', k > 0 ? f.path.slice(0, k) : ''),
+              el('span', 'fx' + (f.ok ? '' : ' bad'), !f.ok ? '실패' : f.new && f.n === 1 ? '새로' : f.n > 1 ? f.n + '번' : '고침'));
+    ul.append(li);
+  }
+  box.append(ul); return box;
+}
+const CRIT_RE = /\n*완료 기준:\s*\n((?:[ \t]*[-·*][^\n]*(?:\n|$))+)\s*$/;
+function critSplit(text) {                                 // 맡긴 일 → [본문, 완료 기준 목록]
+  const m = CRIT_RE.exec(text || ''); if (!m) return [text || '', []];
+  return [text.slice(0, m.index), m[1].split('\n').map(x => x.replace(/^[ \t]*[-·*]\s*/, '').trim()).filter(Boolean)];
+}
+function critMarks(t, crit) {                              // 마지막 답의 「완료 기준 점검」 줄에서 ✅/❌ 찾기
+  const last = [...t.msgs].reverse().find(m => m.bot && m.text), lines = last ? last.text.split('\n') : [];
+  const norm = s => s.replace(/\s+/g, '').slice(0, 14);
+  return crit.map(c => {
+    const l = lines.find(x => /^\s*[✅❌✔✖☑☒]/.test(x) && norm(x.replace(/^\s*[✅❌✔✖☑☒]\uFE0F?\s*/, '')).startsWith(norm(c)));
+    if (!l) return { c, m: '' };
+    const why = l.split(/\s+[—-]\s+/).slice(1).join(' — ');
+    return { c, m: /^\s*[✅✔☑]/.test(l) ? 'ok' : 'no', why };
+  });
+}
+const filesWant = new Set();                               // 상세 패널이 바뀐 파일을 받으러 간 대화
+async function infoFiles(t) {
+  if (filesWant.has(t.key + t.job)) return; filesWant.add(t.key + t.job);
+  try { const r = await api('/api/progress?job=' + encodeURIComponent(t.job)); if (r.progress) hist[t.key] = r.progress; } catch (e) { return; }
+  if (cur && cur.key === t.key && infoOn) drawInfo(cur);
+}
+$('#doneChip').onclick = () => { const on = $('#doneBox').classList.toggle('on'); $('#doneChip').classList.toggle('on', on); if (on) $('#doneText').focus(); };
+function withCrit(text) {
+  const lines = $('#doneBox').classList.contains('on') ? $('#doneText').value.split('\n').map(x => x.replace(/^[ \t]*[-·*]\s*/, '').trim()).filter(Boolean) : [];
+  return lines.length ? text + '\n\n완료 기준:\n' + lines.map(x => '- ' + x).join('\n') : text;
 }
 
 /* ---------- 대화 ---------- */
@@ -991,7 +1067,7 @@ async function sendNew(body, after) {
   finally { busy = false; refreshBtns(); }
 }
 $('#newSend').onclick = async () => { let files; try { files = await fileData('newText'); } catch (e) { return toast(e.message); }
-  sendNew(Object.assign({ text: $('#newText').value.trim(), mode: newMode, folder }, files), () => { $('#newText').value = ''; fileClear('newText'); }); };
+  sendNew(Object.assign({ text: withCrit($('#newText').value.trim()), mode: newMode, folder }, files), () => { $('#newText').value = ''; $('#doneText').value = ''; fileClear('newText'); }); };
 
 /* ---------- 공통 ---------- */
 function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 180) + 'px'; }
@@ -1076,6 +1152,7 @@ function progCard(done) {
   });
   if (!prog.steps.length) ol.append(el('li', 'say', '시작하는 중…'));
   c.append(ol);
+  if (prog.files && prog.files.length) c.append(filesBox(prog.files));
   if (live && !progOpen.size) requestAnimationFrame(() => { ol.scrollTop = ol.scrollHeight; });   // 펼쳐 보는 중엔 맨 아래로 끌어내리지 않는다
   return c;
 }
