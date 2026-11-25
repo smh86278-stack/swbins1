@@ -241,6 +241,16 @@ header .ttl.tap .sub::after{content:" · 상세 ›";color:var(--text)}
 #infoDlg li time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .opt .rec{margin-left:8px;padding:0 6px;border:1px solid var(--accent);color:var(--accent);font-size:11px;font-weight:700}
 .opt.recd{border-color:var(--accent)}
+
+/* 오르카 결 3차 — 완료 기준 */
+#doneBox{display:none;margin-top:8px}
+#doneBox.on{display:block}
+#doneBox textarea{border-style:dashed;background:transparent;font-size:14px}
+#infoDlg ul.crit{list-style:none;margin:0;padding:0;font-size:14px}
+#infoDlg ul.crit li{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
+#infoDlg ul.crit .m{flex:none;width:1.2em;color:var(--muted)}
+#infoDlg ul.crit .m.ok{color:var(--ok)}#infoDlg ul.crit .m.no{color:var(--bad)}
+#infoDlg ul.crit small{display:block;color:var(--muted);font-size:12px}
 </style>
 <style>
 /* ---------- 책등 — 머리·발 굵은 먹선 3px, 고른 것은 책등 색, 주 단추 오른쪽 4px 등, 모서리 0 ---------- */
@@ -330,6 +340,7 @@ textarea:focus,input:focus{border-color:var(--spine)}
     <div class="chips" id="modeChips">
       <button class="chip on" data-mode="read">읽기</button>
       <button class="chip w" data-mode="write">수정 허용</button>
+      <button class="chip" id="doneChip" title="다 됐다고 볼 조건 — 끝낼 때 하나씩 ✅/❌ 로 점검해 답합니다">완료 기준</button>
       <span style="width:6px"></span>
       <span id="folderChips" style="display:contents"></span>
     </div>
@@ -345,6 +356,7 @@ textarea:focus,input:focus{border-color:var(--spine)}
       <textarea id="sayText" rows="1" placeholder="할 일을 적으세요 (첫 줄이 제목 · Jira 는 /jira 키)"></textarea>
       <button class="send" id="saySend" aria-label="보내기" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
+    <div id="doneBox"><textarea id="doneText" rows="2" placeholder="완료 기준 — 한 줄에 하나 (예: 시험 모두 통과)"></textarea></div>
   </section>
 
   <!-- 답하기: 메일로 온 질문(☐ 1~4)에 체크박스로 답한다 -->

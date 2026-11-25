@@ -256,6 +256,7 @@ $('#saySend').onclick = () => {
   const t = parseInt($('#sayThread').value, 10), files = attach.slice();
   if (!text && !files.length) return;
   if (!text) text = '사진 봐줘';                          // 사진만 보내면 이 말로
+  text = withCrit(text);
   const [first, ...rest] = text.split('\n');
   // '/jira 키' 줄이 든 새 지시는 수정 허용으로 — PC 는 쓰기 지시에서만 Jira 처리로 돌린다(옛 Jira 탭과 같게)
   const m = !(t > 0) && /^[ \t]*\/jira[ \t]+[A-Za-z][A-Za-z0-9]+-\d+/im.test(text) ? 'write' : mode;
@@ -265,8 +266,29 @@ $('#saySend').onclick = () => {
   const subject = head.join(' ') + ' ' + first.trim().slice(0, 90);
   const body = (first.trim().length > 90 ? first.trim() + '\n' : '') + rest.join('\n').trim();
   if (!openMail(subject, body, { kind: 'say', text, mode: m, files, thread: t > 0 ? t : '', label: (t > 0 ? 'T' + t + ' · ' : '') + (m === 'write' ? '수정' : '읽기') + (folder && !(t > 0) ? ' @' + folder : '') })) return;
-  $('#sayText').value = ''; grow($('#sayText')); attach = []; drawAttach(); refresh();
+  $('#sayText').value = ''; $('#doneText').value = ''; grow($('#sayText')); attach = []; drawAttach(); refresh();
 };
+
+/* 오르카 결 3차 — 완료 기준(PC 메신저와 같은 규칙: 지시 끝 「완료 기준:」 + "- " 줄, 답 끝 ✅/❌ 줄) */
+const CRIT_RE = /\n*완료 기준:\s*\n((?:[ \t]*[-·*][^\n]*(?:\n|$))+)\s*$/;
+function critSplit(text) {
+  const m = CRIT_RE.exec(text || ''); if (!m) return [text || '', []];
+  return [text.slice(0, m.index), m[1].split('\n').map(x => x.replace(/^[ \t]*[-·*]\s*/, '').trim()).filter(Boolean)];
+}
+function critMarks(r, crit) {
+  const last = [...r.msgs].reverse().find(m => m.bot && m.text), lines = last ? last.text.split('\n') : [];
+  const norm = s => s.replace(/\s+/g, '').slice(0, 14);
+  return crit.map(c => {
+    const l = lines.find(x => /^\s*[✅❌✔✖☑☒]/.test(x) && norm(x.replace(/^\s*[✅❌✔✖☑☒]️?\s*/, '')).startsWith(norm(c)));
+    if (!l) return { c, m: '' };
+    return { c, m: /^\s*[✅✔☑]/.test(l) ? 'ok' : 'no', why: l.split(/\s+[—-]\s+/).slice(1).join(' — ') };
+  });
+}
+function withCrit(text) {
+  const lines = $('#doneBox').classList.contains('on') ? $('#doneText').value.split('\n').map(x => x.replace(/^[ \t]*[-·*]\s*/, '').trim()).filter(Boolean) : [];
+  return lines.length ? text + '\n\n완료 기준:\n' + lines.map(x => '- ' + x).join('\n') : text;
+}
+$('#doneChip').onclick = () => { const on = $('#doneBox').classList.toggle('on'); $('#doneChip').classList.toggle('on', on); if (on) $('#doneText').focus(); };
 
 /* ---- 사진 붙이기(Gmail 모드) — 폰에서 긴 변 1600px JPEG 로 줄여 지시 메일에 붙인다. PC 가 저장해 Claude 가 Read 로 본다 ---- */
 let attach = [];                                         // [{ b64, url }]
@@ -969,7 +991,16 @@ function openInfo(r) {
   if (r.st) box.append(el('span', 'rst' + (isWait(r) ? ' ask' : r.st === '오류' ? ' err' : isBusy(r) ? ' busy' : ''), r.st));
   if (isWait(r)) box.append(el('div', 'needs', r.st === '실행 확인' ? '● 실행 확인을 기다려요' : '● 내 답을 기다려요'));
   const first = r.msgs.find(m => !m.bot);
-  if (first && (first.text || first.rest)) { box.append(el('div', 'sec', '맡긴 일')); box.append(el('p', 'task', first.text || first.rest)); }
+  if (first && (first.text || first.rest)) {
+    const [body, crit] = critSplit(first.text || first.rest);
+    box.append(el('div', 'sec', '맡긴 일')); box.append(el('p', 'task', body));
+    if (crit.length) {
+      const ms = critMarks(r, crit), ul = el('ul', 'crit');
+      box.append(el('div', 'sec', '완료 기준 · ' + (ms.some(x => x.m) ? ms.filter(x => x.m === 'ok').length + '/' + crit.length : '점검 전')));
+      for (const x of ms) { const li = el('li'), tx = el('div', '', x.c); if (x.why) tx.append(el('small', '', x.why)); li.append(el('span', 'm ' + x.m, x.m === 'ok' ? '✓' : x.m === 'no' ? '✕' : '☐'), tx); ul.append(li); }
+      box.append(ul);
+    }
+  }
   box.append(el('div', 'sec', '정보'));
   const dl = el('dl'), add = (k, v) => { if (v) dl.append(el('dt', '', k), el('dd', '', v)); };
   add('번호', r.no ? 'T' + r.no : '대기'); add('권한', r.mode === 'write' ? '수정 허용' : '읽기');
