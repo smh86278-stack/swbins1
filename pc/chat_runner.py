@@ -45,6 +45,8 @@ from email.message import EmailMessage
 from html import escape as html_escape
 from urllib.parse import quote
 
+import checkpoint                    # ↶ 수정 작업 전후 스냅샷(refs/dnc/<id>/before|after)
+
 import jira_watch
 
 IS_WIN = sys.platform == "win32"
@@ -1772,6 +1774,9 @@ class Runner:
         proto = os.path.join(C.RES, "chat-protocol.md")
         if job.get("chat") and os.path.isfile(proto):
             args += ["--append-system-prompt-file", proto]   # 사람에게 물을 자리에서 ```choices 블록을 쓰게 하는 규칙
+        snap = checkpoint.writes(tools)               # 파일을 바꿀 수 있는 작업만 — 「이 작업 전으로 되돌리기」
+        if snap:
+            checkpoint.snap(job["workdir"], jid, "before")
         self.update_job(jid, status="running", started_at=now_text())
         self.current = jid
         C.log("[실행] 시작 %s (폴더 %s%s)" % (jid, job.get("workdir"), ", 세션 %s 이어받기" % job["resume_id"] if job.get("resume_id") else ""))
@@ -1814,6 +1819,8 @@ class Runner:
                         break
                 if not finished:
                     tree.kill()
+            if snap:
+                checkpoint.snap(job["workdir"], jid, "after")
             ms = int((time.time() - t0) * 1000)
             if stopped:
                 self.stop_req.discard(jid)

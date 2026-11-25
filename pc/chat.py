@@ -56,6 +56,7 @@ from email.message import EmailMessage
 from urllib.parse import parse_qs, urlparse
 
 import chat_runner
+import checkpoint                                         # ↶ 이 작업 전으로 되돌리기(11-26)
 import tokenlocal                                          # 허브 없는 PC 의 화면 펫 × 토큰 사용량(이 PC 기록을 읽기만)
 
 IS_WIN = sys.platform == "win32"
@@ -967,7 +968,132 @@ def job_progress(job_id):
             pass
     return {"id": job["id"], "status": job.get("status"), "started_at": job.get("started_at") or "",
             "finished_at": job.get("finished_at") or "",
-            "count": len(steps), "steps": steps[-40:], "files": changed_files(steps), "updated": mtime, "now": time.time()}
+            "count": len(steps), "steps": steps[-40:], "files": changed_files(steps), "updated": mtime, "now": time.time(),
+            "checkpoint": checkpoint.info(job.get("workdir"), job["id"]) if job.get("status") in ("done", "error") else None}
+
+
+# ----------------------------------------------------------------- 되돌리기 · 맡아 둔 이어 말하기 · 태그/대화 잇기 (11-26)
+
+def revert_job(job_id):
+    """↶ 이 작업 전으로 — 그 작업이 바꾼 파일만, 작업 뒤 또 바뀐 파일은 건너뛴다(checkpoint.restore)."""
+    jd = jobs_dir()
+    if not jd or not re.fullmatch(r"[\w\-]{1,80}", str(job_id or "")):
+        raise ValueError("되돌릴 작업이 없습니다")
+    job = read_json(os.path.join(jd, "%s.json" % job_id))
+    if not job or not job.get("id"):
+        raise ValueError("되돌릴 작업이 없습니다")
+    if job.get("status") not in ("done", "error"):
+        raise ValueError("작업이 끝난 뒤에 되돌릴 수 있습니다")
+    r = checkpoint.restore(job.get("workdir") or "", job["id"])
+    log("되돌림 %s — 되돌림 %d · 지움 %d · 건너뜀 %d" % (job["id"], len(r["reverted"]), len(r["removed"]), len(r["skipped"])))
+    return r
+
+
+HELD_PATH = os.path.join(LOCALDATA, "held.json")   # 일하는 중인 대화에 보낸 이어 말하기 {대화 key: [{id, ts, data}]} — 끝나면 차례로 보낸다
+HOLD_STATUSES = ("sent", "queued", "running")      # 이 동안 보낸 말은 맡아 둔다 — 바로 보내면 지금 일의 세션이 아니라 그 전 세션으로 이어져 맥락이 빠진다
+HELD_LOCK = threading.Lock()
+
+
+def load_held():
+    try:
+        with open(HELD_PATH, encoding="utf-8") as f:
+            h = json.load(f)
+        return h if isinstance(h, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_held(h):
+    os.makedirs(LOCALDATA, exist_ok=True)
+    with open(HELD_PATH, "w", encoding="utf-8") as f:
+        json.dump({k: v for k, v in h.items() if v}, f, ensure_ascii=False)
+
+
+def hold_add(data, t):
+    item = {"id": secrets.token_hex(4), "ts": time.time(), "data": {k: data[k] for k in ("text", "picks", "files") if data.get(k)}}
+    with HELD_LOCK:
+        h = load_held()
+        h.setdefault(t["key"], []).append(item)
+        save_held(h)
+        n = len(h[t["key"]])
+    BOX.version += 1
+    log("맡아 둠 T%s — 지금 일이 끝나면 보냄(대기 %d)" % (t.get("no"), n))
+    return {"ok": True, "held": n, "id": item["id"]}
+
+
+def hold_cancel(key, hid):
+    with HELD_LOCK:
+        h = load_held()
+        h[str(key or "")] = [x for x in h.get(str(key or ""), []) if x.get("id") != hid]
+        save_held(h)
+        n = len(h.get(str(key or ""), []))
+    BOX.version += 1
+    return {"ok": True, "held": n}
+
+
+def hold_flush():
+    """맡아 둔 말 — 그 대화의 일이 끝났으면 맨 앞 하나를 보낸다(보내면 다시 '보냄' 이라 다음 것은 또 기다린다)."""
+    h = load_held()
+    if not any(h.values()):
+        return 0
+    threads, sent = {t["key"]: t for t in BOX.threads()}, 0
+    for key, items in h.items():
+        if not items:
+            continue
+        t, item = threads.get(key), items[0]
+        if not t:
+            if time.time() - float(item.get("ts") or 0) > 86400:     # 대화가 사라지고 하루 — 버린다
+                hold_cancel(key, item.get("id"))
+            continue
+        if t.get("status") in HOLD_STATUSES:
+            continue
+        try:
+            send(dict(item.get("data") or {}, key=key, now=True))
+            sent += 1
+        except Exception as e:
+            tries = int(item.get("tries") or 0) + 1
+            log("맡아 둔 말 보내기 실패 T%s (%d번째) — %s" % (t.get("no"), tries, e))
+            if tries < 3:                                # 다음 바퀴에 다시 — 세 번 실패하면 버린다
+                with HELD_LOCK:
+                    cur = load_held()
+                    for x in cur.get(key, []):
+                        if x.get("id") == item.get("id"):
+                            x["tries"] = tries
+                    save_held(cur)
+                continue
+        hold_cancel(key, item.get("id"))
+    return sent
+
+
+def hold_loop():
+    time.sleep(10)
+    while True:
+        try:
+            hold_flush()
+        except Exception:
+            log("맡아 둔 말 확인 실패 — %s" % traceback.format_exc(limit=2))
+        time.sleep(6)
+
+
+TAG_RE = re.compile(r"(?<![\w&#/])#([0-9A-Za-z가-힣_][0-9A-Za-z가-힣_\-]{0,19})")
+TAG_SKIP = {"c", "cw", "hub", "k"}                  # 지시 표식(#c 읽기 · #cw 수정 허용)은 태그가 아니다
+TREF_RE = re.compile(r"(?<![A-Za-z0-9])T(\d{1,5})(?![0-9])")
+
+
+def thread_extra(t, held):
+    """목록·상세용 — 내가 쓴 말의 #태그, 주고받은 말에 나온 다른 대화 번호(T12), 맡아 둔 이어 말하기."""
+    tags, refs = [], set()
+    for m in t.get("msgs") or []:
+        text = str(m.get("text") or "")
+        if not m.get("bot"):
+            for g in TAG_RE.findall(text):
+                if g.lower() not in TAG_SKIP and not g.isdigit() and g not in tags:
+                    tags.append(g)
+        refs.update(int(x) for x in TREF_RE.findall(text))
+    refs.discard(t.get("no"))
+    hl = [{"id": x.get("id"), "ts": x.get("ts"), "text": str((x.get("data") or {}).get("text") or "")[:400]}
+          for x in held.get(t["key"], [])]
+    return {"tags": tags[:8], "refs": sorted(refs)[:30], "held": hl}
 
 
 # ----------------------------------------------------------------- 메일함 감시
@@ -1048,7 +1174,7 @@ class Box:
     def threads(self):
         with self.lock:
             msgs = [dict(m) for m in self.msgs.values()] + [dict(e) for e in self.echo]
-        hidden, urgent, cleared = load_hidden(), load_urgent(), load_cleared()
+        hidden, urgent, cleared, held = load_hidden(), load_urgent(), load_cleared(), load_held()
         out = []
         for t in build_threads(msgs, *local_jobs()):
             if t["key"] in hidden:
@@ -1056,6 +1182,7 @@ class Box:
             if cleared and (t.get("ts") or 0) <= cleared and not kept_on_clear(t, cleared):
                 continue
             t["urgent"] = t["key"] in urgent
+            t.update(thread_extra(t, held))
             out.append(t)
         return out
 
@@ -1265,6 +1392,11 @@ def clean_files(files):
 
 
 def send(data):
+    if data.get("key") and not (data.get("stop") or data.get("retry") or data.get("now")):
+        # 일하는 중인 대화에 이어 말하면 — 지금 일이 끝날 때까지 맡아 뒀다가 같은 대화로 보낸다(hold_loop)
+        t = next((x for x in BOX.threads() if x["key"] == data["key"]), None)
+        if t and t.get("no") and t.get("status") in HOLD_STATUSES:
+            return hold_add(data, t)
     cfg, _ = load_cfg()
     files = clean_files(data.get("files"))
     subject, body, reply_to, shown = compose(cfg, data, BOX.threads())
@@ -1393,7 +1525,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "default_folder": dict(zip(("label", "path"), default_folder(cfg, run["active"]))),
                 "jira_prefix": cfg.get("jira_prefix") or "",
                 "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
-                "threads": [{k: t[k] for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress", "urgent")} for t in BOX.threads()],
+                "threads": [{k: t.get(k) for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress", "urgent",
+                                                    "job", "tags", "refs", "held")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":
             key = (parse_qs(u.query).get("key") or [""])[0]
@@ -1452,6 +1585,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, hide_thread(data.get("key")))
             if u.path == "/api/clear":                                              # 대화 전체 지우기 {undo}
                 return self._send(200, clear_threads(bool(data.get("undo"))))
+            if u.path == "/api/revert":                                             # ↶ 이 작업 전으로 되돌리기 {job}
+                return self._send(200, revert_job(data.get("job")))
+            if u.path == "/api/held":                                               # 맡아 둔 이어 말하기 취소 {key, id}
+                return self._send(200, hold_cancel(data.get("key"), data.get("id")))
             if u.path == "/api/urgent":                                             # 🔥 급건 표시 {key, on}
                 return self._send(200, set_urgent(data.get("key"), bool(data.get("on"))))
             if u.path == "/api/snippets":                                           # 📝 저장해 두는 답 {add} · {remove}
@@ -1549,6 +1686,7 @@ def main():
         return 0
     srv = Server(("127.0.0.1", PORT), Handler)
     threading.Thread(target=BOX.loop, daemon=True).start()
+    threading.Thread(target=hold_loop, daemon=True, name="hold").start()   # 맡아 둔 이어 말하기 — 그 대화의 일이 끝나면 보낸다
     RUNNER.start()                                   # 꺼져 있으면 아무것도 하지 않는다(설정만 가끔 본다)
     log("D&C 메신저 시작 — http://127.0.0.1:%d/" % PORT)
     if not serve_only:
