@@ -650,6 +650,7 @@ def build_threads(msgs, jobs=None, by_mid=None):
     for m in sorted((m for m in msgs if m.get("bot") and m.get("kind") == "progress"), key=lambda x: x["ts"]):
         for r in m.get("refs") or []:
             progress[r] = m
+    sigs = [m for m in msgs if m.get("bot") and m.get("kind") in signal]      # 상세 패널 활동 기록용(접수·진행 시각)
     msgs = [m for m in msgs if not (m.get("bot") and m.get("kind") in signal)]
     by_id = {m["id"]: m for m in msgs if m["id"]}
     jobs, by_mid = jobs or {}, by_mid or {}
@@ -699,6 +700,9 @@ def build_threads(msgs, jobs=None, by_mid=None):
         if job and job.get("status") in ("queued", "running"):
             st = job["status"]
         t["job"] = (job or {}).get("id") or ""
+        mine = {m["id"] for m in t["msgs"] if not m["bot"] and m["id"]}
+        t["events"] = [{"ts": x["ts"], "k": x["kind"], "text": (x.get("text") or "").split("\n", 1)[0][:120]}
+                       for x in sigs if mine & set(x.get("refs") or [])]
         t["status"] = st
         t["progress"] = (pm.get("text") or "").split("\n", 1)[0][:160] if pm and st in ("sent", "queued", "running") else ""
         t["ts"] = last["ts"]
