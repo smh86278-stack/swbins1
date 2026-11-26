@@ -57,6 +57,7 @@ from urllib.parse import parse_qs, urlparse
 
 import chat_runner
 import checkpoint                                         # ↶ 이 작업 전으로 되돌리기(11-26)
+import dnc_extra                                          # 셋째 묶음 뒷부분(11-26) — diff · 따로 해 보기 · 옆 질문 · 한도 · 남은 프로세스
 import tokenlocal                                          # 허브 없는 PC 의 화면 펫 × 토큰 사용량(이 PC 기록을 읽기만)
 
 IS_WIN = sys.platform == "win32"
@@ -1047,6 +1048,8 @@ def hold_flush():
         if not items:
             continue
         t, item = threads.get(key), items[0]
+        if float(item.get("until") or 0) > time.time():    # P7 한도 풀리면 보내기 — 그 시각까지 기다린다
+            continue
         if not t:
             if time.time() - float(item.get("ts") or 0) > 86400:     # 대화가 사라지고 하루 — 버린다
                 hold_cancel(key, item.get("id"))
@@ -1075,6 +1078,7 @@ def hold_loop():
     time.sleep(10)
     while True:
         try:
+            limit_scan()
             hold_flush()
         except Exception:
             log("맡아 둔 말 확인 실패 — %s" % traceback.format_exc(limit=2))
@@ -1190,11 +1194,231 @@ def thread_extra(t, held):
                     tags.append(g)
         refs.update(int(x) for x in TREF_RE.findall(text))
     refs.discard(t.get("no"))
-    hl = [{"id": x.get("id"), "ts": x.get("ts"), "text": str((x.get("data") or {}).get("text") or "")[:400]}
+    hl = [{"id": x.get("id"), "ts": x.get("ts"), "until": x.get("until"), "text": str((x.get("data") or {}).get("text") or "")[:400]}
           for x in held.get(t["key"], [])]
     first = next((m for m in t.get("msgs") or [] if not m.get("bot")), None)
     fm = re.match(r"^@([\w.\-]+)", str((first or {}).get("text") or ""))
     return {"tags": tags[:8], "refs": sorted(refs)[:30], "held": hl, "folder": fm.group(1) if fm else ""}
+
+
+# ----------------------------------------------------------------- 셋째 묶음 뒷부분(11-26) — ④ diff · ⑤⑥ 따로 해 보기 · P4 옆 질문 · P7 한도 · P10 남은 프로세스
+
+def job_read(jid):
+    """작업 JSON — 게이트웨이 인박스·직접 실행 어느 쪽이든."""
+    jid = str(jid or "")
+    if not re.fullmatch(r"[\w\-]{1,80}", jid):
+        return None
+    for d in (jobs_dir(), getattr(RUNNER, "jobs_dir", "")):
+        if d and os.path.isfile(os.path.join(d, "%s.json" % jid)):
+            j = read_json(os.path.join(d, "%s.json" % jid))
+            if isinstance(j, dict) and j.get("id"):
+                return j
+    return None
+
+
+def thread_by_key(key):
+    return next((x for x in BOX.threads() if x["key"] == key), None)
+
+
+def job_diff(data):
+    """④ 바뀐 파일 하나의 차이 — 되돌리기 스냅샷(before..after)으로. 토큰 있는 POST 로만(파일 내용이 실린다)."""
+    job = job_read(data.get("job"))
+    if not job or job.get("status") not in ("done", "error"):
+        raise ValueError("끝난 작업만 차이를 볼 수 있습니다")
+    return dnc_extra.diff_file(job.get("workdir") or "", job["id"], data.get("path"))
+
+
+def thread_wt(t):
+    job = job_read(t.get("job")) if t else None
+    wt = (job or {}).get("wt")
+    return wt if isinstance(wt, dict) else None
+
+
+JOBX_CACHE = {}                                             # 대화 key → (시각, 값)
+
+
+def thread_jobx(key):
+    """상세 패널용 — 따로 해 본 작업 공간 상태(⑤⑥) · 옆 질문(P4)."""
+    t = thread_by_key(key)
+    if not t:
+        return {}
+    hit = JOBX_CACHE.get(key)
+    if hit and time.time() - hit[0] < 10 and hit[1].get("job") == t.get("job"):
+        out = dict(hit[1])
+    else:
+        wt = thread_wt(t)
+        out = {"job": t.get("job"), "wt": dict(dnc_extra.wt_state(wt), origin=wt.get("origin") or wt.get("repo")) if wt else None}
+        JOBX_CACHE[key] = (time.time(), out)
+        out = dict(out)
+    out["side"] = side_load().get(key, [])[-10:]
+    return out
+
+
+def worktree_action(data):
+    """⑤ [합치기] · [버리기] — 화면의 확인 창을 거친 요청만 온다."""
+    t = thread_by_key(data.get("key"))
+    wt = thread_wt(t)
+    if not wt:
+        raise ValueError("따로 해 본 작업이 아닙니다")
+    if t.get("status") in HOLD_STATUSES:
+        raise ValueError("일이 끝난 뒤에 합치거나 버릴 수 있습니다")
+    act = data.get("action")
+    if act == "merge":
+        r = dnc_extra.wt_merge(wt, "D&C: T%s 따로 해 보기 합치기 — %s" % (t.get("no") or "?", str(t.get("title") or "")[:60]))
+    elif act == "drop":
+        r = dnc_extra.wt_drop(wt)
+    else:
+        raise ValueError("알 수 없는 동작입니다")
+    JOBX_CACHE.pop(t["key"], None)
+    log("따로 해 보기 %s T%s — %s" % (act, t.get("no"), r))
+    BOX.version += 1
+    return r
+
+
+SIDE_PATH = os.path.join(LOCALDATA, "side.json")           # P4 옆 질문 {대화 key: [{id, q, ts, status, a}]} — 이 PC 에만
+SIDE_LOCK = threading.Lock()
+
+
+def side_load():
+    try:
+        with open(SIDE_PATH, encoding="utf-8") as f:
+            h = json.load(f)
+        return h if isinstance(h, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def side_put(key, item):
+    with SIDE_LOCK:
+        h = side_load()
+        lst = [x for x in h.get(key, []) if x.get("id") != item["id"]] + [dict(item)]
+        h[key] = lst[-20:]
+        os.makedirs(LOCALDATA, exist_ok=True)
+        with open(SIDE_PATH, "w", encoding="utf-8") as f:
+            json.dump(h, f, ensure_ascii=False)
+    JOBX_CACHE.pop(key, None)
+    BOX.version += 1
+
+
+def side_ask(data):
+    """P4 옆 질문 — 일하는 세션을 --fork-session 으로 갈라 읽기 전용으로 답한다(본 작업은 그대로)."""
+    t, q = thread_by_key(data.get("key")), str(data.get("q") or "").strip()[:2000]
+    if not t or not q:
+        raise ValueError("물을 말을 적어 주세요")
+    job = job_read(t.get("job"))
+    if not job:
+        raise ValueError("이 PC 에서 맡긴 일만 옆에서 물을 수 있습니다")
+    sid = str(job.get("session_id") or "")
+    if not sid:
+        try:
+            since = datetime.strptime(job.get("started_at") or "", "%Y-%m-%d %H:%M:%S").timestamp() - 5
+            path = find_transcript(job, since)
+            sid = os.path.splitext(os.path.basename(path))[0] if path else ""
+        except ValueError:
+            sid = ""
+    if not chat_runner.SESSION_RE.match(sid):
+        raise ValueError("이 작업의 Claude 세션을 아직 못 찾았습니다 — 조금 뒤 다시 물어 주세요")
+    claude = RUNNER.claude_cmd()
+    if not claude:
+        raise ValueError(chat_runner.NO_CLAUDE)
+    item = {"id": secrets.token_hex(4), "q": q, "ts": time.time(), "status": "running", "a": ""}
+    side_put(t["key"], item)
+    threading.Thread(target=side_run, args=(t["key"], item, claude, sid, job), daemon=True).start()
+    log("옆 질문 T%s — %s" % (t.get("no"), q[:60]))
+    return {"ok": True, "id": item["id"]}
+
+
+def side_run(key, item, claude, sid, job):
+    base = os.path.join(LOCALDATA, "side-" + item["id"])
+    try:
+        guard = chat_runner.guard_settings(["Read", "Glob", "Grep"], base, sys.modules[__name__])
+        if dnc_extra.fork_supported(claude):
+            args, prompt = dnc_extra.side_args(claude, sid, guard), dnc_extra.SIDE_NOTE + item["q"]
+        else:                                                # 세션을 못 가르는 claude — 맡긴 일을 붙인 새 읽기 전용 질문
+            args = list(claude) + ["-p", "--output-format", "json", "--permission-mode", "dontAsk", "--allowedTools", "Read", "Glob", "Grep"]
+            if guard:
+                args[args.index("-p"):args.index("-p")] = ["--settings", guard]
+            prompt = dnc_extra.SIDE_NOTE + item["q"] + "\n\n[본 작업에 맡긴 일]\n" + str(job.get("prompt") or "")[:3000]
+        wd = job.get("workdir") if os.path.isdir(job.get("workdir") or "") else None
+        p = subprocess.run(args, input=prompt.encode("utf-8"), capture_output=True, timeout=900, cwd=wd,
+                           creationflags=0x08000000 if IS_WIN else 0)
+        out, res = p.stdout.decode("utf-8", "replace").strip(), None
+        for cand in [out] + out.splitlines()[::-1]:
+            try:
+                res = json.loads(cand)
+                break
+            except ValueError:
+                continue
+        if isinstance(res, dict) and res.get("result"):
+            item.update(status="done", a=str(res.get("result"))[:8000])
+        else:
+            item.update(status="error", a=(p.stderr.decode("utf-8", "replace").strip() or out or "답을 받지 못했습니다")[-800:])
+    except Exception as e:
+        item.update(status="error", a="%s" % e)
+    finally:
+        try:
+            os.remove(base + ".guard.json")
+        except OSError:
+            pass
+    side_put(key, item)
+
+
+LIMIT_SEEN_PATH = os.path.join(LOCALDATA, "limit-seen.json")
+
+
+def limit_scan():
+    """P7 — 사용 한도 오류로 끝난 대화는 마지막 지시를 한도 풀리는 시각까지 맡아 뒀다가 보낸다(답 하나에 한 번)."""
+    try:
+        with open(LIMIT_SEEN_PATH, encoding="utf-8") as f:
+            seen = json.load(f)
+    except (OSError, ValueError):
+        seen = {}
+    try:
+        wait = max(5, int(load_cfg()[0].get("limit_retry_minutes") or 60))
+    except (TypeError, ValueError):
+        wait = 60
+    changed = False
+    for t in BOX.threads():
+        msgs = t.get("msgs") or []
+        if t.get("status") not in ("done", "error") or not t.get("no") or not msgs or not msgs[-1].get("bot"):
+            continue
+        last = msgs[-1]
+        mid = str(last.get("id") or last.get("ts"))
+        if seen.get(t["key"]) == mid:
+            continue
+        until = dnc_extra.limit_reset(str(last.get("text") or "") + "\n" + str(last.get("foot") or ""), default_min=wait)
+        if until is None:
+            continue
+        seen[t["key"]], changed = mid, True
+        ask = next((m for m in reversed(msgs) if not m.get("bot") and str(m.get("text") or "").strip()), None)
+        if not ask:
+            continue
+        with HELD_LOCK:
+            h = load_held()
+            h.setdefault(t["key"], []).append({"id": secrets.token_hex(4), "ts": time.time(), "until": until, "limit": True,
+                                               "data": {"text": str(ask.get("text"))[:4000]}})
+            save_held(h)
+        log("한도 — T%s 지시를 %s 에 다시 보냄" % (t.get("no"), datetime.fromtimestamp(until).strftime("%m-%d %H:%M")))
+    if changed:
+        os.makedirs(LOCALDATA, exist_ok=True)
+        with open(LIMIT_SEEN_PATH, "w", encoding="utf-8") as f:
+            json.dump(seen, f)
+        BOX.version += 1
+
+
+def thread_leftovers(data, kill=False):
+    """P10 끝난 작업이 남긴 프로세스 — 목록(kill=False) · 고른 PID 끄기(kill=True, 다시 골라 본 것만)."""
+    t = thread_by_key(data.get("key"))
+    job = job_read(t.get("job")) if t else None
+    if not job:
+        raise ValueError("이 PC 에서 맡긴 일이 아닙니다")
+    if job.get("status") not in ("done", "error"):
+        raise ValueError("일이 끝난 뒤에 확인할 수 있습니다")
+    if kill:
+        r = dnc_extra.kill_leftovers(job, data.get("pids"))
+        log("남은 프로세스 정리 T%s — 끔 %d · 실패 %d" % (t.get("no"), len(r["killed"]), len(r["failed"])))
+        return r
+    return {"procs": dnc_extra.leftovers(job), "supported": IS_WIN}
 
 
 # ----------------------------------------------------------------- 메일함 감시
@@ -1694,6 +1918,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"snippets": load_snippets()})
         if u.path == "/api/templates":                                              # 📋 지시 템플릿
             return self._send(200, {"templates": load_templates()})
+        if u.path == "/api/jobx":                                                   # ⑤ 따로 해 보기 상태 · P4 옆 질문
+            return self._send(200, thread_jobx((parse_qs(u.query).get("key") or [""])[0]))
         if u.path == "/api/gitinfo":                                                # P8 대화 작업 폴더의 브랜치·안 커밋
             return self._send(200, thread_gitinfo((parse_qs(u.query).get("key") or [""])[0]))
         if u.path == "/api/folders":                                                # ⚙ 작업 폴더(게이트웨이 설정을 따를 때)
@@ -1725,6 +1951,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, clear_threads(bool(data.get("undo"))))
             if u.path == "/api/revert":                                             # ↶ 이 작업 전으로 되돌리기 {job}
                 return self._send(200, revert_job(data.get("job")))
+            if u.path == "/api/diff":                                               # ④ 바뀐 파일 차이 {job, path}
+                return self._send(200, job_diff(data))
+            if u.path == "/api/worktree":                                           # ⑤ 따로 해 보기 {key, action: merge|drop}
+                return self._send(200, worktree_action(data))
+            if u.path == "/api/side":                                               # P4 옆 질문 {key, q}
+                return self._send(200, side_ask(data))
+            if u.path == "/api/leftover":                                           # P10 남은 프로세스 {key} · {key, pids, kill}
+                return self._send(200, thread_leftovers(data, bool(data.get("kill"))))
             if u.path == "/api/held":                                               # 맡아 둔 이어 말하기 취소 {key, id}
                 return self._send(200, hold_cancel(data.get("key"), data.get("id")))
             if u.path == "/api/urgent":                                             # 🔥 급건 표시 {key, on}

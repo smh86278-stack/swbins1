@@ -40,6 +40,7 @@ def main():
            "--add-data", os.path.join(HERE, "chat-protocol.md") + os.pathsep + ".",   # 이 PC 에서 직접 실행할 때 claude 에 덧붙이는 대화 규칙
            "--add-data", os.path.join(HERE, "browser-guard.js") + os.pathsep + ".",   # 브라우저 안전장치 훅(node 로 돈다)
            "--add-data", os.path.join(HERE, "bash-guard.js") + os.pathsep + ".",      # 읽기 지시의 위험한 git 옵션 막는 훅(node)
+           "--add-data", os.path.join(HERE, "danger-guard.js") + os.pathsep + ".",    # 수정 작업의 지우기·push 등 허락 받는 훅(node, 11-26)
            *[x for f in ("pets.js", "petwarp.js", "pets.css", "pettok.js") for x in ("--add-data", os.path.join(PET, f) + os.pathsep + "pet")],
            "--add-data", os.path.join(PET, PET_SKIN, "plush") + os.pathsep + os.path.join("pet", "skin", "plush"),   # 인형 강아지·고양이
            # 만화 — swbins1 의 pet\skin\toon 만(직접 만든 그림만 골라 둔 공개본). swbins2 의 skins\toon 에는 남의 저작물 캐릭터 그림이 있어 묶지 않는다

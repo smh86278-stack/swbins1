@@ -46,6 +46,7 @@ from html import escape as html_escape
 from urllib.parse import quote
 
 import checkpoint                    # ↶ 수정 작업 전후 스냅샷(refs/dnc/<id>/before|after)
+import dnc_extra                     # ③ 위험 작업 이름 · ⑤ 따로 해 보기(worktree)
 
 import jira_watch
 
@@ -187,7 +188,8 @@ def grant_rules(denials):
         elif name == "Bash":
             cmd = " ".join(str(inp.get("command") or "").split())
             if cmd and _SAFE_RULE.match(cmd):
-                rule, desc = "Bash(%s)" % cmd, "명령 실행: %s" % cmd
+                dn = dnc_extra.danger_name(cmd)    # ③ 위험 작업 안전장치(danger-guard.js)가 막은 명령이면 그렇게 보이게
+                rule, desc = "Bash(%s)" % cmd, ("⚠ 위험 작업 허락 — %s: %s" % (dn, cmd)) if dn else "명령 실행: %s" % cmd
             else:
                 continue
         elif name in ("Write", "Edit", "NotebookEdit"):
@@ -1447,6 +1449,16 @@ class Runner:
                "allowed_tools": list(tools or (WRITE_TOOLS if mode == "write" else READ_TOOLS))}
         if resume_id:
             job.update(resume_id=resume_id, thread=thread_no)
+            if prev and isinstance(prev.get("wt"), dict) and os.path.isdir(str(prev["wt"].get("path") or "")):
+                job["wt"] = prev["wt"]                # ⑤ 따로 해 보기 대화는 이어 말해도 같은 작업 공간
+        job["prompt"], want_wt = dnc_extra.wt_strip(job["prompt"])
+        if want_wt and mode == "write" and not resume_id and os.path.isdir(workdir or ""):
+            w = dnc_extra.wt_add(workdir, jid)      # ⑤ 따로 해 보기 — 저장소 옆 .dnc-wt/<작업> 에서 dnc/<작업> 브랜치로
+            if w:
+                w["origin"] = workdir
+                job.update(workdir=w["workdir"], wt=w, prompt=job["prompt"] + dnc_extra.WT_NOTE % w["branch"])
+            else:
+                job["wt_note"] = "git 저장소가 아니라 따로 하지 못하고 그 폴더에서 했습니다"
         elif thread_no:
             job["thread"] = thread_no
         if denied:
@@ -1840,6 +1852,7 @@ class Runner:
             with open(pf, "rb") as fin, open(of, "wb") as fout, open(ef, "wb") as ferr:
                 kw = {"creationflags": CREATE_NO_WINDOW} if IS_WIN else {"start_new_session": True}
                 p = subprocess.Popen(args, stdin=fin, stdout=fout, stderr=ferr, cwd=job["workdir"], env=env, **kw)
+                self.update_job(jid, claude_pid=p.pid)      # P10 남은 프로세스 — 이 작업의 claude 본체
                 tree = ProcTree(p)
                 deadline = t0 + int(cfg.get("run_timeout_sec") or TIMEOUT_SEC)
                 while True:
@@ -1896,7 +1909,7 @@ class Runner:
             if tree:
                 tree.close()
             for f in (pf, of, ef, os.path.join(logs, jid + ".mcp.json"), os.path.join(logs, jid + ".pw.json"),
-                      os.path.join(logs, jid + ".guard.json")):
+                      os.path.join(logs, jid + ".guard.json"), os.path.join(logs, jid + ".danger.json")):
                 try:
                     os.remove(f)
                 except OSError:
@@ -2191,6 +2204,14 @@ def guard_settings(tools, base, C):
         pre.append({"matcher": BROWSER_TOOL + "__.*", "hooks": [bg]})
         if bash:
             pre.append({"matcher": "Bash", "hooks": [bg]})
+    # ③ 위험 작업 승인 요청 — Bash 전체가 열린 수정 작업에서 지우기·push·reset --hard 같은 명령은 막아 permission_denials 로 남기고
+    # (게이트웨이·메신저가 「허락이 필요한 일」로 묻는다), 사용자가 허락한 바로 그 명령(Bash(<명령>) 규칙)만 통과시킨다.
+    if bash_full and _guard_js(C, "danger-guard.js"):
+        ok = sorted({t[5:-1].replace("rtk ", "", 1) for t in tools if t.startswith("Bash(") and t.endswith(")")})
+        C.write_json(base + ".danger.json", ok)
+        dg = hook(_guard_js(C, "danger-guard.js"))
+        dg["command"] += ' "%s"' % (base + ".danger.json").replace("\\", "/")
+        pre.append({"matcher": "Bash|PowerShell" if "PowerShell" in tools else "Bash", "hooks": [dg]})
     if bash and not bash_full and _guard_js(C, "bash-guard.js"):
         pre.append({"matcher": "Bash", "hooks": [hook(_guard_js(C, "bash-guard.js"))]})
     # 같은 훅이 읽기 도구의 비밀 자리(메일 암호 설정·.keys·SSH 키·브라우저 로그인 DB)를 막는다 — Bash 전체가 열린 작업은

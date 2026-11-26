@@ -603,7 +603,8 @@ class RunnerTest(unittest.TestCase):
         """브라우저 도구가 있으면 browser-guard.js. 훅을 걸 도구가 없으면 --settings 도 없다."""
         base = os.path.join(self.tmp, "j1")
         self.assertEqual(runner.guard_settings(["Edit", "Write"], base, chat), "")
-        self.assertEqual(runner.guard_settings(["Read", "Bash"], base, chat), "")       # Bash 전체면 읽기 훅도 안 건다
+        dg = chat.read_json(runner.guard_settings(["Read", "Bash"], base, chat))["hooks"]["PreToolUse"]   # Bash 전체면 읽기 훅은 안 걸고
+        self.assertEqual([(h["matcher"], "danger-guard.js" in h["hooks"][0]["command"]) for h in dg], [("Bash", True)])   # 위험 작업 훅만(11-26)
         path = runner.guard_settings(["Read", "mcp__browser"], base, chat)
         hook = chat.read_json(path)["hooks"]["PreToolUse"][0]
         self.assertEqual(hook["matcher"], "mcp__browser__.*")
@@ -618,7 +619,8 @@ class RunnerTest(unittest.TestCase):
                          [("Bash", "bash-guard.js"), ("Read|Glob|Grep", "bash-guard.js")])   # 읽기 도구 비밀 자리(10-28)
         pre = chat.read_json(runner.guard_settings(runner.WRITE_TOOLS + ["mcp__browser"], base, chat))["hooks"]["PreToolUse"]
         self.assertEqual([(p["matcher"], os.path.basename(p["hooks"][0]["command"].split('"')[-2])) for p in pre],
-                         [("mcp__browser__.*", "browser-guard.js"), ("Bash", "browser-guard.js")])   # Bash 전체면 bash-guard 는 없음
+                         [("mcp__browser__.*", "browser-guard.js"), ("Bash", "browser-guard.js"),
+                          ("Bash", "j2.danger.json")])   # Bash 전체면 bash-guard 대신 위험 작업 훅(danger-guard.js, 허락한 명령 목록 파일)
         self.addCleanup(setattr, runner, "find_tool", runner.find_tool)
         runner.find_tool = lambda n: ""
         self.assertEqual(runner.guard_tools(runner.READ_TOOLS + ["mcp__browser"], chat), ["Read", "Glob", "Grep"])
