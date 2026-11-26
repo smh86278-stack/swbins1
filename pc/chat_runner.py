@@ -83,6 +83,8 @@ JIRA_NO_SKILL = ("Jira 이슈 %s 를 처리해 줘. mcp__jira__jira_get_issue �
                  "이 폴더의 코드에서 고칠 곳을 찾아. 고치기 전에 방향을 choices 로 물어봐.")   # 작업 폴더에 jira 스킬이 없을 때
 TOOL_RE = re.compile(r"^[A-Za-z0-9_]+(\([^\"'`\r\n]*\))?$")      # 명령줄에 붙이기 전에 거른다(워커 Test-JobInputs 와 같은 규칙)
 SESSION_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+# 끊긴 일 이어 하기(11-26) — 메신저가 일하는 도중 꺼졌다 다시 켜지면 그 세션으로 한 번만 더 돌릴 때의 지시
+RESUME_PROMPT = "끊겨서 이어서 진행합니다. 하던 일을 마저 해 주세요."
 TIMEOUT_SEC = 900
 MAX_PROMPT = 4000
 MAX_PER_CYCLE = 3                 # 한 바퀴에 받는 지시 수(실수로 무더기 실행되는 것 막기)
@@ -454,6 +456,8 @@ def reply_footer(job):
     lines = ["%s작업 폴더 %s · %d초 · $%.3f%s%s · 이 PC 에서 실행" % (
         ("[T%s] · " % job["thread"]) if job.get("thread") else "", job.get("workdir") or "", secs, job.get("cost_usd") or 0,
         " · 수정 허용 모드" if job.get("mode") == "write" else "", " · 이어서 실행" if job.get("resume_id") else "")]
+    if job.get("auto_resumed"):                         # 끊긴 일 이어 하기(11-26) — 워커가 다시 떠서 같은 세션으로 마저 한 작업
+        lines.append("↻ 끊겨서 이어서 진행했습니다")
     note = changed_files_note(job)                      # 바뀐 파일 — 폰·메신저가 이 줄을 읽어 목록으로
     if note:
         lines.append(note)
@@ -999,9 +1003,32 @@ class Runner:
                     j.update(status="canceled", error=why, finished_at=now_text(), replied=True)
                     self.write_job(j)
 
+    def find_session(self, job):
+        """끊긴 작업의 Claude 세션 id(세션 기록 파일 이름) — 메신저 진행 카드가 쓰는 find_transcript 그대로."""
+        try:
+            since = datetime.strptime(job.get("started_at") or "", "%Y-%m-%d %H:%M:%S").timestamp() - 5
+        except ValueError:
+            return ""
+        find = getattr(self.C, "find_transcript", None)
+        try:
+            f = find(job, since) if find else ""
+        except Exception:
+            f = ""
+        sid = os.path.splitext(os.path.basename(f))[0] if f else ""
+        return sid if SESSION_RE.match(sid) else ""
+
     def clean_orphans(self):
-        """앞서 메신저가 일하는 도중 꺼졌으면 그 작업이 running 으로 남는다 — 실패로 돌려 회신한다."""
+        """앞서 메신저가 일하는 도중 꺼졌으면 그 작업이 running 으로 남는다 — 그 Claude 세션을 찾으면 --resume 으로 한 번만 더
+        돌리고(끊긴 일 이어 하기, 설정 auto_resume 기본 켬), 못 찾거나 이미 이어 한 작업은 실패로 돌려 회신한다."""
+        on = self.C.load_cfg()[0].get("auto_resume", True) is not False
         for j in self.iter_jobs():
+            if j.get("status") == "running" and on and not j.get("auto_resumed"):
+                sid = self.find_session(j)
+                if sid:
+                    self.update_job(j["id"], status="queued", resume_id=sid, auto_resumed=True,
+                                    orig_prompt=j.get("prompt") or "", prompt=RESUME_PROMPT)
+                    self.C.log("[실행] 끊긴 작업 이어 하기 %s (세션 %s)" % (j["id"], sid))
+                    continue
             if j.get("status") == "running":
                 self.update_job(j["id"], status="error", finished_at=now_text(),
                                 error="메신저가 다시 시작되어 실행 중이던 작업이 중단됐습니다. 필요하면 다시 보내세요.")
@@ -1775,7 +1802,7 @@ class Runner:
         if job.get("chat") and os.path.isfile(proto):
             args += ["--append-system-prompt-file", proto]   # 사람에게 물을 자리에서 ```choices 블록을 쓰게 하는 규칙
         snap = checkpoint.writes(tools)               # 파일을 바꿀 수 있는 작업만 — 「이 작업 전으로 되돌리기」
-        if snap:
+        if snap and not job.get("auto_resumed"):     # 이어 한 작업은 처음 시작 전 상태를 그대로 둔다
             checkpoint.snap(job["workdir"], jid, "before")
         self.update_job(jid, status="running", started_at=now_text())
         self.current = jid

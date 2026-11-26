@@ -878,6 +878,8 @@ def _first_prompt(lines, since):
             ev = json.loads(ln)
         except ValueError:
             continue
+        if ev.get("entrypoint") and ev.get("entrypoint") != "sdk-cli":
+            return ""                                  # 대화형 세션(사람이 연 claude) — 워커가 맡긴 일의 기록이 아니다
         if ev.get("type") == "user" and not ev.get("isSidechain") and _ts(ev.get("timestamp")) >= since:
             c = (ev.get("message") or {}).get("content")
             if isinstance(c, list):
@@ -1080,6 +1082,61 @@ TAG_SKIP = {"c", "cw", "hub", "k"}                  # 지시 표식(#c 읽기 ·
 TREF_RE = re.compile(r"(?<![A-Za-z0-9])T(\d{1,5})(?![0-9])")
 
 
+STALL_MIN = 10                                      # 일하는 중인데 세션 기록이 이만큼(분) 조용하면 「멈춘 듯」 — 설정 stall_minutes
+
+
+def stall_minutes(t):
+    """멈춘 일 감지(11-26) — 일하는 중인 대화의 세션 기록(jsonl)이 N분 넘게 안 바뀌었으면 그 분 수, 아니면 0.
+    이 PC 에 게이트웨이 인박스가 있거나 직접 실행할 때만(작업 파일을 읽어야 해서)."""
+    if t.get("status") != "running" or not t.get("job"):
+        return 0
+    jd = jobs_dir()
+    if not jd or not re.fullmatch(r"[\w\-]{1,80}", str(t["job"])):
+        return 0
+    job = read_json(os.path.join(jd, "%s.json" % t["job"]))
+    if not isinstance(job, dict) or job.get("status") != "running" or not job.get("id"):
+        return 0
+    try:
+        since = datetime.strptime(job.get("started_at") or "", "%Y-%m-%d %H:%M:%S").timestamp() - 5
+    except ValueError:
+        return 0
+    path = find_transcript(job, since)
+    try:
+        ref = os.path.getmtime(path) if path else since
+    except OSError:
+        ref = since
+    try:
+        lim = max(1, int(load_cfg()[0].get("stall_minutes") or STALL_MIN))
+    except (TypeError, ValueError):
+        lim = STALL_MIN
+    mins = int((time.time() - ref) / 60)
+    return mins if mins >= lim else 0
+
+
+def thread_commits(key):
+    """커밋에 T번호(11-26) — 그 대화의 작업 폴더에서 메시지에 「D&C: T<번호>」가 든 커밋 최근 10개."""
+    t = next((x for x in BOX.threads() if x["key"] == key), None)
+    if not t or not t.get("no"):
+        return {"commits": []}
+    jd, wd = jobs_dir(), ""
+    if jd and t.get("job") and re.fullmatch(r"[\w\-]{1,80}", str(t["job"])):
+        wd = str((read_json(os.path.join(jd, "%s.json" % t["job"])) or {}).get("workdir") or "")
+    if not wd or not os.path.isdir(wd):
+        return {"commits": []}
+    try:
+        r = subprocess.run(["git", "-C", wd, "log", "--branches", "-n", "40", "--fixed-strings", "--grep", "D&C: T%d" % t["no"],
+                            "--format=%h\x1f%H\x1f%s\x1f%cr\x1f%B\x1e"], capture_output=True, timeout=20,
+                           creationflags=0x08000000 if IS_WIN else 0)
+    except (OSError, subprocess.SubprocessError):
+        return {"commits": []}
+    out, want = [], re.compile(r"D&C: T%d\b" % t["no"])
+    for rec in r.stdout.decode("utf-8", "replace").split("\x1e"):
+        p = rec.strip("\n").split("\x1f")
+        if len(p) >= 5 and want.search(p[4]):
+            out.append({"h": p[0], "hash": p[1], "subject": p[2][:120], "when": p[3]})
+    return {"commits": out[:10]}
+
+
 def thread_extra(t, held):
     """목록·상세용 — 내가 쓴 말의 #태그, 주고받은 말에 나온 다른 대화 번호(T12), 맡아 둔 이어 말하기."""
     tags, refs = [], set()
@@ -1183,6 +1240,7 @@ class Box:
                 continue
             t["urgent"] = t["key"] in urgent
             t.update(thread_extra(t, held))
+            t["stall"] = stall_minutes(t)
             out.append(t)
         return out
 
@@ -1526,7 +1584,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "jira_prefix": cfg.get("jira_prefix") or "",
                 "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
                 "threads": [{k: t.get(k) for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress", "urgent",
-                                                    "job", "tags", "refs", "held")} for t in BOX.threads()],
+                                                    "job", "tags", "refs", "held", "stall")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":
             key = (parse_qs(u.query).get("key") or [""])[0]
@@ -1549,6 +1607,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             gw = read_json_quiet(GATEWAY_CFG) if GATEWAY_CFG else None
             rep.update(local=True, limit=chat_runner.cost_limit(gw if isinstance(gw, dict) else load_cfg()[0]))
             return self._send(200, rep)
+        if u.path == "/api/commits":                                                # 이 대화의 커밋(메시지에 D&C: T번호)
+            return self._send(200, thread_commits((parse_qs(u.query).get("key") or [""])[0]))
         if u.path == "/api/progress":                                               # 일하는 중인 대화의 실시간 진행(게이트웨이 PC 만)
             job_id = (parse_qs(u.query).get("job") or [""])[0]
             return self._send(200, {"progress": job_progress(job_id), "local": bool(jobs_dir())})

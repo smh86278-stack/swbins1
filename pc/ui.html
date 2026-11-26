@@ -463,6 +463,14 @@ button.worked:hover{color:var(--text);text-decoration:underline}
 #palList button.on small{color:var(--onspine)}
 #palList .hint{padding:8px;font-size:12px;color:var(--muted)}
 @media (max-width:1099px){#boardCols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* 11-26 둘째 묶음 — 멈춘 듯 · 커밋 · 검토 받기 · 인계문 */
+.item .held.stall{color:var(--bad);border-color:var(--bad);border-style:solid}
+.item.sel .held.stall{color:var(--onspine);border-color:var(--onspine)}
+#infoPane .acts2{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+#infoPane ul.links .h{font-family:ui-monospace,Consolas,monospace;font-size:12px;margin-right:6px;color:var(--spine)}
+#infoPane .hashes{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 0}
+#infoPane .hashes .chip{font-family:ui-monospace,Consolas,monospace;font-size:11px}
 </style>
 <link rel="stylesheet" href="/pet/pets.css">
 <style>
@@ -570,6 +578,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
         <button class="chip on" data-mode="read" title="조회·분석만">읽기</button>
         <button class="chip wr" data-mode="write" title="파일 수정·명령 실행까지 — PC 가 실행 전에 확인 메일을 한 번 보냅니다">수정 허용</button>
         <button class="chip" id="doneChip" title="다 됐다고 볼 조건 — 끝낼 때 하나씩 ✅/❌ 로 점검해 답합니다">완료 기준</button>
+        <button class="chip" id="askChip" title="바로 고치지 말고 먼저 필요한 확인 질문부터 하게 합니다">먼저 질문</button>
         <span class="sep"></span>
         <span id="folderChips" style="display:contents"></span>
       </div>
@@ -739,6 +748,7 @@ function itemBtn(t) {                                       // 목록 줄 — �
   top.append(el('span', 'title', t.title));
   if (t.mode === 'write') top.append(el('span', 'badge w', '수정'));
   if ((t.held || []).length) top.append(el('span', 'held', '대기 ' + t.held.length));
+  if (t.stall) { const sp = el('span', 'held stall', '⏸ 멈춘 듯 ' + t.stall + '분'); sp.title = '일하는 중인데 ' + t.stall + '분째 활동 기록이 없습니다'; top.append(sp); }
   top.append(['ask', 'confirm'].includes(t.status) ? el('span', 'needs', t.status === 'confirm' ? '확인 필요' : '답 필요') : badge(t.status), el('span', 'time', when(t.ts)));
   b.append(top, el('div', 'last', (t.last_bot ? '' : '나: ') + (t.last || '')));
   if ((t.tags || []).length) {
@@ -790,6 +800,7 @@ function drawInfo(t) {
     n.onclick = () => { const c = $('#msgs .choice'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); else $('#sayText').focus(); };
     box.append(n);
   }
+  stallInto(box, t);
   const first = t.msgs.find(m => !m.bot);
   if (first && first.text) {
     const [body, crit] = critSplit(first.text);
@@ -810,7 +821,7 @@ function drawInfo(t) {
   const kv = el('dl', 'kv'), add = (k, v) => { if (v) kv.append(el('dt', '', k), el('dd', '', v)); };
   add('번호', t.no ? 'T' + t.no : '대기');
   add('권한', t.mode === 'write' ? '수정 허용' : '읽기');
-  const fm = first && /^@(\w+)/.exec(first.text || ''); add('폴더', fm ? '@' + fm[1] : '');
+  const fm = first && /^@([\w.\-]+)/.exec(first.text || ''); add('폴더', fm ? '@' + fm[1] : '');
   if (t.msgs.length) {
     const t0 = t.msgs[0].ts, t1 = t.msgs[t.msgs.length - 1].ts;
     add('시작', hm(t0));
@@ -989,6 +1000,7 @@ function infoExtra(box, t) {
     ol.hs.forEach((h, k) => { const li = el('li'), a = el('a', '', h); a.onclick = () => { const e = document.getElementById('oh-' + ol.i + '-' + k); if (!e) return; e.scrollIntoView({ block: 'center', behavior: 'smooth' }); e.classList.add('flash'); setTimeout(() => e.classList.remove('flash'), 1400); }; li.append(a); o.append(li); });
     box.append(o);
   }
+  infoMore(box, t);
 }
 /* ② 일하는 중에 보낸 말 — 메신저가 맡아 뒀다가 지금 일이 끝나면 같은 대화로 보낸다 */
 function heldRow(t, h) {
@@ -1053,6 +1065,8 @@ function palCmds() {
     ['상세 패널 켜기/끄기', '열린 대화', () => $('#infoBtn').click(), () => !!cur],
     ['멈춤', '일하는 중인 대화', () => $('#stopBtn').click(), () => !!cur && !$('#stopBtn').hidden],
     ['이 대화 지우기', '열린 대화 — 메일은 그대로', () => $('#delBtn').click(), () => !!cur],
+    ['검토 받기', '다른 세션이 마지막 답을 비판적으로', () => reviewSend(cur), () => !!cur && cur.status === 'done' && !!cur.no],
+    ['인계문으로 새 대화', '요약·남은 일로 정리해 이어 가기', () => handoffSend(cur), () => !!cur && !!cur.no],
     ['비우기 — 대화 전체 지우기', '메일은 그대로', () => $('#clearBtn').click()],
     ['비우기 되돌리기', '지우기 전으로', async () => { if (!confirm('지운 대화를 되돌릴까요?')) return; try { await api('/api/clear', { undo: true }); toast('되돌렸습니다'); poll(true); } catch (e) { toast(e.message); } }],
     ['메일함 다시 읽기', '↻', () => $('#refreshBtn').click()],
@@ -1098,6 +1112,99 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('mousedown', e => { if (!$('#pal').hidden && !e.target.closest('#pal')) palClose(); });
 
+
+/* 11-26 둘째 묶음 — P3 멈춘 듯 · P5 검토 받기 · P6 먼저 질문 · P9 이 대화의 커밋 · P11 인계문으로 새 대화 */
+const STALL_RETRY = '끊긴 것 같아 멈췄어요. 하던 일을 이어서 마저 해 주세요.';
+function stallInto(box, t) {
+  if (!t.stall) return;
+  box.append(el('div', 'needsyou', '⏸ ' + t.stall + '분째 활동이 없어요 — 멈춘 듯합니다'));
+  const r = el('div', 'acts2'), stop = el('button', 'ghost', '멈춤'), again = el('button', 'ghost', '다시 시도');
+  stop.title = '하던 일을 멈추고 지금까지의 상태만 받습니다';
+  again.title = '멈춘 뒤 같은 대화에서 하던 일을 이어서 다시 하게 합니다(멈춤이 끝나면 저절로 보냄)';
+  stop.onclick = () => { if (confirm('이 일을 멈출까요?')) sendSay({ stop: true }); };
+  again.onclick = async () => {
+    if (!confirm('멈춘 뒤 같은 대화에서 하던 일을 이어서 다시 시도할까요?')) return;
+    await sendSay({ stop: true });
+    try { await api('/api/send', { key: t.key, text: STALL_RETRY }); } catch (e) { toast(e.message); }
+    poll(true);
+  };
+  r.append(stop, again); box.append(r);
+}
+function askFirst(text) {                                   // P6 「먼저 질문」 칩 — 완료 기준보다 앞에(완료 기준 줄은 맨 끝이어야 한다)
+  return text && $('#askChip').classList.contains('on') ? text + '\n\n바로 고치지 말고 먼저 필요한 확인 질문만 하고 멈춰 주세요.' : text;
+}
+$('#askChip').onclick = () => $('#askChip').classList.toggle('on');
+function threadFolder(t) { const f = t.msgs.find(m => !m.bot), m = f && /^@([\w.\-]+)/.exec(f.text || ''); return m ? m[1] : ''; }
+function clipText(s, n) { s = String(s || '').trim(); return s.length > n ? s.slice(0, n) + ' …' : s; }
+function filesOf(t) { const pf = hist[t.key]; return pf && pf.id === t.job && pf.files && pf.files.length ? pf.files : footFiles(t); }
+async function sendSide(text, what) {                      // 읽기 전용 새 대화 — 같은 작업 폴더로
+  if (busy || !cur) return;
+  busy = true; refreshBtns();
+  try { await api('/api/send', { text, mode: 'read', folder: threadFolder(cur) }); toast(what + ' — 새 대화로 보냈습니다'); await poll(true); }
+  catch (e) { toast(e.message); }
+  finally { busy = false; refreshBtns(); }
+}
+function reviewSend(t) {                                   // P5 다른 의견 받기 — 다른 세션이 이 답을 비판적으로(읽기만)
+  const last = [...t.msgs].reverse().find(m => m.bot && m.text);
+  if (!last || !t.no) return;
+  if (!confirm('T' + t.no + ' 의 마지막 답과 바뀐 파일을 다른 세션에게 검토받을까요?\n(읽기 전용 새 대화로 보냅니다 — 파일은 고치지 않습니다)')) return;
+  const files = filesOf(t).map(f => '- ' + f.path).join('\n');
+  sendSide('T' + t.no + ' 검토 — ' + t.title + '\n'
+    + 'T' + t.no + ' 대화의 마지막 답과 바뀐 파일을 비판적으로 검토해 주세요. 문제 · 빠진 점 · 위험만 짧게 적고, 고치지는 말고 읽기만 하세요. 바뀐 파일은 직접 열어 확인하세요.\n\n'
+    + '[마지막 답]\n' + clipText(last.text, 3000) + (files ? '\n\n[바뀐 파일]\n' + files : ''), '검토 받기');
+}
+function handoffSend(t) {                                  // P11 인계문으로 새 대화 — 이 대화를 요약·남은 일로
+  if (!t.no) return;
+  if (!confirm('T' + t.no + ' 대화를 인계문(목표·한 일·남은 일)으로 정리하는 새 대화를 시작할까요?\n(읽기 전용 — 파일은 고치지 않습니다)')) return;
+  const lines = []; let n = 0;
+  for (const m of [...t.msgs].reverse()) {
+    const s = (m.bot ? 'Claude: ' : '나: ') + clipText(m.text, 800);
+    if (n + s.length > 6000) break; lines.unshift(s); n += s.length;
+  }
+  const files = filesOf(t).map(f => '- ' + f.path).join('\n');
+  sendSide('T' + t.no + ' 이어서 — ' + t.title + '\n'
+    + 'T' + t.no + ' 대화를 다음 세션이 이어받을 인계문으로 정리해 주세요: 목표 · 한 일 · 바뀐 파일 · 남은 일 · 주의점. 고치지는 말고 정리만 하세요. 끝에 다음에 할 일을 고르기로 제안해 주세요.\n\n'
+    + '[대화]\n' + lines.join('\n\n') + (files ? '\n\n[바뀐 파일]\n' + files : ''), '인계문');
+}
+function reviewBar(t) {
+  const b = el('button', 'worked', '↳ 검토 받기 — 다른 세션이 이 답을 비판적으로 봅니다');
+  b.title = '읽기 전용 새 대화로 이 답과 바뀐 파일의 문제·빠진 점만 받아 봅니다'; b.onclick = () => reviewSend(t); return b;
+}
+const HASH_RE = /(?<![-\w])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![-\w])/g;
+function hashesOf(t) {
+  const s = new Set();
+  for (const m of t.msgs) if (m.bot && m.text) for (const h of m.text.match(HASH_RE) || []) { s.add(h); if (s.size >= 8) return [...s]; }
+  return [...s];
+}
+const commitCache = {};                                    // 대화 key → {at, list}
+function infoMore(box, t) {
+  if (!t.no) return;
+  const c = commitCache[t.key], fresh = c && Date.now() - c.at < 60000;
+  if (!fresh && state.local && t.job) {
+    commitCache[t.key] = { at: Date.now(), list: c ? c.list : [] };
+    api('/api/commits?key=' + encodeURIComponent(t.key)).then(r => { commitCache[t.key] = { at: Date.now(), list: r.commits || [] }; if (cur && cur.key === t.key && infoOn) drawInfo(cur); }).catch(() => {});
+  }
+  const list = (commitCache[t.key] || {}).list || [], known = new Set(list.map(x => x.h));
+  const hs = hashesOf(t).filter(h => ![...known].some(k => h.startsWith(k) || k.startsWith(h)));
+  if (list.length || hs.length) {
+    box.append(el('div', 'sec', '이 대화의 커밋'));
+    if (list.length) {
+      const ul = el('ul', 'links');
+      for (const x of list) { const li = el('li'), a = el('a', ''); a.append(el('span', 'h', x.h), document.createTextNode(x.subject)); a.title = '해시 복사 — ' + x.hash; a.onclick = () => copyText(x.hash).then(() => toast('커밋 해시를 복사했습니다'), () => {}); li.append(a, el('small', '', x.when)); ul.append(li); }
+      box.append(ul);
+    }
+    if (hs.length) {
+      const r = el('div', 'hashes');
+      for (const h of hs) { const b = el('button', 'chip', h.slice(0, 10)); b.title = '답에 나온 커밋 해시 — 눌러서 복사'; b.onclick = () => copyText(h).then(() => toast('해시를 복사했습니다'), () => {}); r.append(b); }
+      box.append(r);
+    }
+  }
+  const acts = el('div', 'acts2'), ho = el('button', 'ghost', '인계문으로 새 대화');
+  ho.title = '이 대화를 요약·남은 일로 정리해 새 대화에서 이어 갑니다(첫 줄에 T' + t.no + ' — 대화 잇기로 연결)'; ho.onclick = () => handoffSend(t); acts.append(ho);
+  if (t.status === 'done') { const rv = el('button', 'ghost', '검토 받기'); rv.title = '다른 세션이 마지막 답을 비판적으로 봅니다(읽기 전용 새 대화)'; rv.onclick = () => reviewSend(t); acts.append(rv); }
+  box.append(acts);
+}
+
 /* ---------- 대화 ---------- */
 async function openThread(key) {
   sel = key; drawList(); document.body.classList.remove('list');
@@ -1136,6 +1243,7 @@ function drawThread(scroll) {
     box.append(row);
     if (m.bot && m.ask && i === t.msgs.length - 1) box.append(choiceCard(m.ask, m.kind === 'confirm'));
   });
+  if (t.status === 'done' && t.no && t.msgs.length && t.msgs[t.msgs.length - 1].bot) box.append(reviewBar(t));
   for (const h of t.held || []) box.append(heldRow(t, h));
   if (t.status === 'error' && t.no) box.append(failCard(t));
   const card = t.status === 'running' && prog && progKey === t.key;
@@ -1143,7 +1251,7 @@ function drawThread(scroll) {
   if (['sent', 'queued', 'running'].includes(t.status)) {
     // 진행 메일(오래 걸리는 일의 중간 한 줄)은 말풍선이 아니라 이 회색 줄에 — 진행 카드가 있으면 카드가 더 자세하니 뺀다
     const ty = el('div', 'typing'); ty.append(el('span'), el('span'), el('span'), document.createTextNode(
-      (t.status === 'running' ? ' 작업 중' : ' 답을 기다리는 중') + (t.msgs.length && !t.msgs[t.msgs.length - 1].bot ? ' · ' + dur(Date.now() / 1000 - t.msgs[t.msgs.length - 1].ts) + '째' : '') + (t.progress && !card ? ' · ' + t.progress : '')));
+      (t.status === 'running' ? ' 작업 중' : ' 답을 기다리는 중') + (t.msgs.length && !t.msgs[t.msgs.length - 1].bot ? ' · ' + dur(Date.now() / 1000 - t.msgs[t.msgs.length - 1].ts) + '째' : '') + (t.progress && !card ? ' · ' + t.progress : '') + (t.stall ? ' · ⏸ ' + t.stall + '분째 조용함' : '')));
     box.append(ty);
   }
   if (scroll || near) box.scrollTop = box.scrollHeight;
@@ -1343,7 +1451,7 @@ async function sendNew(body, after) {
   finally { busy = false; refreshBtns(); }
 }
 $('#newSend').onclick = async () => { let files; try { files = await fileData('newText'); } catch (e) { return toast(e.message); }
-  sendNew(Object.assign({ text: withCrit($('#newText').value.trim()), mode: newMode, folder }, files), () => { $('#newText').value = ''; $('#doneText').value = ''; fileClear('newText'); }); };
+  sendNew(Object.assign({ text: withCrit(askFirst($('#newText').value.trim())), mode: newMode, folder }, files), () => { $('#newText').value = ''; $('#doneText').value = ''; $('#askChip').classList.remove('on'); fileClear('newText'); }); };
 
 /* ---------- 공통 ---------- */
 function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 180) + 'px'; }
