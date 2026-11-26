@@ -254,6 +254,31 @@ header .ttl.tap .sub::after{content:" · 상세 ›";color:var(--text)}
 #infoDlg ul.files{list-style:none;margin:0;padding:0;font-size:13px}
 #infoDlg ul.files li{display:flex;gap:8px;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);word-break:break-all}
 #infoDlg ul.files .fx{flex:none;color:var(--muted);font-size:12px}#infoDlg ul.files .fx.bad{color:var(--bad)}
+
+/* 11-26 — 묶음 · 찾기 · 태그 · 대화 잇기 · 개요 · 템플릿 · 그래프 · 커밋 칩 (책등 변수 그대로) */
+.rtags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.rtags .tg,a.tagref{font-size:11px;color:var(--muted);border:1px solid var(--line);padding:0 5px;cursor:pointer;text-decoration:none}
+a.tagref{border:0;padding:0;text-decoration:underline;text-underline-offset:2px}
+a.tref{color:var(--accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.hash{font:11px/1.6 ui-monospace,Consolas,monospace;border:1px solid var(--line);padding:0 4px;cursor:pointer}
+.grp{align-self:stretch;display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--muted);padding:10px 14px 6px;font:12px/1.4 var(--serif);text-align:left;cursor:pointer}
+.grp b{color:var(--text);font-weight:700}
+.grp .go{margin-left:auto}
+#infoDlg .tagrow{display:flex;flex-wrap:wrap;gap:6px}
+#infoDlg ul.lnk,#infoDlg ol.ol{list-style:none;margin:0;padding:0;font-size:14px}
+#infoDlg ul.lnk li,#infoDlg ol.ol li{display:block;padding:5px 0;border-bottom:1px solid var(--line)}
+#infoDlg ul.lnk a,#infoDlg ol.ol a{color:var(--text);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#infoDlg ul.lnk small{display:block;color:var(--muted);font-size:12px}
+#infoDlg .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.hl{outline:2px solid var(--accent);outline-offset:2px}
+#tplDlg,#graphDlg{border:1px solid var(--line);background:var(--bg);color:var(--text);padding:16px;max-width:min(560px,94vw);width:94vw;border-radius:0}
+#tplDlg h3,#graphDlg h3{margin:0 0 10px;font:16px/1.4 var(--serif)}
+#tplList{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto}
+#tplList .tpl{display:flex;gap:8px;align-items:center;border:1px solid var(--line);padding:8px 10px}
+#tplList .tpl button.use{flex:1;text-align:left;border:0;background:transparent;color:var(--text);font:inherit;cursor:pointer}
+#tplList .tpl small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60vw}
+#graphBox svg{width:100%;height:auto;display:block}
+#graphBox text{font-size:10px;fill:var(--text)}
 </style>
 <style>
 /* ---------- 책등 — 머리·발 굵은 먹선 3px, 고른 것은 책등 색, 주 단추 오른쪽 4px 등, 모서리 0 ---------- */
@@ -326,7 +351,7 @@ textarea:focus,input:focus{border-color:var(--spine)}
   <div class="pet dog" id="pDog"><div class="art" id="pDogArt"></div></div>
   <div class="pet cat" id="pCat"><div class="art" id="pCatArt"></div></div>
 </div>
-<div id="searchBar"><input type="search" id="q" placeholder="대화 찾기 (제목·내용)" autocomplete="off" enterkeyhint="search"></div>
+<div id="searchBar"><input type="search" id="q" placeholder="찾기 — 글자 · T12 · #태그 · status:완료 · folder:키" autocomplete="off" enterkeyhint="search"></div>
 <div id="gbar"><span id="gbarText"></span><button class="btn" id="gbarBtn">다시 연결</button></div>
 <div id="sumBar" role="group" aria-label="대화 요약"></div>
 <main id="log" aria-live="polite"></main>
@@ -344,6 +369,10 @@ textarea:focus,input:focus{border-color:var(--spine)}
       <button class="chip on" data-mode="read">읽기</button>
       <button class="chip w" data-mode="write">수정 허용</button>
       <button class="chip" id="doneChip" title="다 됐다고 볼 조건 — 끝낼 때 하나씩 ✅/❌ 로 점검해 답합니다">완료 기준</button>
+      <button class="chip" id="askChip" title="바로 고치지 말고 먼저 필요한 확인 질문부터 하게 합니다">먼저 질문</button>
+      <button class="chip" id="wtChip" title="따로 해 보기 — 떨어진 작업 공간(git worktree)에서 고치고, 끝나면 PC 메신저에서 합치기·버리기">따로 해 보기</button>
+      <button class="chip" id="twoChip" title="두 번 해 보기 — 같은 지시를 시도 A·B 로 따로 돌려 비교(비용 두 배)">두 번 해 보기</button>
+      <button class="chip" id="tplChip" title="저장한 지시 불러오기 · 지금 쓴 지시 저장(이 기기에만)">템플릿</button>
       <span style="width:6px"></span>
       <span id="folderChips" style="display:contents"></span>
     </div>
@@ -418,6 +447,8 @@ textarea:focus,input:focus{border-color:var(--spine)}
   <button class="btn danger" id="selDel" disabled>지우기</button>
 </div>
 <dialog id="infoDlg" aria-label="대화 상세"><button class="x" id="infoX" aria-label="닫기">✕</button><div id="infoBody"></div></dialog>
+<dialog id="tplDlg" aria-label="지시 템플릿"><button class="x" id="tplX" aria-label="닫기">✕</button><h3>템플릿</h3><div id="tplList"></div><div class="actions" style="margin-top:10px"><button class="btn" id="tplSave">지금 쓴 지시를 템플릿으로 저장</button></div><div class="hint" style="margin-top:6px">빈칸: {{날짜}} {{오늘}} {{폴더}} {{입력:설명}} — 이 기기에만 저장됩니다</div></dialog>
+<dialog id="graphDlg" aria-label="대화 그래프"><button class="x" id="graphX" aria-label="닫기">✕</button><h3>대화 그래프</h3><div id="graphBox"></div><div class="hint">점 = 대화 · 선 = 서로 말한 대화(T번호) · ◇ = 태그 — 점을 누르면 그 대화</div></dialog>
 <div id="toast"></div>
 <div class="spine" aria-hidden="true"><b class="vt">메신저</b><small>D&amp;C</small></div>
 <script src="pet/petwarp.js"></script>

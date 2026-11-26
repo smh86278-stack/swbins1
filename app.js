@@ -168,6 +168,235 @@ function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('s
 function el(t, c, x) { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
 const pad = n => String(n).padStart(2, '0');
 
+/* 11-26 — PC 메신저와 같은 규칙: T번호 · #태그 · 제목 줄 · [dnc:wt] 표식 · 「먼저 질문」 문구 · 검토/인계문 문구 */
+var lastRooms = [];
+var TREF_RE = /(?<![A-Za-z0-9])T(\d{1,5})(?![0-9])/g, TAG_RX = /(?<![\w&#/])#([0-9A-Za-z가-힣_][0-9A-Za-z가-힣_\-]{0,19})/g;
+var TAG_SKIP = new Set(['c', 'cw', 'hub', 'k']);
+var HEAD_RE = /^\s*(#{1,4}\s+\S|\*\*[^*\n]{2,80}\*\*|[①-⑳]\s*\S|[■▶◆]\s*\S)/;
+var HASH_RE = /(?<![-\w])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![-\w])/g;
+var WT_RE = /^[ \t]*\[dnc:wt\][ \t]*$/m;
+function headText(l) { return l.replace(/^\s*#{1,4}\s+/, '').replace(/\*\*/g, '').trim().slice(0, 60); }
+function roomTags(r) {
+  const out = [];
+  for (const m of r.msgs.filter(x => !x.bot).concat(r.out)) for (const t of String(m.text || m.rest || '').matchAll(TAG_RX)) {
+    const g = t[1]; if (!TAG_SKIP.has(g.toLowerCase()) && !out.includes(g)) out.push(g);
+  }
+  return out.slice(0, 6);
+}
+function roomFolder(r) { const f = r.msgs.find(m => !m.bot) || r.out[0], m = f && /^@([\w.\-]+)/.exec(f.text || ''); return m ? m[1] : ''; }
+function roomRefs(r) {                                   // 이 대화 글에 나온 다른 대화 번호
+  const s = new Set();
+  for (const m of r.msgs.concat(r.out)) for (const x of String(m.text || m.rest || '').matchAll(TREF_RE)) if (+x[1] !== r.no) s.add(+x[1]);
+  return [...s];
+}
+function tagFind(g) { if (room) closeRoom(); $('#q').value = '#' + g; query = ('#' + g).toLowerCase(); $('#searchBar').classList.add('on'); draw(); }
+/* O2/O7 찾기 — 글자 · T12 · #태그 · folder:/status:/tag:/mode: (폴더·상태·태그·권한:) */
+var ST_ALIAS = { '완료': ['완료'], 'done': ['완료'], '작업중': ['일하는 중'], 'running': ['일하는 중'], '진행중': ['일하는 중', '전송됨', '보내는 중'],
+  '대기': ['전송됨', '보내는 중'], '오류': ['오류'], '실패': ['오류'], 'error': ['오류'], '답필요': ['질문', '실행 확인'], '답할것': ['질문', '실행 확인'], '질문': ['질문'], '확인필요': ['실행 확인'] };
+var FIND_KEY = { '폴더': 'folder', '상태': 'status', '태그': 'tag', '권한': 'mode' };
+function findRoom(r, q) {
+  const f = { rest: [] };
+  for (const w of q.split(/\s+/).filter(Boolean)) {
+    const m = /^(folder|status|tag|mode|폴더|상태|태그|권한):(.+)$/i.exec(w);
+    if (m) { const k = FIND_KEY[m[1]] || m[1].toLowerCase(); (f[k] = f[k] || []).push(m[2].replace(/^[@#]/, '')); continue; }
+    const tm = /^#(\S+)$/.exec(w); if (tm) { (f.tag = f.tag || []).push(tm[1]); continue; }
+    const nm = /^t(\d{1,5})$/i.exec(w); if (nm) { (f.no = f.no || []).push(+nm[1]); continue; }
+    f.rest.push(w);
+  }
+  if (f.no && !f.no.includes(r.no)) return false;
+  if (f.folder && !f.folder.some(x => roomFolder(r).toLowerCase() === x || (!roomFolder(r) && ['default', '기본'].includes(x)))) return false;
+  if (f.status && !f.status.some(x => (ST_ALIAS[x.replace(/\s+/g, '')] || [x]).includes(r.st))) return false;
+  const tags = roomTags(r).map(x => x.toLowerCase());
+  if (f.tag && !f.tag.every(x => tags.includes(x))) return false;
+  if (f.mode && !f.mode.some(x => (/^(수정|write|w|쓰기)/.test(x) ? 'write' : 'read') === r.mode)) return false;
+  const all = [r.title, r.last, r.no ? 'T' + r.no : ''].concat(r.msgs.map(m => (m.text || '') + ' ' + (m.rest || ''))).join('\n').toLowerCase();
+  return f.rest.every(w => all.includes(w));
+}
+/* ⑦ 상태별 묶음 — PC 칸반의 넷(대기 · 작업 중 · 답할 것 · 완료)을 폰에선 접는 묶음으로 */
+var GRP = [['ask', '답할 것'], ['busy', '작업 중'], ['wait', '대기'], ['err', '오류'], ['done', '완료']];
+var grpShut = store.get('grpShut', {});
+function grpOn() { return !!store.get('grpOn', false); }
+function grpOf(r) { return isWait(r) ? 'ask' : r.st === '일하는 중' ? 'busy' : ['전송됨', '보내는 중'].includes(r.st) ? 'wait' : r.st === '오류' ? 'err' : 'done'; }
+function grpSort(rooms) { const o = Object.fromEntries(GRP.map((g, i) => [g[0], i])); return rooms.slice().sort((a, b) => o[grpOf(a)] - o[grpOf(b)] || b.ts - a.ts); }
+function grpHead(g, rooms) {
+  const n = rooms.filter(r => grpOf(r) === g).length, b = el('button', 'grp');
+  b.append(el('b', '', GRP.find(x => x[0] === g)[1]), el('span', '', String(n)), el('span', 'go', grpShut[g] ? '›' : '▾'));
+  b.onclick = () => { grpShut[g] = !grpShut[g]; store.set('grpShut', grpShut); draw(); };
+  return b;
+}
+/* O3·O4·P9 — 말풍선 글의 T번호 → 그 대화, #태그 → 태그 찾기, (답의) 커밋 해시 → 복사. 제목 줄엔 개요가 찾아갈 표시 */
+function richPost(b, m, i) {
+  b.dataset.mi = i;
+  const re = new RegExp(TREF_RE.source + '|' + TAG_RX.source + (m.bot ? '|' + HASH_RE.source : ''), 'g');
+  const walk = n => {
+    if (n.nodeType === 3) {
+      const s = n.nodeValue; let at = 0, x, frag = null;
+      re.lastIndex = 0;
+      while ((x = re.exec(s))) {
+        let node = null;
+        if (x[1]) { const t = lastRooms.find(r => r.no === +x[1] && r.key !== room); if (t) { node = el('a', 'tref', x[0]); node.title = 'T' + t.no + ' ' + t.title; node.onclick = e => { e.stopPropagation(); openRoom(t.key); }; } }
+        else if (x[2]) { if (!TAG_SKIP.has(x[2].toLowerCase())) { const g = x[2]; node = el('a', 'tagref', x[0]); node.onclick = e => { e.stopPropagation(); tagFind(g); }; } }
+        else { const hv = x[0]; node = el('span', 'hash', hv.slice(0, 7)); node.title = hv + ' — 눌러서 복사'; node.onclick = e => { e.stopPropagation(); try { navigator.clipboard.writeText(hv); toast('커밋 ' + hv.slice(0, 7) + ' 복사했습니다'); } catch (err) {} }; }
+        if (!node) continue;
+        frag = frag || document.createDocumentFragment();
+        frag.append(s.slice(at, x.index), node); at = x.index + x[0].length;
+      }
+      if (frag) { frag.append(s.slice(at)); n.replaceWith(frag); }
+      return;
+    }
+    if (n.nodeType === 1 && (n.matches('button,a,pre,code,.ask') )) return;
+    [...n.childNodes].forEach(walk);
+  };
+  walk(b);
+}
+function outlineOf(r) {                                  // 제목 줄이 셋 이상인 가장 최근 답
+  for (let i = r.msgs.length - 1; i >= 0; i--) {
+    const m = r.msgs[i]; if (!m.bot || !m.text) continue;
+    const hs = m.text.split('\n').filter(l => HEAD_RE.test(l)).map(headText);
+    if (hs.length >= 3) return { i, hs };
+  }
+  return null;
+}
+function outlineGo(i, h) {
+  $('#infoDlg').close();
+  const b = document.querySelector('#log .bubble[data-mi="' + i + '"]'); if (!b) return;
+  const fold = b.querySelector('.mdbody.fold'), more = b.querySelector('button.more'); if (fold && more) more.click();
+  const key = h.replace(/\s+/g, '').slice(0, 20);
+  const t = [...b.querySelectorAll('.mdbody > div, .mdbody .h')].find(x => x.textContent.replace(/\s+/g, '').includes(key)) || b;
+  t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('hl'); setTimeout(() => t.classList.remove('hl'), 1600);
+}
+function infoMore(box, r) {
+  const tags = roomTags(r);
+  if (tags.length) {
+    box.append(el('div', 'sec', '태그'));
+    const row = el('div', 'tagrow');
+    for (const g of tags) { const c = el('button', 'chip', '#' + g); c.onclick = () => { $('#infoDlg').close(); tagFind(g); }; row.append(c); }
+    box.append(row);
+  }
+  const link = x => { const li = el('li'), a = el('a', '', 'T' + x.no + ' ' + x.title); a.onclick = () => { $('#infoDlg').close(); openRoom(x.key); }; li.append(a, el('small', '', x.st || '')); return li; };
+  const said = roomRefs(r).map(n => lastRooms.find(x => x.no === n)).filter(Boolean);
+  if (said.length) { const ul = el('ul', 'lnk'); said.forEach(x => ul.append(link(x))); box.append(el('div', 'sec', '이 대화가 말한 대화'), ul); }
+  const back = r.no ? lastRooms.filter(x => x.key !== r.key && roomRefs(x).includes(r.no)) : [];
+  if (back.length) { const ul = el('ul', 'lnk'); back.forEach(x => ul.append(link(x))); box.append(el('div', 'sec', '이 대화를 언급한 대화'), ul); }
+  const ol = outlineOf(r);
+  if (ol) {
+    box.append(el('div', 'sec', '답 개요 · ' + ol.hs.length));
+    const o = el('ol', 'ol');
+    ol.hs.forEach(hh => { const li = el('li'), a = el('a', '', hh); a.onclick = () => outlineGo(ol.i, hh); li.append(a); o.append(li); });
+    box.append(o);
+  }
+  if (r.no) {
+    const acts = el('div', 'acts'), ho = el('button', 'btn', '인계문으로 새 대화');
+    ho.onclick = () => handoffSend(r); acts.append(ho);
+    if (r.st === '완료') { const rv = el('button', 'btn', '검토 받기'); rv.onclick = () => reviewSend(r); acts.append(rv); }
+    box.append(acts);
+  }
+}
+/* P5·P11 — PC 메신저와 같은 문구로 읽기 전용 새 대화(같은 폴더) */
+function clipText(s, n) { s = String(s || '').trim(); return s.length > n ? s.slice(0, n) + ' …' : s; }
+function roomFiles(r) { const fl = [...r.msgs].reverse().find(m => m.bot && m.files); return fl ? fl.files.list.map(x => '- ' + x.replace(/ (작성|실패|\d+번)$/, '')).join('\n') : ''; }
+function sendSide(r, text, what) {
+  const f = roomFolder(r), [first, ...rest] = text.split('\n');
+  const subject = TAG.read + (f ? ' @' + f : '') + ' ' + first.trim().slice(0, 90);
+  if (openMail(subject, rest.join('\n').trim(), { kind: 'say', text, mode: 'read', thread: '', label: '읽기' + (f ? ' @' + f : '') })) { $('#infoDlg').close(); toast(what + ' — 새 대화로 보냈습니다'); }
+}
+function reviewSend(r) {
+  const last = [...r.msgs].reverse().find(m => m.bot && m.text); if (!last || !r.no) return;
+  if (!confirm('T' + r.no + ' 의 마지막 답과 바뀐 파일을 다른 세션에게 검토받을까요?\n(읽기 전용 새 대화로 보냅니다 — 파일은 고치지 않습니다)')) return;
+  const files = roomFiles(r);
+  sendSide(r, 'T' + r.no + ' 검토 — ' + r.title + '\n'
+    + 'T' + r.no + ' 대화의 마지막 답과 바뀐 파일을 비판적으로 검토해 주세요. 문제 · 빠진 점 · 위험만 짧게 적고, 고치지는 말고 읽기만 하세요. 바뀐 파일은 직접 열어 확인하세요.\n\n'
+    + '[마지막 답]\n' + clipText(last.text, 3000) + (files ? '\n\n[바뀐 파일]\n' + files : ''), '검토 받기');
+}
+function handoffSend(r) {
+  if (!r.no) return;
+  if (!confirm('T' + r.no + ' 대화를 인계문(목표·한 일·남은 일)으로 정리하는 새 대화를 시작할까요?\n(읽기 전용 — 파일은 고치지 않습니다)')) return;
+  const lines = []; let n = 0;
+  for (const m of [...r.msgs].reverse()) {
+    const s = (m.bot ? 'Claude: ' : '나: ') + clipText(m.text || m.rest, 800);
+    if (n + s.length > 6000) break; lines.unshift(s); n += s.length;
+  }
+  const files = roomFiles(r);
+  sendSide(r, 'T' + r.no + ' 이어서 — ' + r.title + '\n'
+    + 'T' + r.no + ' 대화를 다음 세션이 이어받을 인계문으로 정리해 주세요: 목표 · 한 일 · 바뀐 파일 · 남은 일 · 주의점. 고치지는 말고 정리만 하세요. 끝에 다음에 할 일을 고르기로 제안해 주세요.\n\n'
+    + '[대화]\n' + lines.join('\n\n') + (files ? '\n\n[바뀐 파일]\n' + files : ''), '인계문');
+}
+/* P6 · ⑤ · ⑥ — 새 지시 칩 */
+function askFirst(text) { return text && $('#askChip').classList.contains('on') ? text + '\n\n바로 고치지 말고 먼저 필요한 확인 질문만 하고 멈춰 주세요.' : text; }
+function wtMark(s) { const i = s.indexOf('\n'); return i < 0 ? s + '\n[dnc:wt]' : s.slice(0, i) + '\n[dnc:wt]' + s.slice(i); }   // 완료 기준 줄은 맨 끝에 남게 둘째 줄에
+$('#askChip').onclick = () => $('#askChip').classList.toggle('on');
+for (const id of ['#wtChip', '#twoChip']) $(id).onclick = () => {
+  const on = $(id).classList.toggle('on');
+  if (on) { $(id === '#twoChip' ? '#wtChip' : '#twoChip').classList.remove('on'); setMode('write'); }
+};
+var twoNext = '';                                         // 두 번 해 보기 — 시도 A 를 보낸 뒤 입력칸에 채워 둘 시도 B
+function chipPrep(text) {                                 // 보내기 직전: 먼저 질문 → 완료 기준 → (따로/두 번) 표식
+  const two = $('#twoChip').classList.contains('on'), wt = two || $('#wtChip').classList.contains('on');
+  let base = withCrit(askFirst(text));
+  twoNext = '';
+  if (two) {
+    if (!confirm('같은 지시를 따로 두 번(시도 A · B) 돌려 비교합니다.\n\n· 비용이 두 배로 듭니다.\n· 시도 A 를 보낸 뒤 입력칸에 시도 B 가 채워지면 한 번 더 보내기를 누르세요.\n· 합치기는 PC 메신저 상세 패널에서 하나만 「이걸로 합치기」.')) return null;
+    const tag = '#시도' + Math.random().toString(16).slice(2, 6), i = base.indexOf('\n'), title = i < 0 ? base : base.slice(0, i), rest = i < 0 ? '' : base.slice(i);
+    twoNext = wtMark(title + ' · 시도 B ' + tag + rest);
+    base = title + ' · 시도 A ' + tag + rest;
+  }
+  for (const c of ['#askChip', '#wtChip', '#twoChip']) $(c).classList.remove('on');
+  return wt ? wtMark(base) : base;
+}
+function chipAfter() { if (!twoNext) return; const t = $('#sayText'); t.value = twoNext; twoNext = ''; setMode('write'); grow(t); refresh(); toast('시도 B 도 보내기를 누르세요'); }
+/* O9 지시 템플릿 — 이 기기 저장(PC 메신저 템플릿과 같은 빈칸) */
+var tpls = store.get('tpl', []);
+function tplFill(body) {
+  const d = new Date(), wk = '일월화수목금토'[d.getDay()];
+  let s = body.replace(/\{\{날짜\}\}/g, d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()))
+    .replace(/\{\{오늘\}\}/g, (d.getMonth() + 1) + '월 ' + d.getDate() + '일(' + wk + ')')
+    .replace(/\{\{폴더\}\}/g, folder ? '@' + folder : '기본 폴더');
+  const asks = [...new Set([...s.matchAll(/\{\{입력:([^}]{1,40})\}\}/g)].map(m => m[1]))];
+  for (const q of asks) { const v = prompt(q); if (v === null) return null; s = s.split('{{입력:' + q + '}}').join(v); }
+  return s;
+}
+function tplDraw() {
+  const box = $('#tplList'); box.replaceChildren();
+  if (!tpls.length) box.append(el('div', 'hint', '저장한 템플릿이 없습니다 — 지시를 쓰고 아래 단추로 저장하세요'));
+  for (const x of tpls) {
+    const row = el('div', 'tpl'), use = el('button', 'use'), del = el('button', 'btn', '지우기');
+    use.append(el('b', '', x.title), el('small', '', x.body.slice(0, 80)));
+    use.onclick = () => { const s = tplFill(x.body); if (s == null) return; const t = $('#sayText'); t.value = t.value.trim() ? t.value.replace(/\s+$/, '') + '\n' + s : s; grow(t); refresh(); $('#tplDlg').close(); t.focus(); };
+    del.onclick = () => { if (!confirm('「' + x.title + '」 템플릿을 지울까요?')) return; tpls = tpls.filter(y => y !== x); store.set('tpl', tpls); tplDraw(); };
+    row.append(use, del); box.append(row);
+  }
+}
+$('#tplChip').onclick = () => { tplDraw(); $('#tplDlg').showModal(); };
+$('#tplX').onclick = () => $('#tplDlg').close();
+$('#tplSave').onclick = () => {
+  const body = $('#sayText').value.trim(); if (!body) { toast('먼저 지시를 쓰세요'); return; }
+  const title = prompt('템플릿 이름', body.split('\n')[0].slice(0, 30)); if (!title || !title.trim()) return;
+  tpls = tpls.filter(x => x.title !== title.trim()).concat([{ title: title.trim(), body }]).slice(-40); store.set('tpl', tpls); tplDraw(); toast('템플릿으로 저장했습니다');
+};
+/* O10 그래프 — 대화(점) · T번호 관계(선) · 태그(◇). 원 둘레에 놓는 간단한 배치 */
+function graphOpen() {
+  const rooms = lastRooms.filter(r => r.no).slice(0, 40), NS = 'http://www.w3.org/2000/svg', W = 360, Hh = 360, cx = W / 2, cy = Hh / 2;
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + Hh);
+  const mk = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const pos = {}, tags = {};
+  rooms.forEach((r, i) => { const a = i / Math.max(1, rooms.length) * Math.PI * 2 - Math.PI / 2; pos[r.no] = [cx + Math.cos(a) * 140, cy + Math.sin(a) * 140]; for (const g of roomTags(r)) (tags[g] = tags[g] || []).push(r.no); });
+  const tg = Object.keys(tags).filter(g => tags[g].length > 1).slice(0, 8);
+  tg.forEach((g, i) => { const a = i / Math.max(1, tg.length) * Math.PI * 2; pos['#' + g] = [cx + Math.cos(a) * 55, cy + Math.sin(a) * 55]; });
+  const line = (a, b, w, dash) => { if (pos[a] && pos[b]) svg.append(mk('line', { x1: pos[a][0], y1: pos[a][1], x2: pos[b][0], y2: pos[b][1], stroke: 'currentColor', 'stroke-width': w, 'stroke-dasharray': dash || '', opacity: dash ? .35 : .7 })); };
+  for (const r of rooms) for (const n of roomRefs(r)) line(r.no, n, 1.6);
+  for (const g of tg) for (const n of tags[g]) line('#' + g, n, 1, '3 3');
+  for (const g of tg) { const [x, y] = pos['#' + g]; svg.append(mk('rect', { x: x - 5, y: y - 5, width: 10, height: 10, transform: 'rotate(45 ' + x + ' ' + y + ')', fill: 'none', stroke: 'currentColor' })); const t = mk('text', { x: x + 8, y: y + 3 }); t.textContent = '#' + g; svg.append(t); }
+  for (const r of rooms) {
+    const [x, y] = pos[r.no], gr = mk('g', { style: 'cursor:pointer' });
+    gr.append(mk('circle', { cx: x, cy: y, r: 6, fill: isWait(r) ? 'var(--bad)' : isBusy(r) ? 'var(--accent)' : 'var(--muted)' }));
+    const t = mk('text', { x: x + 8, y: y + 3 }); t.textContent = 'T' + r.no + ' ' + r.title.slice(0, 10); gr.append(t);
+    gr.addEventListener('click', () => { $('#graphDlg').close(); openRoom(r.key); }); svg.append(gr);
+  }
+  $('#graphBox').replaceChildren(rooms.length ? svg : el('div', 'hint', '번호가 붙은 대화가 아직 없습니다'));
+  $('#graphDlg').showModal();
+}
+$('#graphX').onclick = () => $('#graphDlg').close();
+
 /* ---- 보낸 기록 ---- */
 function draw() {
   const box = $('#log'); box.replaceChildren();
@@ -256,7 +485,7 @@ $('#saySend').onclick = () => {
   const t = parseInt($('#sayThread').value, 10), files = attach.slice();
   if (!text && !files.length) return;
   if (!text) text = '사진 봐줘';                          // 사진만 보내면 이 말로
-  text = withCrit(text);
+  if (!(t > 0)) { const pre = chipPrep(text); if (pre == null) return; text = pre; } else text = withCrit(text);
   const [first, ...rest] = text.split('\n');
   // '/jira 키' 줄이 든 새 지시는 수정 허용으로 — PC 는 쓰기 지시에서만 Jira 처리로 돌린다(옛 Jira 탭과 같게)
   const m = !(t > 0) && /^[ \t]*\/jira[ \t]+[A-Za-z][A-Za-z0-9]+-\d+/im.test(text) ? 'write' : mode;
@@ -267,6 +496,7 @@ $('#saySend').onclick = () => {
   const body = (first.trim().length > 90 ? first.trim() + '\n' : '') + rest.join('\n').trim();
   if (!openMail(subject, body, { kind: 'say', text, mode: m, files, thread: t > 0 ? t : '', label: (t > 0 ? 'T' + t + ' · ' : '') + (m === 'write' ? '수정' : '읽기') + (folder && !(t > 0) ? ' @' + folder : '') })) return;
   $('#sayText').value = ''; $('#doneText').value = ''; grow($('#sayText')); attach = []; drawAttach(); refresh();
+  chipAfter();
 };
 
 /* 오르카 결 3차 — 완료 기준(PC 메신저와 같은 규칙: 지시 끝 「완료 기준:」 + "- " 줄, 답 끝 ✅/❌ 줄) */
@@ -838,7 +1068,7 @@ function drawQuick(r) {
   }));
 }
 function drawGmail(box) {
-  const list = gList(), rooms = gRooms(list);
+  const list = gList(), rooms = gRooms(list); lastRooms = rooms;
   if (room && !rooms.some(r => r.key === room)) {
     room = gFollow(room, list);
     try { history.replaceState(room ? { room } : null, ''); } catch (e) {}
@@ -853,8 +1083,7 @@ function drawRooms(box, rooms) {
   if (sumF) rooms = rooms.filter(sumF === 'wait' ? isWait : isBusy);
   $('#searchBar').classList.toggle('on', rooms.length > 4 || !!query);   // 방이 몇 개 넘으면 검색칸
   if (query) {
-    const hit = t => (t || '').toLowerCase().includes(query);
-    rooms = rooms.filter(r => hit(r.title) || hit(r.last) || r.msgs.some(m => hit(m.text) || hit(m.rest)) || hit(r.no ? 'T' + r.no : ''));
+    rooms = rooms.filter(r => findRoom(r, query));
     if (!rooms.length) { box.append(el('div', 'empty', '「' + $('#q').value.trim() + '」 이(가) 들어간 대화가 없습니다')); return; }
   }
   if (!rooms.length) {
@@ -862,7 +1091,10 @@ function drawRooms(box, rooms) {
     e.innerHTML = '<b>Gmail 로 주고받습니다</b><br><br>아래에 할 일을 적고 보내면 PC 가 받아 일하고, 대화마다 <b>방</b>이 생겨 답이 말풍선으로 옵니다.<br><br>선택지가 오면 방 안 말풍선의 단추를 누르고 보내기만 누르세요.';
     box.append(e); return;
   }
+  if (grpOn()) rooms = grpSort(rooms);
+  let gPrev = null;
   for (const r of rooms) {
+    if (grpOn()) { const g = grpOf(r); if (g !== gPrev) { box.append(grpHead(g, rooms)); gPrev = g; } if (grpShut[g]) continue; }
     const row = el('button', 'room'), body = el('div', 'rbody'), top = el('div', 'rtop'), bot = el('div', 'rbot');
     top.append(el('span', 'rtitle', r.title));
     if (gpin[r.key]) top.append(el('span', 'pin', '📌'));
@@ -872,6 +1104,8 @@ function drawRooms(box, rooms) {
     if (r.st) bot.append(el('span', 'rst' + ({ '질문': ' ask', '실행 확인': ' ask', '오류': ' err', '일하는 중': ' busy', '보내는 중': ' busy', '전송됨': '' }[r.st] || ''), r.st));
     if (r.unread) bot.append(el('span', 'dot'));
     body.append(top, bot);
+    const tgs = roomTags(r);
+    if (tgs.length) { const tr = el('div', 'rtags'); for (const g of tgs) { const c = el('span', 'tg', '#' + g); c.onclick = e => { if (editing) return; e.stopPropagation(); tagFind(g); }; tr.append(c); } body.append(tr); }
     row.dataset.key = r.key;
     if (editing) {
       row.classList.toggle('sel', picked.has(r.key));
@@ -928,6 +1162,7 @@ function drawRoom(box, r) {
       });
       b.append(ask);
     }
+    richPost(b, m, i);
     w.append(b, meta); add(m.ts, w);
   });
   for (const o of r.out) {                             // 아직 못 보낸 것
@@ -964,10 +1199,13 @@ function isWait(r) { return r.st === '질문' || r.st === '실행 확인'; }
 function isBusy(r) { return ['일하는 중', '전송됨', '보내는 중'].includes(r.st); }
 function drawSum(rooms) {
   const bar = $('#sumBar'), w = rooms.filter(isWait).length, b = rooms.filter(isBusy).length;
-  bar.classList.toggle('on', !room && !editing && (w + b > 0 || !!sumF));
+  bar.classList.toggle('on', !room && !editing && (w + b > 0 || !!sumF || rooms.length > 1));
   bar.replaceChildren();
   const mk = (f, label, n, cls) => { const x = el('button', cls + (sumF === f ? ' on' : '')); x.append(document.createTextNode(label + ' '), el('b', '', String(n))); x.onclick = () => { sumF = sumF === f ? '' : f; draw(); }; return x; };
   bar.append(mk('wait', '답할 것', w, 'wait'), mk('busy', '진행 중', b, 'busy'));
+  const gb = el('button', grpOn() ? 'on' : '', '묶음'); gb.title = '상태별로 묶어 보기(답할 것 · 작업 중 · 대기 · 오류 · 완료)'; gb.onclick = () => { store.set('grpOn', !grpOn()); draw(); };
+  const gr = el('button', '', '그래프'); gr.title = '대화끼리 이어진 모양'; gr.onclick = graphOpen;
+  bar.append(gb, gr);
 }
 function roomEvents(r) {
   const ev = []; let prevAsk = false;
@@ -1003,6 +1241,7 @@ function openInfo(r) {
       box.append(ul);
     }
   }
+  infoMore(box, r);
   box.append(el('div', 'sec', '정보'));
   const dl = el('dl'), add = (k, v) => { if (v) dl.append(el('dt', '', k), el('dd', '', v)); };
   add('번호', r.no ? 'T' + r.no : '대기'); add('권한', r.mode === 'write' ? '수정 허용' : '읽기');
