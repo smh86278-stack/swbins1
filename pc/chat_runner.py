@@ -458,6 +458,8 @@ def reply_footer(job):
         " · 수정 허용 모드" if job.get("mode") == "write" else "", " · 이어서 실행" if job.get("resume_id") else "")]
     if job.get("auto_resumed"):                         # 끊긴 일 이어 하기(11-26) — 워커가 다시 떠서 같은 세션으로 마저 한 작업
         lines.append("↻ 끊겨서 이어서 진행했습니다")
+    if job.get("setup_note"):                           # ⑧ 폴더별 시작 명령의 결과 한 줄
+        lines.append(str(job["setup_note"])[:200])
     note = changed_files_note(job)                      # 바뀐 파일 — 폰·메신저가 이 줄을 읽어 목록으로
     if note:
         lines.append(note)
@@ -767,6 +769,7 @@ class Runner:
         return {"enabled": bool(cfg.get("run_here")), "since": cfg.get("run_since") or 0,
                 "workdir": cfg.get("run_workdir") or "", "home": os.path.expanduser("~"),
                 "dirs": "\n".join("%s=%s" % kv for kv in (cfg.get("run_dirs") or {}).items()),
+                "setup": "\n".join("%s=%s" % kv for kv in (cfg.get("run_setup") or {}).items()),
                 "claude": claude[-1] if claude else "", "blocked": self.blocked(cfg, src),
                 "notice": cfg.get("run_conflict") or "", "error": self.error, "busy": self.current,
                 "has_key": bool(str(cfg.get("key_word") or "").strip()),
@@ -790,6 +793,8 @@ class Runner:
             own["run_workdir"] = os.path.abspath(wd) if wd else ""
         if "dirs" in data:
             own["run_dirs"] = parse_dirs(data.get("dirs"))
+        if "setup" in data:                              # ⑧ 폴더별 시작 명령
+            own["run_setup"] = parse_setup(data.get("setup"), list(own.get("run_dirs") or {}) + ["default"])
         self.configure_extras(own, data)
         want = bool(data.get("enabled"))
         if want and not own.get("run_here"):
@@ -1801,6 +1806,11 @@ class Runner:
         proto = os.path.join(C.RES, "chat-protocol.md")
         if job.get("chat") and os.path.isfile(proto):
             args += ["--append-system-prompt-file", proto]   # 사람에게 물을 자리에서 ```choices 블록을 쓰게 하는 규칙
+        setup = "" if job.get("auto_resumed") else (cfg.get("run_setup") or {}).get(job.get("workdir_label") or "default")
+        if setup:                                     # ⑧ 폴더별 시작 명령 — 시작 전 스냅샷보다 먼저(되돌리기가 pull 을 되돌리지 않게)
+            job["setup_note"] = run_setup(setup, job["workdir"])
+            self.update_job(jid, setup_note=job["setup_note"])
+            C.log("[실행] %s %s" % (jid, job["setup_note"]))
         snap = checkpoint.writes(tools)               # 파일을 바꿀 수 있는 작업만 — 「이 작업 전으로 되돌리기」
         if snap and not job.get("auto_resumed"):     # 이어 한 작업은 처음 시작 전 상태를 그대로 둔다
             checkpoint.snap(job["workdir"], jid, "before")
@@ -2199,6 +2209,69 @@ def cap_error(res, cfg):
     cap = ("작업 하나 비용 상한($%.2f)" % cost_limit(cfg, "job_cost_usd") if sub == "error_max_budget_usd" else
            "작업 하나 턴 상한(%s턴)" % cfg.get("job_max_turns") if sub == "error_max_turns" else "")
     return "%s에 닿아 중간에 멈췄습니다. 이어서 하려면 '계속' 이라고 답하세요." % cap if cap else ""
+
+
+# 폴더별 시작 명령(11-26) — 지시 전에 그 폴더에서 한 번(git pull 같은 것). 120초까지, 실패해도 작업은 그대로.
+# 지우기·push·되돌리기·받아서 바로 실행 같은 명령은 시작 명령으로 못 쓴다(설정 때 막고, 돌릴 때 한 번 더 본다).
+SETUP_TIMEOUT = 120
+SETUP_DENY = re.compile(r"(?i)(\brm\s+-\w*[rf]|\brmdir\b|\brd\s+/s|\bdel\s+/|\bformat\s+[a-z]:|remove-item\b|"
+                        r"\bgit\s+(push|reset\s+--hard|clean\b|checkout\s+--\s|restore\b)|\bshutdown\b|"
+                        r"\bcurl\b[^|]*\|\s*\w*sh\b|\b(iwr|irm|invoke-webrequest|invoke-restmethod)\b[^|]*\|\s*iex|invoke-expression|\bmkfs|\bdd\s+if=)")
+
+
+def setup_blocked(cmd):
+    return bool(SETUP_DENY.search(str(cmd or "")))
+
+
+def parse_setup(text, keys=None):
+    """'키=명령' 줄들 → {키: 명령}. 기본 폴더는 default. keys 를 주면 그 안의 키만."""
+    if isinstance(text, dict):
+        text = "\n".join("%s=%s" % kv for kv in text.items())
+    out = {}
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        k, sep, v = line.partition("=")
+        k, v = k.strip().lstrip("@"), v.strip()
+        if not sep or not re.fullmatch(r"\w{1,32}", k) or not v:
+            raise ValueError("시작 명령은 한 줄에 '키=명령' 으로 적어 주세요(기본 폴더는 default=…): %s" % line)
+        if keys is not None and k not in keys:
+            raise ValueError("등록된 폴더 키가 아닙니다: %s (작업 폴더 목록의 키나 default)" % k)
+        if len(v) > 300:
+            raise ValueError("시작 명령이 너무 깁니다(300자까지): %s" % k)
+        if setup_blocked(v):
+            raise ValueError("시작 명령으로 쓸 수 없는 명령입니다(지우기·push·되돌리기 등): %s" % v)
+        out[k] = v
+    return out
+
+
+def run_setup(cmd, workdir, timeout=SETUP_TIMEOUT):
+    """시작 명령을 그 폴더에서 돌리고 답 꼬리에 붙일 한 줄을 돌려준다."""
+    cmd = str(cmd or "").strip()
+    if not cmd:
+        return ""
+    short = cmd if len(cmd) <= 60 else cmd[:57] + "…"
+    if setup_blocked(cmd):
+        return "시작 명령 `%s` — 막음(지우기·push 같은 명령은 시작 명령으로 못 씁니다)" % short
+    kw = {"creationflags": CREATE_NO_WINDOW} if IS_WIN else {"start_new_session": True}
+    try:
+        p = subprocess.Popen(cmd, shell=True, cwd=workdir, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kw)
+        tree = ProcTree(p)                           # 셸이 띄운 자식까지 한 묶음으로(시간 넘기면 같이 끊는다)
+        try:
+            out, _ = p.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            tree.kill()
+            return "시작 명령 `%s` — %d초를 넘겨 끊음(작업은 그대로 진행)" % (short, timeout)
+    except OSError as e:
+        return "시작 명령 `%s` — 실행 못 함: %s" % (short, e)
+    try:
+        txt = out.decode("utf-8")
+    except UnicodeDecodeError:
+        txt = out.decode("mbcs" if IS_WIN else "latin-1", "replace")
+    lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+    last = (lines[-1] if lines else "")[:120]
+    return "시작 명령 `%s` — %s%s" % (short, "성공" if p.returncode == 0 else "실패(%d)" % p.returncode, ": " + last if last else "")
 
 
 def parse_dirs(text):

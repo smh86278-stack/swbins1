@@ -215,6 +215,7 @@ LOG_PATH = os.path.join(LOCALDATA, "chat.log")
 HIDDEN_PATH = os.path.join(LOCALDATA, "hidden.json")      # 화면에서 지운 대화(키 목록) — 메일은 그대로, 이 PC 목록에서만 숨긴다
 CLEARED_PATH = os.path.join(LOCALDATA, "cleared.json")    # 전체 지우기 시각 — 그 전에 끝난 대화를 숨긴다(새 글이 오면 다시 보임)
 URGENT_PATH = os.path.join(LOCALDATA, "urgent.json")      # 🔥 급건 표시한 대화(키 목록) — 목록 맨 위
+TEMPLATES_PATH = os.path.join(LOCALDATA, "templates.json")  # 📋 지시 템플릿(제목·본문, {{날짜}} 같은 빈칸) — 이 PC 에만
 SNIPPETS_PATH = os.path.join(LOCALDATA, "snippets.json")  # 📝 저장해 두는 답(글 목록) — 없으면 기본 몇 개
 KEY_RE = re.compile(r"\s*\[k:[^\]\s]{1,64}\]\s*$")       # 폰이 제목 끝에 붙이는 암호 단어 — 화면에는 안 보인다
 BODY_KEY_RE = re.compile(r"^[ \t]*\[k:[^\]\s]{1,64}\][ \t\r]*$", re.M)   # 폰(Gmail) 페이지는 본문 마지막 줄에 붙인다
@@ -400,7 +401,8 @@ def folders_info():
     keys = gw.get("workdir_keys") if isinstance(gw.get("workdir_keys"), dict) else {}
     return {"mode": "gateway", "workdir": gw.get("default_workdir") or "", "file": GATEWAY_CFG,
             "dirs": "\n".join("%s=%s" % kv for kv in keys.items()),
-            "company": gw.get("company_workdirs")}
+            "company": gw.get("company_workdirs"),
+            "setup": "\n".join("%s=%s" % kv for kv in (gw.get("folder_setup") or {}).items()) if isinstance(gw.get("folder_setup"), dict) else ""}
 
 
 def save_gateway_folders(data):
@@ -423,6 +425,8 @@ def save_gateway_folders(data):
         gw["company_workdirs"] = [old]
         note = "회사 모드 폴더는 옛 기본 폴더(%s) 그대로 둡니다." % old
     gw["default_workdir"], gw["workdir_keys"] = new, dirs
+    if "setup" in data:                                     # ⑧ 폴더별 시작 명령 — 게이트웨이가 작업에 setup_cmd 로 실어 워커가 돌린다
+        gw["folder_setup"] = chat_runner.parse_setup(data.get("setup"), list(dirs) + ["default"])
     txt = json.dumps(gw, ensure_ascii=False, indent=2) + "\n"
     tmp = GATEWAY_CFG + ".tmp"
     with open(tmp, "wb") as f:
@@ -1137,6 +1141,44 @@ def thread_commits(key):
     return {"commits": out[:10]}
 
 
+GIT_CACHE = {}                                              # 작업 폴더 → (시각, {branch, dirty})
+
+
+def thread_workdir(t):
+    """그 대화가 맡긴 작업의 작업 폴더 — 게이트웨이 작업 폴더·직접 실행 작업 폴더 어느 쪽이든."""
+    jid = str(t.get("job") or "")
+    if not re.fullmatch(r"[\w\-]{1,80}", jid):
+        return ""
+    for d in (jobs_dir(), getattr(RUNNER, "jobs_dir", "")):
+        if d and os.path.isfile(os.path.join(d, "%s.json" % jid)):
+            wd = str((read_json(os.path.join(d, "%s.json" % jid)) or {}).get("workdir") or "")
+            if wd and os.path.isdir(wd):
+                return wd
+    return ""
+
+
+def thread_gitinfo(key):
+    """P8(11-26) — 그 대화 작업 폴더의 지금 git 브랜치 · 안 커밋한 파일 수. git 저장소가 아니면 빈 값."""
+    t = next((x for x in BOX.threads() if x["key"] == key), None)
+    wd = thread_workdir(t) if t else ""
+    if not wd:
+        return {}
+    hit = GIT_CACHE.get(wd)
+    if hit and time.time() - hit[0] < 20:
+        return hit[1]
+    info, nw = {}, {"creationflags": 0x08000000} if IS_WIN else {}
+    try:
+        b = subprocess.run(["git", "-C", wd, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, timeout=10, **nw)
+        if b.returncode == 0:
+            st = subprocess.run(["git", "-C", wd, "status", "--porcelain=v1"], capture_output=True, timeout=15, **nw)
+            info = {"branch": b.stdout.decode("utf-8", "replace").strip()[:80],
+                    "dirty": len([ln for ln in st.stdout.decode("utf-8", "replace").splitlines() if ln.strip()]) if st.returncode == 0 else None}
+    except (OSError, subprocess.SubprocessError):
+        info = {}
+    GIT_CACHE[wd] = (time.time(), info)
+    return info
+
+
 def thread_extra(t, held):
     """목록·상세용 — 내가 쓴 말의 #태그, 주고받은 말에 나온 다른 대화 번호(T12), 맡아 둔 이어 말하기."""
     tags, refs = [], set()
@@ -1150,7 +1192,9 @@ def thread_extra(t, held):
     refs.discard(t.get("no"))
     hl = [{"id": x.get("id"), "ts": x.get("ts"), "text": str((x.get("data") or {}).get("text") or "")[:400]}
           for x in held.get(t["key"], [])]
-    return {"tags": tags[:8], "refs": sorted(refs)[:30], "held": hl}
+    first = next((m for m in t.get("msgs") or [] if not m.get("bot")), None)
+    fm = re.match(r"^@([\w.\-]+)", str((first or {}).get("text") or ""))
+    return {"tags": tags[:8], "refs": sorted(refs)[:30], "held": hl, "folder": fm.group(1) if fm else ""}
 
 
 # ----------------------------------------------------------------- 메일함 감시
@@ -1365,6 +1409,36 @@ def edit_snippets(data):
     items = items[:SNIPPET_MAX]
     _write_local(SNIPPETS_PATH, items)
     return {"ok": True, "snippets": items}
+
+
+TEMPLATE_MAX = 40
+
+
+def load_templates():
+    got = _read_local(TEMPLATES_PATH, None)
+    if not isinstance(got, list):
+        return []
+    return [{"title": str(x.get("title")).strip()[:60], "body": str(x.get("body"))} for x in got
+            if isinstance(x, dict) and str(x.get("title") or "").strip() and str(x.get("body") or "").strip()]
+
+
+def edit_templates(data):
+    """📋 지시 템플릿 — {"add": {title, body}} 이면 맨 앞에(같은 이름은 바꿈), {"remove": 이름} 이면 뺀다."""
+    items = load_templates()
+    add = data.get("add")
+    if isinstance(add, dict):
+        title, body = str(add.get("title") or "").strip()[:60], str(add.get("body") or "").strip()
+        if not title or not body:
+            raise ValueError("템플릿 이름과 내용을 넣어 주세요")
+        if len(body) > 4000:
+            raise ValueError("템플릿이 너무 깁니다(4000자까지)")
+        items = [{"title": title, "body": body}] + [x for x in items if x["title"] != title]
+    rem = str(data.get("remove") or "").strip()
+    if rem:
+        items = [x for x in items if x["title"] != rem]
+    items = items[:TEMPLATE_MAX]
+    _write_local(TEMPLATES_PATH, items)
+    return {"ok": True, "templates": items}
 
 
 BOX = Box()
@@ -1584,7 +1658,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "jira_prefix": cfg.get("jira_prefix") or "",
                 "support_email": str(COMPANY.get("support_email") or "").strip(),    # 실패 카드의 ✉ 문의 — 없으면 기록 복사만
                 "threads": [{k: t.get(k) for k in ("key", "no", "title", "mode", "status", "ts", "last", "last_bot", "progress", "urgent",
-                                                    "job", "tags", "refs", "held", "stall")} for t in BOX.threads()],
+                                                    "job", "tags", "refs", "held", "stall", "folder")} for t in BOX.threads()],
             })
         if u.path == "/api/thread":
             key = (parse_qs(u.query).get("key") or [""])[0]
@@ -1618,6 +1692,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, RUNNER.jira.info())
         if u.path == "/api/snippets":
             return self._send(200, {"snippets": load_snippets()})
+        if u.path == "/api/templates":                                              # 📋 지시 템플릿
+            return self._send(200, {"templates": load_templates()})
+        if u.path == "/api/gitinfo":                                                # P8 대화 작업 폴더의 브랜치·안 커밋
+            return self._send(200, thread_gitinfo((parse_qs(u.query).get("key") or [""])[0]))
         if u.path == "/api/folders":                                                # ⚙ 작업 폴더(게이트웨이 설정을 따를 때)
             return self._send(200, folders_info())
         if u.path == "/api/setup":
@@ -1653,6 +1731,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, set_urgent(data.get("key"), bool(data.get("on"))))
             if u.path == "/api/snippets":                                           # 📝 저장해 두는 답 {add} · {remove}
                 return self._send(200, edit_snippets(data))
+            if u.path == "/api/templates":                                          # 📋 지시 템플릿 {add:{title,body}} · {remove}
+                return self._send(200, edit_templates(data))
             if u.path == "/api/refresh":
                 BOX.wake.set()
                 return self._send(200, {"ok": True})

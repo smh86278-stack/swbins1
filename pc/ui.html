@@ -471,6 +471,36 @@ button.worked:hover{color:var(--text);text-decoration:underline}
 #infoPane ul.links .h{font-family:ui-monospace,Consolas,monospace;font-size:12px;margin-right:6px;color:var(--spine)}
 #infoPane .hashes{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 0}
 #infoPane .hashes .chip{font-family:ui-monospace,Consolas,monospace;font-size:11px}
+
+/* 11-26 셋째 묶음 앞부분 — O2 빠른 전환 · O6 미리 보기 · O7 찾기 문법 · O8 나란히 · O9 템플릿 · P8 브랜치 · ⑧ 시작 명령 */
+.findbar input{padding-right:48px}
+.findbar .fhelp{position:absolute;right:34px;top:50%;transform:translateY(-50%);border:0;background:none;padding:0 4px;font-size:12px;line-height:1;color:var(--muted);cursor:pointer}
+.findbar .fhelp:hover,.findbar .fhelp.on{color:var(--text)}
+.fhelppop{left:10px;right:10px;top:calc(100% + 2px);padding:10px 12px;font-size:12px;line-height:1.75}
+.fhelppop[hidden]{display:none}
+.fhelppop code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;background:var(--soft);padding:0 4px}
+.hovpop{position:fixed;left:0;top:0;right:auto;width:min(340px,70vw);z-index:60;padding:9px 11px;font-size:12px;pointer-events:none}
+.hovpop[hidden]{display:none}
+.hovpop b{display:block;font-size:13px;margin-bottom:4px}
+.hovpop .hm{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.hovpop .hl{color:var(--muted);white-space:pre-wrap;word-break:break-word;max-height:9.5em;overflow:hidden;margin-top:6px;border-top:1px dotted var(--line);padding-top:5px}
+.item .br{flex:none;font-size:10.5px;color:var(--muted);font-family:ui-monospace,Consolas,monospace;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item.sel .br{color:var(--onspine)}
+#threadPane.grid.side{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+#threadPane.grid.side.withinfo{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 300px}
+#threadPane.grid.side .composer .inrow textarea{min-width:140px}
+#threadPane.grid.side > #infoPane{grid-column:3}
+#sidePane{grid-column:2;grid-row:2/4;min-height:0;overflow:auto;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+#sidePane[hidden]{display:none}
+#sidePane .shead{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+#sidePane .shead b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+#sidePane .shead small{color:var(--muted);font-size:11px}
+#sidePane .smsgs{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+#sidePane .row{max-width:94%}
+@media (max-width:1099px){#threadPane.grid.side,#threadPane.grid.side.withinfo{grid-template-columns:minmax(0,1fr)}#sidePane{display:none!important}}
+.tplpop .it span{display:flex;flex-direction:column}
+.tplpop .it small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:330px}
+#runSetup,#gwSetup{min-height:44px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
 </style>
 <link rel="stylesheet" href="/pet/pets.css">
 <style>
@@ -550,7 +580,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
     </div>
     <div class="lookpop costpop" id="costBox" hidden></div>
   </div>
-  <div class="findbar"><input id="findQ" type="search" placeholder="대화 찾기" title="제목·번호(T12)·주고받은 말 — 어디서든 / 를 누르면 여기로" autocomplete="off"><kbd>/</kbd></div>
+  <div class="findbar"><input id="findQ" type="search" placeholder="대화 찾기" title="제목·번호(T12)·주고받은 말 — 어디서든 / 를 누르면 여기로. 조건 섞어 쓰기는 옆 ?" autocomplete="off"><kbd>/</kbd><button class="fhelp" id="findHelp" type="button" title="찾기 문법 — folder: status: tag: mode: T번호 after:">?</button><div class="lookpop fhelppop" id="findHelpBox" hidden role="note">글자는 그대로 찾고, 아래 조건은 빈칸으로 나눠 섞어 씁니다.<br><code>folder:web</code> 폴더(@키) · <code>status:완료</code> 완료·작업중·대기·오류·답필요<br><code>tag:게임</code> 또는 <code>#게임</code> 태그 · <code>mode:수정</code> 수정·읽기<br><code>T54</code> 번호 · <code>after:11-20</code> 그날 이후<br>예: <code>status:완료 #게임 그림</code> · <code>Ctrl+O</code> 대화 빠른 전환</div></div>
   <div id="list"></div>
   <div class="usage" id="usage" hidden></div>
   <div class="petstage off" id="petStage" title="강아지는 메일함을 지키고, 고양이는 맡긴 일을 합니다 — 마우스를 올려 보세요">
@@ -586,6 +616,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
         <textarea id="newText" rows="3" placeholder="할 일을 적으세요. 첫 줄이 제목이 됩니다."></textarea>
         <button class="ghost filebtn" data-for="newText" title="이 PC 파일 붙이기 — 사진·pdf·문서·표(xlsx·csv)·텍스트, 5개·하나 10MB 까지">파일</button>
         <span class="snipwrap"><button class="ghost snipbtn" data-for="newText" title="저장해 두는 답 — 자주 쓰는 말을 넣습니다">답 모음</button><div class="snip"></div></span>
+        <span class="snipwrap"><button class="ghost" id="tplBtn" title="지시 템플릿 — 저장해 둔 지시를 빈칸({{날짜}}·{{입력:…}})을 채워 넣습니다">템플릿</button><div class="snip tplpop" id="tplBox"></div></span>
         <button class="send" id="newSend" disabled>보내기</button>
       </div>
       <div id="doneBox"><textarea id="doneText" rows="2" placeholder="완료 기준 — 한 줄에 하나 (예: 시험 모두 통과 · 바뀐 화면 캡처)"></textarea></div>
@@ -603,6 +634,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
       <button class="iconbtn" id="delBtn" title="이 대화 지우기 — 메일은 그대로, 이 화면 목록에서만 뺍니다">지우기</button>
     </div>
     <div id="msgs"></div>
+    <section id="sidePane" aria-label="옆 대화(읽기 전용)" hidden></section>
     <div class="composer">
       <div class="inrow">
         <textarea id="sayText" rows="1" placeholder="이어서 말하기 · Ctrl+Enter 보내기"></textarea>
@@ -644,6 +676,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
     <p>폴더를 고르지 않은 지시가 도는 <b>기본 폴더</b>와, 지시에 <code>@키</code> 로 고르는 폴더들입니다. 이 PC 게이트웨이 설정(<span id="gwFile"></span>)에 저장하고 게이트웨이가 바로 따릅니다.</p>
     <div class="field"><label>기본 폴더</label><input id="gwDir" type="text" placeholder="C:\work\main"></div>
     <div class="field"><label>다른 작업 폴더 (한 줄에 <code>키=폴더</code>)</label><textarea id="gwDirs" rows="3" placeholder="web=C:\work\web"></textarea></div>
+    <div class="field"><label>폴더별 시작 명령 (한 줄에 <code>키=명령</code> — 기본 폴더는 <code>default=</code>. 지시 전에 그 폴더에서 돌리고 결과 한 줄을 답에 붙입니다 · 120초까지 · 지우기·push 같은 명령은 막음)</label><textarea id="gwSetup" rows="2" placeholder="default=git pull --ff-only"></textarea></div>
     <div id="gwErr" style="color:var(--bad);font-size:12px;min-height:16px"></div>
     <div class="acts" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" id="gwSave">저장</button></div>
   </div>
@@ -655,6 +688,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
     <div id="runWhy"></div>
     <div class="field"><label>기본 작업 폴더</label><input id="runDir" type="text" placeholder="지시를 실행할 폴더"></div>
     <div class="field"><label>다른 작업 폴더 (한 줄에 <code>키=폴더</code> — 지시에 @키 로 고름)</label><textarea id="runDirs" rows="2" placeholder="web=C:\work\web"></textarea></div>
+    <div class="field"><label>폴더별 시작 명령 (한 줄에 <code>키=명령</code> — 기본 폴더는 <code>default=</code>, 지시 전에 그 폴더에서 · 120초까지)</label><textarea id="runSetup" rows="2" placeholder="default=git pull --ff-only"></textarea></div>
     <h4>전용 브라우저 (Playwright) <label class="switch" title="켜면 수정 허용(#cw) 지시가 웹 사이트 일을 이 PC 의 전용 브라우저로 합니다"><input type="checkbox" id="runBrowser"><span></span></label></h4>
     <p>켜면 수정 허용(#cw) 지시가 웹 사이트 일을 이 PC 의 전용 Chrome 창으로 합니다(Node.js·Chrome 필요, 윈도우는 Edge 도 됨).
       쓸 사이트는 <b>로그인 창 열기</b>로 한 번 로그인해 두세요. 로그인·OTP 가 나오거나 결제·삭제·발송 같은 단추 앞에서는 멈추고 묻습니다.</p>
@@ -693,6 +727,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--spine)}
   </div>
 </dialog>
 <div id="toast"></div>
+<div class="lookpop hovpop" id="hov" hidden aria-hidden="true"></div>
 <div class="lookpop palpop" id="pal" hidden role="dialog" aria-label="명령 팔레트"><input id="palQ" type="text" autocomplete="off" placeholder="명령 · 대화 제목 · T번호 · #태그 — ↑↓ 고르고 Enter, Esc 닫기"><div id="palList"></div></div>
 
 <script>
@@ -724,9 +759,9 @@ let findKeys = null;                                  // 대화 찾기 — 맞�
 async function runFind() {
   const q = $('#findQ').value.trim();
   if (!q) { findKeys = null; drawList(); return; }
-  const tm = /^#(\S+)$/.exec(q);                     // #태그 — 그 태그가 붙은 대화만(이 화면에서 바로)
-  if (tm) { const w = tm[1].toLowerCase(); findKeys = new Set(state.threads.filter(t => (t.tags || []).some(x => x.toLowerCase() === w)).map(t => t.key)); drawList(); return; }
-  try { const j = await api('/api/search?q=' + encodeURIComponent(q)); if ($('#findQ').value.trim() === q) { findKeys = new Set(j.keys || []); drawList(); } } catch (e) { toast(e.message); }
+  const f = findParse(q), local = state.threads.filter(t => findLocal(t, f)).map(t => t.key);   // folder: status: #태그 mode: T번호 after: — 이 화면에서
+  if (!f.rest.length) { findKeys = new Set(local); drawList(); return; }
+  try { const j = await api('/api/search?q=' + encodeURIComponent(f.rest.join(' '))); if ($('#findQ').value.trim() === q) { const s = new Set(j.keys || []); findKeys = new Set(local.filter(k => s.has(k))); drawList(); } } catch (e) { toast(e.message); }
 }
 $('#findQ').oninput = () => { clearTimeout(runFind.t); runFind.t = setTimeout(runFind, 250); };
 function drawList() {
@@ -741,13 +776,14 @@ function drawList() {
   drawBoard();
 }
 function itemBtn(t) {                                       // 목록 줄 — 칸반 카드도 같은 모양
-  const b = el('button', 'item' + (t.key === sel ? ' sel' : '') + (t.urgent ? ' urgent' : ''));
+  const b = el('button', 'item' + (t.key === sel ? ' sel' : '') + (t.urgent ? ' urgent' : '')); b.dataset.key = t.key;
   const top = el('div', 'top');
   if (t.urgent) top.append(el('span', 'fire', '급건'));
   if (t.no) top.append(el('span', 'no', 'T' + t.no));
   top.append(el('span', 'title', t.title));
   if (t.mode === 'write') top.append(el('span', 'badge w', '수정'));
   if ((t.held || []).length) top.append(el('span', 'held', '대기 ' + t.held.length));
+  if (['sent', 'queued', 'running'].includes(t.status) && t.job) { const g = gitGet(t, drawList); if (g && g.branch) { const br = el('span', 'br', '⎇ ' + g.branch); br.title = '작업 폴더의 지금 브랜치' + (g.dirty ? ' · 안 커밋 ' + g.dirty + '개' : ''); top.append(br); } }
   if (t.stall) { const sp = el('span', 'held stall', '⏸ 멈춘 듯 ' + t.stall + '분'); sp.title = '일하는 중인데 ' + t.stall + '분째 활동 기록이 없습니다'; top.append(sp); }
   top.append(['ask', 'confirm'].includes(t.status) ? el('span', 'needs', t.status === 'confirm' ? '확인 필요' : '답 필요') : badge(t.status), el('span', 'time', when(t.ts)));
   b.append(top, el('div', 'last', (t.last_bot ? '' : '나: ') + (t.last || '')));
@@ -827,6 +863,8 @@ function drawInfo(t) {
     add('시작', hm(t0));
     add(['sent', 'queued', 'running'].includes(t.status) ? '지난 시간' : '걸린 시간', dur((['sent', 'queued', 'running'].includes(t.status) ? Date.now() / 1000 : t1) - t0));
   }
+  const gi = t.job && gitGet(t, () => { if (cur && cur.key === t.key && infoOn) drawInfo(cur); });
+  if (gi && gi.branch) { add('브랜치', gi.branch); if (gi.dirty != null) add('안 커밋', gi.dirty ? gi.dirty + '개' : '없음'); }
   box.append(kv);
   if (t.job && state.local) {
     const live = ['sent', 'queued', 'running'].includes(t.status), pf = live && progKey === t.key ? prog : hist[t.key];
@@ -966,7 +1004,7 @@ function richInto(node, text, mi) {
       const t = m[1] ? state.threads.find(x => x.no === +m[1] && (!cur || x.key !== cur.key)) : null;
       if (m[1] && !t) continue;
       host.append(line.slice(at, m.index));
-      if (t) { const a = el('a', 'tref', m[0]); a.title = 'T' + t.no + ' ' + t.title + ' — 이 대화 열기'; a.onclick = () => openThread(t.key); host.append(a); }
+      if (t) { const a = el('a', 'tref', m[0]); a.dataset.key = t.key; a.title = 'T' + t.no + ' ' + t.title + ' — 이 대화 열기'; a.onclick = () => openThread(t.key); host.append(a); }
       else { const tg = m[2], a = el('a', 'tagref', m[0]); a.title = '#' + tg + ' 태그가 붙은 대화 찾기'; a.onclick = () => tagFind(tg); host.append(a); }
       at = m.index + m[0].length;
     }
@@ -988,7 +1026,7 @@ function infoExtra(box, t) {
     for (const g of t.tags) { const c = el('button', 'chip', '#' + g); c.title = '이 태그가 붙은 대화 찾기'; c.onclick = () => tagFind(g); r.append(c); }
     box.append(r);
   }
-  const link = (x, why) => { const li = el('li'), a = el('a', '', 'T' + x.no + ' ' + x.title); a.onclick = () => openThread(x.key); li.append(a, el('small', '', why || STATUS[x.status] || '')); return li; };
+  const link = (x, why) => { const li = el('li'), a = el('a', '', 'T' + x.no + ' ' + x.title); a.dataset.key = x.key; a.onclick = () => openThread(x.key); li.append(a, el('small', '', why || STATUS[x.status] || '')); return li; };
   const outs = (t.refs || []).map(n => state.threads.find(x => x.no === n)).filter(Boolean);
   const ins = t.no ? state.threads.filter(x => x.key !== t.key && (x.refs || []).includes(t.no)) : [];
   if (outs.length) { box.append(el('div', 'sec', '이 대화가 말한 대화')); const ul = el('ul', 'links'); outs.forEach(x => ul.append(link(x))); box.append(ul); }
@@ -1054,8 +1092,9 @@ function drawBoard() {
 $('#boardBtn').onclick = () => boardShow(!boardVisible());
 $('#boardX').onclick = () => boardShow(false);
 /* O1 명령 팔레트 — Ctrl+P(또는 Ctrl+K): 동작·대화를 글자로 걸러 Enter */
-var palItems = [], palAt = 0;
+var palItems = [], palAt = 0, palMode = 'cmd';
 function palCmds() {
+  if (palMode !== 'cmd') return palThreads();
   const f = s => () => document.querySelector('#filters [data-f=' + s + ']').click();
   const c = [
     ['새 대화', 'Alt+N', showNew],
@@ -1075,7 +1114,12 @@ function palCmds() {
     ['설정 — 메일 계정 · 작업 폴더', '', () => $('#setBtn').click()],
     ['목록: 전체', '', f('all')], ['목록: 답할 것', '', f('wait')], ['목록: 진행 중', '', f('busy')], ['목록: 급건', '', f('urgent')], ['목록: 오류', '', f('error')],
     ['폴더 바꾸기 — 기본 폴더', '새 대화', () => { folder = ''; drawFolders(); showNew(); }],
+    ['빠른 전환 — 대화만 찾기', 'Ctrl+O', () => palOpen('go')],
+    ['옆에 열기 — 다른 대화 나란히', '열린 대화 옆에(읽기 전용)', () => palOpen('side'), () => !!cur],
+    ['옆 대화 닫기', '', sideClose, () => !!sideKey],
+    ['템플릿 — 지금 쓴 지시 저장 · 고르기', '새 대화', () => { showNew(); tplOpen(); }],
   ];
+  for (const x of templates || []) c.push(['템플릿 — ' + x.title, '새 대화에 채우기', () => tplApply(x), null, x.body.slice(0, 80)]);
   for (const x of state.folders || []) c.push(['폴더 바꾸기 — @' + x, '새 대화', () => { folder = x; drawFolders(); showNew(); }]);
   const tags = new Set(); state.threads.forEach(t => (t.tags || []).forEach(g => tags.add(g)));
   for (const g of tags) c.push(['#' + g + ' 태그 대화', '태그 찾기', () => tagFind(g)]);
@@ -1084,7 +1128,9 @@ function palCmds() {
 }
 function palDraw() {
   const q = $('#palQ').value.trim().toLowerCase().split(/\s+/).filter(Boolean), box = $('#palList');
-  palItems = palCmds().filter(x => q.every(w => (x[0] + ' ' + x[1] + ' ' + (x[4] || '')).toLowerCase().includes(w))).slice(0, 60);
+  const all = palCmds();
+  if (palMode === 'cmd') palItems = all.filter(x => q.every(w => (x[0] + ' ' + x[1] + ' ' + (x[4] || '')).toLowerCase().includes(w))).slice(0, 60);
+  else { const qq = q.join(''); palItems = all.map((x, i) => [x, qq ? fuzzy(qq, (x[0] + (x[4] || '')).toLowerCase().replace(/\s+/g, '')) : i]).filter(p => p[1] != null).sort((a, b) => a[1] - b[1]).slice(0, 60).map(p => p[0]); }
   palAt = Math.min(palAt, Math.max(0, palItems.length - 1));
   box.replaceChildren();
   if (!palItems.length) { box.append(el('div', 'hint', '맞는 명령·대화가 없습니다')); return; }
@@ -1095,7 +1141,12 @@ function palDraw() {
   });
   const on = box.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
 }
-function palOpen() { lookShow(false); costShow(false); $('#pal').hidden = false; $('#palQ').value = ''; palAt = 0; palDraw(); $('#palQ').focus(); }
+var PAL_HINT = { cmd: '명령 · 대화 제목 · T번호 · #태그 — ↑↓ 고르고 Enter, Esc 닫기', go: '빠른 전환 — 대화 제목 · T번호 · #태그 (최근 연 순서)', side: '옆에 열 대화 — 제목 · T번호 · #태그' };
+function palOpen(mode) {
+  palMode = mode === 'go' || mode === 'side' ? mode : 'cmd';
+  lookShow(false); costShow(false); hovHide(); $('#pal').hidden = false; $('#palQ').value = ''; $('#palQ').placeholder = PAL_HINT[palMode]; palAt = 0; palDraw(); $('#palQ').focus();
+  if (palMode === 'cmd' && !templates) tplLoad().then(() => { if (!$('#pal').hidden && palMode === 'cmd') palDraw(); });
+}
 function palClose() { $('#pal').hidden = true; }
 function palRun(i) { const x = palItems[i]; palClose(); if (x) x[2](); }
 $('#palQ').oninput = () => { palAt = 0; palDraw(); };
@@ -1108,7 +1159,8 @@ $('#palQ').onkeydown = e => {
 };
 document.addEventListener('keydown', e => {
   if (e.isComposing) return;
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.code === 'KeyP' || e.code === 'KeyK')) { e.preventDefault(); if ($('#pal').hidden) palOpen(); else palClose(); }
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.code === 'KeyP' || e.code === 'KeyK')) { e.preventDefault(); if ($('#pal').hidden || palMode !== 'cmd') palOpen('cmd'); else palClose(); }
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyO') { e.preventDefault(); if ($('#pal').hidden || palMode !== 'go') palOpen('go'); else palClose(); }
 });
 document.addEventListener('mousedown', e => { if (!$('#pal').hidden && !e.target.closest('#pal')) palClose(); });
 
@@ -1202,11 +1254,191 @@ function infoMore(box, t) {
   const acts = el('div', 'acts2'), ho = el('button', 'ghost', '인계문으로 새 대화');
   ho.title = '이 대화를 요약·남은 일로 정리해 새 대화에서 이어 갑니다(첫 줄에 T' + t.no + ' — 대화 잇기로 연결)'; ho.onclick = () => handoffSend(t); acts.append(ho);
   if (t.status === 'done') { const rv = el('button', 'ghost', '검토 받기'); rv.title = '다른 세션이 마지막 답을 비판적으로 봅니다(읽기 전용 새 대화)'; rv.onclick = () => reviewSend(t); acts.append(rv); }
+  const sb = el('button', 'ghost', sideKey ? '옆 대화 바꾸기' : '옆에 열기'); sb.title = '다른 대화를 오른쪽에 나란히 — 비교하며 보기(읽기 전용)'; sb.onclick = () => palOpen('side'); acts.append(sb);
   box.append(acts);
+}
+
+
+/* 11-26 셋째 묶음 앞부분 — O2 빠른 전환 · O6 호버 미리 보기 · O7 찾기 문법 · O8 대화 둘 나란히 · O9 지시 템플릿 · P8 브랜치 */
+/* O7 찾기 문법 — folder: status: tag:(#) mode: T번호 after: 은 이 화면에서 거르고, 나머지 글자만 서버 찾기 */
+var ST_ALIAS = { '완료': ['done'], 'done': ['done'], '작업중': ['running'], '작업': ['running'], 'running': ['running'], '진행중': ['sent', 'queued', 'running'],
+  '대기': ['sent', 'queued'], 'queued': ['sent', 'queued'], '오류': ['error'], 'error': ['error'], '실패': ['error'],
+  '답필요': ['ask', 'confirm'], '답할것': ['ask', 'confirm'], '확인필요': ['confirm'], 'ask': ['ask', 'confirm'] };
+var FIND_KEY = { '폴더': 'folder', '상태': 'status', '태그': 'tag', '권한': 'mode', '이후': 'after' };
+function findParse(q) {
+  const f = { rest: [] };
+  for (const w of q.split(/\s+/).filter(Boolean)) {
+    const m = /^(folder|status|tag|mode|after|폴더|상태|태그|권한|이후):(.+)$/i.exec(w);
+    if (m) { const k = FIND_KEY[m[1]] || m[1].toLowerCase(); (f[k] = f[k] || []).push(m[2].replace(/^[@#]/, '').toLowerCase()); continue; }
+    const tm = /^#(\S+)$/.exec(w); if (tm) { (f.tag = f.tag || []).push(tm[1].toLowerCase()); continue; }
+    const nm = /^[Tt](\d{1,5})$/.exec(w); if (nm) { (f.no = f.no || []).push(+nm[1]); continue; }
+    f.rest.push(w);
+  }
+  return f;
+}
+function findLocal(t, f) {
+  if (f.folder && !f.folder.some(x => (t.folder || '').toLowerCase() === x || (!t.folder && ['default', '기본'].includes(x)))) return false;
+  if (f.status && !f.status.some(x => (ST_ALIAS[x.replace(/\s+/g, '')] || [x]).includes(t.status))) return false;
+  if (f.tag && !f.tag.every(x => (t.tags || []).some(g => g.toLowerCase() === x))) return false;
+  if (f.mode && !f.mode.some(x => (/^(수정|write|w|쓰기)/.test(x) ? 'write' : 'read') === (t.mode === 'write' ? 'write' : 'read'))) return false;
+  if (f.no && !f.no.includes(t.no)) return false;
+  for (const x of f.after || []) {
+    const m = /^(?:(\d{4})-)?(\d{1,2})-(\d{1,2})$/.exec(x); if (!m) continue;
+    const now = new Date(), d = new Date(m[1] ? +m[1] : now.getFullYear(), +m[2] - 1, +m[3]);
+    if (!m[1] && d > now) d.setFullYear(d.getFullYear() - 1);
+    if ((t.ts || 0) * 1000 < d.getTime()) return false;
+  }
+  return true;
+}
+$('#findHelp').onclick = e => { e.preventDefault(); const b = $('#findHelpBox'); b.hidden = !b.hidden; $('#findHelp').classList.toggle('on', !b.hidden); };
+document.addEventListener('mousedown', e => { if (!$('#findHelpBox').hidden && !e.target.closest('#findHelpBox,#findHelp')) { $('#findHelpBox').hidden = true; $('#findHelp').classList.remove('on'); } });
+
+/* O2 빠른 전환 — 최근 연 대화 순서(이 PC 에 기억) */
+function recentKeys() { try { return JSON.parse(localStorage.getItem('dnc-recent') || '[]') || []; } catch (e) { return []; } }
+function recentPush(key) { try { localStorage.setItem('dnc-recent', JSON.stringify([key].concat(recentKeys().filter(k => k !== key)).slice(0, 30))); } catch (e) {} }
+function fuzzy(q, s) {                                      // 글자가 순서대로 다 들어 있으면 점수(작을수록 가깝다), 아니면 null
+  let at = 0, last = -1, score = 0;
+  for (const ch of q) { const j = s.indexOf(ch, at); if (j < 0) return null; score += j - last - 1; last = j; at = j + 1; }
+  return score - (s.startsWith(q) ? 1000 : s.includes(q) ? 500 : 0);
+}
+function palThreads() {
+  const rec = recentKeys(), rank = k => { const i = rec.indexOf(k); return i < 0 ? 1e9 : i; };
+  return [...state.threads].filter(t => palMode !== 'side' || !cur || t.key !== cur.key)
+    .sort((a, b) => rank(a.key) - rank(b.key) || (b.ts || 0) - (a.ts || 0))
+    .map(t => [(t.no ? 'T' + t.no + ' ' : '') + t.title, (STATUS[t.status] || '') + (rec.includes(t.key) ? ' · 최근' : ''),
+      palMode === 'side' ? () => sideOpen(t.key) : () => openThread(t.key), null, (t.tags || []).map(g => '#' + g).join(' ')]);
+}
+
+/* O6 호버 미리 보기 — 목록 줄·T번호 링크·칸반 카드·연결 대화에 0.4초 */
+var hovT = null, hovKey = '', hovCache = {};
+function hovPlace(box, anchor) {
+  const r = anchor.getBoundingClientRect(), w = box.offsetWidth, h = box.offsetHeight;
+  let x = r.right + 8, y = r.top;
+  if (x + w > innerWidth - 50) { x = Math.max(8, Math.min(r.left, innerWidth - w - 50)); y = r.bottom + 6; }
+  if (y + h > innerHeight - 8) y = Math.max(8, (y === r.top ? r.bottom : r.top) - h - 6);
+  box.style.left = x + 'px'; box.style.top = y + 'px';
+}
+function hovDraw(t, full, anchor) {
+  const box = $('#hov'); box.replaceChildren();
+  box.append(el('b', '', (t.no ? 'T' + t.no + ' ' : '') + t.title));
+  const meta = el('div', 'hm'); meta.append(badge(t.status));
+  if (t.mode === 'write') meta.append(el('span', '', '수정 허용'));
+  if (t.folder) meta.append(el('span', '', '@' + t.folder));
+  const files = full ? footFiles(full) : [];
+  if (files.length) meta.append(el('span', '', '바뀐 파일 ' + files.length + '개'));
+  meta.append(el('span', '', when(t.ts))); box.append(meta);
+  const last = full ? [...full.msgs].reverse().find(m => m.bot && m.text) : null;
+  const text = last ? last.text : (t.last_bot ? t.last : '');
+  if (text) box.append(el('div', 'hl', clipText(text, 260)));
+  box.hidden = false; hovPlace(box, anchor);
+}
+function hovHide() { clearTimeout(hovT); hovKey = ''; $('#hov').hidden = true; }
+document.addEventListener('mouseover', e => {
+  const a = e.target.closest && e.target.closest('[data-key]'), k = a ? a.dataset.key : '';
+  if (k === hovKey) return;
+  hovHide(); if (!k) return;
+  hovKey = k;
+  const live = () => document.contains(a) ? a : document.querySelector('[data-key="' + CSS.escape(k) + '"]:hover');   // 목록을 다시 그려도 마우스 아래 같은 대화
+  hovT = setTimeout(async () => {
+    const t = state.threads.find(x => x.key === k), at = live(); if (!t || hovKey !== k || !at) return;
+    const c = hovCache[k];
+    hovDraw(t, c && c.full, at);
+    if (!c || Date.now() - c.at > 30000) {
+      try { const full = await api('/api/thread?key=' + encodeURIComponent(k)); hovCache[k] = { at: Date.now(), full }; const at2 = live(); if (hovKey === k && at2) hovDraw(t, full, at2); } catch (err) {}
+    }
+  }, 400);
+});
+document.addEventListener('mousedown', hovHide, true);
+document.addEventListener('scroll', hovHide, true);
+
+/* O8 대화 둘 나란히 — 오른쪽은 읽기 전용 보기 */
+var sideKey = '';
+async function sideOpen(key) {
+  if (!cur || key === cur.key) return;
+  sideKey = key; let t;
+  try { t = await api('/api/thread?key=' + encodeURIComponent(key)); } catch (e) { toast(e.message); return; }
+  if (sideKey !== key) return;
+  sideDraw(t);
+}
+function sideDraw(t) {
+  const box = $('#sidePane'); box.replaceChildren();
+  const h = el('div', 'shead'), go = el('button', 'iconbtn', '가운데로'), x = el('button', 'iconbtn', '×');
+  h.append(el('b', '', (t.no ? 'T' + t.no + ' ' : '') + t.title), badge(t.status), el('small', '', '읽기 전용'));
+  go.title = '이 대화를 가운데에서 열기'; go.onclick = () => { const k = t.key; sideClose(); openThread(k); };
+  x.title = '옆 대화 닫기'; x.onclick = sideClose; h.append(go, x); box.append(h);
+  const ms = el('div', 'smsgs');
+  for (const m of t.msgs) {
+    const row = el('div', 'row ' + (m.bot ? 'bot' : 'me') + (m.bot && m.status === 'error' ? ' err' : '')), b = el('div', 'bubble');
+    richInto(b, m.text || (m.bot ? '' : '(빈 메시지)'), -1); if (m.bot && m.foot) b.append(el('div', 'foot', m.foot));
+    row.append(b, el('div', 'meta', hm(m.ts))); ms.append(row);
+  }
+  if (!t.msgs.length) ms.append(el('div', 'hint', '주고받은 말이 없습니다'));
+  box.append(ms); box.hidden = false; $('#threadPane').classList.add('side'); box.scrollTop = box.scrollHeight;
+}
+function sideClose() { sideKey = ''; $('#sidePane').hidden = true; $('#sidePane').replaceChildren(); $('#threadPane').classList.remove('side'); }
+
+/* O9 지시 템플릿 — {{날짜}} {{오늘}} {{폴더}} {{입력:설명}} 빈칸을 채워 새 지시 칸에 */
+var templates = null;
+async function tplLoad() { if (!templates) { try { templates = (await api('/api/templates')).templates || []; } catch (e) { templates = []; } } return templates; }
+function tplFill(body) {
+  const d = new Date(), wk = '일월화수목금토'[d.getDay()];
+  let s = body.replace(/\{\{날짜\}\}/g, d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()))
+    .replace(/\{\{오늘\}\}/g, (d.getMonth() + 1) + '월 ' + d.getDate() + '일(' + wk + ')')
+    .replace(/\{\{폴더\}\}/g, folder ? '@' + folder : ((state.default_folder || {}).label || '기본 폴더'));
+  const asks = [...new Set([...s.matchAll(/\{\{입력:([^}]{1,40})\}\}/g)].map(m => m[1]))];
+  for (const q of asks) { const v = prompt(q); if (v === null) return null; s = s.split('{{입력:' + q + '}}').join(v); }
+  return s;
+}
+function tplApply(x) {
+  for (const p of document.querySelectorAll('.snip.open')) p.classList.remove('open');
+  const s = tplFill(x.body); if (s == null) return;
+  if ($('#newPane').style.display !== 'flex') showNew();
+  const ta = $('#newText'); ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + s : s; grow(ta); refreshBtns(); ta.focus();
+}
+async function tplOpen() {
+  const box = $('#tplBox'), was = box.classList.contains('open');
+  for (const p of document.querySelectorAll('.snip.open')) p.classList.remove('open');
+  if (was) return;
+  await tplLoad();
+  const draw = () => {
+    box.replaceChildren();
+    if (!templates.length) box.append(el('div', 'hint', '저장한 템플릿이 없습니다 — 지시를 쓰고 아래에서 저장하세요'));
+    for (const x of templates) {
+      const it = el('div', 'it'), tx = el('span', '', x.title), del = el('button', '', '×');
+      tx.append(el('small', '', x.body.split('\n')[0])); del.title = '이 템플릿 지우기';
+      del.onclick = async e => { e.stopPropagation(); if (!confirm('「' + x.title + '」 템플릿을 지울까요?')) return; try { templates = (await api('/api/templates', { remove: x.title })).templates; draw(); } catch (err) { toast(err.message); } };
+      it.title = x.body; it.onclick = () => tplApply(x); it.append(tx, del); box.append(it);
+    }
+    const add = el('button', 'add', '지금 쓴 지시를 템플릿으로 저장'); add.disabled = !$('#newText').value.trim();
+    add.title = '빈칸으로 쓸 수 있는 말: {{날짜}} {{오늘}} {{폴더}} {{입력:설명}}';
+    add.onclick = async e => {
+      e.preventDefault(); const body = $('#newText').value.trim(); if (!body) return;
+      const title = prompt('템플릿 이름 — 빈칸: {{날짜}} {{오늘}} {{폴더}} {{입력:설명}}', body.split('\n')[0].slice(0, 30)); if (!title || !title.trim()) return;
+      try { templates = (await api('/api/templates', { add: { title: title.trim(), body } })).templates; draw(); toast('템플릿으로 저장했습니다'); } catch (err) { toast(err.message); }
+    };
+    box.append(add);
+  };
+  draw(); box.classList.add('open');
+}
+$('#tplBtn').onclick = e => { e.preventDefault(); tplOpen(); };
+
+/* P8 대화별 브랜치·안 커밋 — 작업 폴더가 git 저장소일 때(30초 캐시) */
+var gitCache = {};
+function gitGet(t, after) {
+  const c = gitCache[t.key];
+  if (state.local && t.job && (!c || Date.now() - c.at > 30000)) {
+    gitCache[t.key] = { at: Date.now(), r: c ? c.r : null };
+    api('/api/gitinfo?key=' + encodeURIComponent(t.key)).then(r => {
+      const old = JSON.stringify((c && c.r) || null); gitCache[t.key] = { at: Date.now(), r };
+      if (JSON.stringify(r || null) !== old && after) after();
+    }).catch(() => {});
+  }
+  return c && c.r;
 }
 
 /* ---------- 대화 ---------- */
 async function openThread(key) {
+  recentPush(key); if (sideKey === key) sideClose();
   sel = key; drawList(); document.body.classList.remove('list');
   $('#boardPane').style.display = 'none'; $('#boardBtn').classList.remove('lookon');
   $('#newPane').style.display = 'none'; $('#threadPane').style.display = 'grid'; infoShow();
@@ -1434,14 +1666,14 @@ async function loadGwFolders() {
   try {
     const r = await api('/api/folders');
     $('#gwFolderBox').hidden = r.mode !== 'gateway';
-    if (r.mode === 'gateway') { $('#gwDir').value = r.workdir || ''; $('#gwDirs').value = r.dirs || ''; $('#gwFile').textContent = r.file || ''; }
+    if (r.mode === 'gateway') { $('#gwDir').value = r.workdir || ''; $('#gwDirs').value = r.dirs || ''; $('#gwSetup').value = r.setup || ''; $('#gwFile').textContent = r.file || ''; }
   } catch (e) { $('#gwFolderBox').hidden = true; }
 }
 $('#gwSave').onclick = async () => {
   $('#gwErr').textContent = '';
   try {
-    const r = await api('/api/folders', { workdir: $('#gwDir').value, dirs: $('#gwDirs').value });
-    $('#gwDirs').value = r.dirs || ''; toast('작업 폴더를 저장했습니다' + (r.note ? ' — ' + r.note : '')); poll(true);
+    const r = await api('/api/folders', { workdir: $('#gwDir').value, dirs: $('#gwDirs').value, setup: $('#gwSetup').value });
+    $('#gwDirs').value = r.dirs || ''; $('#gwSetup').value = r.setup || ''; toast('작업 폴더를 저장했습니다' + (r.note ? ' — ' + r.note : '')); poll(true);
   } catch (e) { $('#gwErr').textContent = e.message; }
 };
 async function sendNew(body, after) {
@@ -1609,7 +1841,7 @@ function drawRunner(r) {
   const on = $('#runOn'), why = $('#runWhy');
   on.checked = !!r.enabled;
   on.disabled = !r.enabled && !!(r.blocked || !r.claude);
-  $('#runDir').value = r.workdir || r.home || ''; $('#runDirs').value = r.dirs || '';
+  $('#runDir').value = r.workdir || r.home || ''; $('#runDirs').value = r.dirs || ''; $('#runSetup').value = r.setup || '';
   $('#runBrowser').checked = !!r.browser; $('#runJira').checked = !!r.jira;
   $('#runBrowser').disabled = !r.browser && !(r.npx && r.browser_path);
   $('#runBrowser').parentElement.title = r.browser || (r.npx && r.browser_path) ? '켜면 수정 허용(#cw) 지시가 웹 사이트 일을 이 PC 의 전용 브라우저로 합니다'
@@ -1635,7 +1867,7 @@ async function loadRunner() {
 async function saveRunner(enabled, done) {
   $('#runErr').textContent = '';
   try {
-    const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value,
+    const r = await api('/api/runner', { enabled, workdir: $('#runDir').value, dirs: $('#runDirs').value, setup: $('#runSetup').value,
       browser: $('#runBrowser').checked, jira: $('#runJira').checked, jira_url: $('#runJiraUrl').value,
       jira_token: $('#runJiraTok').value, jira_dir: $('#runJiraDir').value,
       jira_skill: $('#runJiraSkill').value, jira_allow_net: $('#runJiraNet').checked, cost: $('#runCost').value,
