@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 잠긴 페이지(gh-pages). 진짜 화면은 payload.json 안에 키로 암호화돼 있고 unlock.js 가 이 기기에서 풀어 그린다.
+     풀린 화면의 app.js 는 blob: 주소로 붙으므로 script-src 에 blob: 이 있다. 나머지는 원래 index.html 의 정책과 같다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://gmail.googleapis.com https://www.googleapis.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#EEF3EA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1B2018" media="(prefers-color-scheme: dark)">
+<title>🔒</title>
+<style>
+/* 공통 디자인 「책등」 — 풀린 화면(index.html)과 같은 색·책등. 바탕·강조·밝기는 그 화면 설정('dnc.look')을 unlock.js 가 읽어 붙인다.
+   글꼴은 gh-pages 에선 같은 폴더, 저장소에서 lock/ 로 열면 한 칸 위 */
+@font-face{font-family:"Sunflower";src:url(sunflower-medium-ks.woff2) format("woff2"),url(../sunflower-medium-ks.woff2) format("woff2");font-display:swap}
+:root{color-scheme:light dark;
+  --bg:light-dark(#EEF3EA,#1B2018);--solid:light-dark(#FAFBF7,#151A13);--text:light-dark(#2A3324,#DEE5D3);--muted:light-dark(#5A6650,#A4AE97);
+  --line:light-dark(#D6DCCB,#2F382A);--field:light-dark(#9AA48E,#56604E);--edge:light-dark(#2A3324,#A4AE97);
+  --spine:light-dark(#2F3A3A,#5A6D69);--onspine:light-dark(#E9EEE2,#EEF2E8);--spine-w:32px;
+  --display:"Sunflower","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --sans:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",-apple-system,sans-serif}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+:root[data-base=kraft]{--bg:light-dark(#E9DEC9,#221D16);--solid:light-dark(#F5ECDC,#2A241B);--text:light-dark(#2E2418,#EFE4CF);--muted:light-dark(#6B5C47,#B6A68B);
+  --line:light-dark(#CFBFA3,#3E3527);--field:light-dark(#A8977A,#62563F);--edge:light-dark(#2E2418,#B6A68B)}
+:root[data-accent=ink]{--spine:light-dark(#2F5283,#4D6C98)}
+:root[data-accent=pine]{--spine:light-dark(#2F6B4F,#45745E)}
+:root[data-accent=plum]{--spine:light-dark(#7B3A6B,#905784)}
+:root[data-accent=ochre]{--spine:light-dark(#7D5A12,#83652D)}
+body{margin:0;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding-right:var(--spine-w);box-sizing:border-box;
+  font:16px/1.5 var(--sans);background:var(--bg);color:var(--text)}
+form{display:none;gap:8px;flex-direction:column;width:min(280px,calc(100vw - var(--spine-w) - 32px))}
+form.on{display:flex}
+input,button{font:inherit;padding:10px 12px;border-radius:0;border:1px solid var(--line);color:inherit}
+input{background:var(--solid);outline:none}
+input:focus{border-color:var(--spine)}
+button{cursor:pointer;font-family:var(--display);font-weight:400;background:var(--spine);border-color:var(--spine);color:var(--onspine);
+  box-shadow:inset -4px 0 0 var(--edge);transition:transform .15s,box-shadow .15s}
+button:active{transform:translateX(-6px);box-shadow:inset -6px 0 0 var(--edge)}
+#msg{min-height:1.5em;font-size:14px;color:var(--muted)}
+.spine{position:fixed;top:0;right:0;bottom:0;width:var(--spine-w);background:var(--spine);color:var(--onspine);display:flex;flex-direction:column;
+  align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 16px) 0 calc(env(safe-area-inset-bottom) + 12px);box-sizing:border-box;
+  user-select:none;-webkit-user-select:none;overflow:hidden}
+.spine .vt{writing-mode:vertical-rl;text-orientation:upright;letter-spacing:.12em;font-family:var(--display);font-weight:400;font-size:15px}
+.spine small{writing-mode:vertical-rl;font-size:10px;letter-spacing:.1em;opacity:.85}
+@media (prefers-reduced-motion:reduce){button{transition:none}button:active{transform:none}}
+</style>
+</head>
+<body>
+<form id="f" autocomplete="off">
+  <input id="k" type="password" placeholder="키" autocapitalize="off" spellcheck="false" aria-label="키">
+  <button>열기</button>
+  <div id="msg"></div>
+</form>
+<div class="spine" aria-hidden="true"><b class="vt">메신저</b><small>D&amp;C</small></div>
+<script src="unlock.js"></script>
+</body>
+</html>
